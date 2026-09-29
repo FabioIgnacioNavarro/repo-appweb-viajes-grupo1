@@ -4,8 +4,8 @@ Estas convenciones permiten que módulos y agentes distintos puedan integrarse s
 
 ## Nombres
 
-- Código y API en inglés técnico consistente; documentación explicativa en español.
-- Estados del dominio en mayúsculas; valores JSON en `snake_case`.
+- Nombres propios de la aplicación —rutas, parámetros, variables y campos JSON— en español. Las rutas usan `kebab-case`, los parámetros `camelCase` y los campos JSON `snake_case`; los métodos y encabezados estándar de HTTP mantienen sus nombres oficiales.
+- Estados del dominio en mayúsculas; sus valores JSON usan `snake_case`.
 - Identificadores con una forma única definida antes de implementar persistencia. No mezclar UUID, enteros y strings arbitrarios sin ADR.
 - No introducir sinónimos públicos para los términos del glosario.
 
@@ -13,7 +13,7 @@ Estas convenciones permiten que módulos y agentes distintos puedan integrarse s
 
 - Fechas y horas: ISO 8601 con zona horaria explícita; persistir en UTC.
 - Duraciones: milisegundos en contratos internos y segundos o minutos solo cuando el endpoint lo documente.
-- Dinero: entero en unidad mínima o decimal exacto; nunca `number` de punto flotante para importes.
+- Dinero: moneda del sistema `ARS`, sin centavos; persistir como entero exacto de pesos (por ejemplo, `BIGINT` en PostgreSQL) y exponer en JSON como cadena de dígitos, por ejemplo `"8086"`. No convertir a `number` de JavaScript. Incluir `moneda: "ARS"` en las respuestas con importes.
 - Coordenadas: latitud y longitud en grados decimales, con rango validado y sistema de referencia documentado.
 - Distancias: unidad explícita, preferentemente metros.
 
@@ -24,14 +24,14 @@ Toda respuesta de error debe seguir esta forma conceptual:
 ```json
 {
   "error": {
-    "code": "TRIP_NOT_ACCESSIBLE",
-    "message": "El viaje no está disponible para este usuario.",
-    "details": {}
+    "codigo": "VIAJE_NO_DISPONIBLE",
+    "mensaje": "El viaje no está disponible para este usuario.",
+    "detalles": {}
   }
 }
 ```
 
-`code` es estable y apto para clientes; `message` es legible; `details` es opcional y no debe filtrar SQL, stack traces, secretos ni información de otro usuario.
+`codigo` es estable y apto para clientes; `mensaje` es legible; `detalles` es opcional y no debe filtrar consultas, trazas internas, secretos ni información de otro usuario.
 
 ## Autorización
 
@@ -39,13 +39,15 @@ Autenticar no equivale a autorizar. Cada caso de uso debe verificar actor, rol, 
 
 ## Idempotencia
 
-Las operaciones con efectos no repetibles deben aceptar `Idempotency-Key`. La clave pertenece a la intención del actor y el resultado guardado debe poder devolverse en un reintento sin repetir el efecto.
+Las operaciones con efectos no repetibles deben aceptar `Clave-Idempotencia`. La clave pertenece a la intención del actor y el resultado guardado debe poder devolverse en un reintento sin repetir el efecto.
 
 ## Precio dinámico
 
-- El multiplicador es calculado exclusivamente por el servidor.
-- Una estimación debe ser identificable y contener su vigencia o versión de regla.
-- La confirmación debe conservar el multiplicador y los datos de demanda usados.
+- La tarifa base se calcula en el servidor con distancia y duración; disponibilidad, demanda de la zona, lluvia y franja horaria aplican ajustes configurados.
+- Si la demanda sube, el componente de demanda eleva el precio; si baja, lo reduce.
+- El multiplicador y los ajustes los calcula exclusivamente el servidor.
+- Una estimación debe ser identificable, incluir los factores usados y vencer a los tres minutos.
+- La confirmación debe conservar el precio visto y los datos de todos los factores usados.
 - El precio confirmado es inmutable frente a cambios posteriores de demanda.
 - La auditoría debe permitir reconstruir la decisión sin exponer información innecesaria de otros usuarios.
 

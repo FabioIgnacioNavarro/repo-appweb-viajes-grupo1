@@ -10,3 +10,8 @@ ADRs mínimos previstos:
 4. Resolución de la doble asignación viaje-chofer.
 5. Solución de la tarea pesada de ubicaciones y búsqueda.
 6. Canal de tiempo real y reconexión, o la decisión específica más importante del grupo.
+
+Decisiones adicionales registradas:
+
+7. Representación de importes en pesos argentinos sin centavos.
+8. Fuente del dato de lluvia para el precio dinámico.

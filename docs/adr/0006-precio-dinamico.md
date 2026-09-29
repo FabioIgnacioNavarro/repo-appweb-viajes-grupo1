@@ -1,4 +1,4 @@
-# ADR 0006: Congelar el multiplicador dinámico al confirmar el viaje
+# ADR 0006: Congelar el precio dinámico aceptado por el pasajero
 
 - Estado: propuesto
 - Fecha: 2026-09-23
@@ -6,15 +6,15 @@
 
 ## Contexto
 
-La variante A exige que el precio suba o baje según la relación entre solicitudes y choferes disponibles en una zona. El pasajero debe conocer el multiplicador antes de confirmar, y el precio confirmado no puede cambiar aunque la demanda cambie durante el viaje. La carrera crítica aparece cuando la demanda se recalcula mientras el pasajero confirma.
+La variante A exige que el componente de demanda suba cuando crecen las solicitudes respecto de los choferes disponibles en una zona, y baje cuando la demanda baja. El precio también tendrá ajustes configurables por lluvia y franja horaria, además de la tarifa base por distancia y duración. El pasajero debe conocer el precio antes de confirmar. La estimación tendrá una vigencia de tres minutos y el precio confirmado no cambiará ante variaciones posteriores de los factores. La carrera crítica aparece cuando cambian los factores mientras el pasajero confirma.
 
 ## Opciones consideradas
 
-### Congelar estimación y multiplicador en la confirmación
+### Congelar precio y factores de la estimación aceptada
 
-Ventajas: el importe aceptado queda claro, es auditable y no cambia durante el viaje. Permite reproducir la decisión con la versión de regla y el resumen de demanda.
+Ventajas: el importe aceptado queda claro, es auditable y no cambia durante el viaje. Permite reproducir la decisión con la versión de regla y los datos de disponibilidad, demanda, lluvia y franja horaria.
 
-Desventajas: la estimación puede quedar desactualizada entre la consulta y la confirmación; hay que definir una vigencia o política de revalidación.
+Desventajas: la estimación puede quedar desactualizada durante su vigencia de tres minutos; vencida, el pasajero debe solicitar otra.
 
 ### Recalcular siempre al confirmar
 
@@ -24,11 +24,11 @@ Desventajas: puede cobrar un precio distinto del que el pasajero vio, genera rec
 
 ## Decisión
 
-Se propone congelar el multiplicador y el precio en la confirmación. El viaje conservará el multiplicador, la versión de la regla, la zona y un resumen de los datos de demanda usados. La política exacta de vigencia de la estimación queda pendiente de definición.
+Se decide aceptar estimaciones durante tres minutos y congelar al confirmar el precio que se mostró al pasajero. El viaje conservará la versión de la regla, la zona y un resumen de disponibilidad, demanda, lluvia y franja horaria usados en el cálculo. Las franjas quedan definidas en `docs/modelo.md`. La fórmula, los límites y los pesos de cada ajuste, y la fuente de lluvia quedan pendientes.
 
 ## Consecuencias
 
-La demanda futura no modifica viajes ya confirmados. La operación de confirmación debe ser atómica respecto del precio y debe soportar reintentos con idempotencia. Será necesario diseñar una forma de auditar el cálculo sin depender del estado actual de la zona.
+Los cambios posteriores de demanda, lluvia o franja horaria no modifican viajes ya confirmados. La operación de confirmación debe comprobar que la estimación no superó los tres minutos, ser atómica respecto del precio y soportar reintentos con idempotencia. La auditoría debe permitir reconstruir el cálculo sin depender del estado actual de la zona ni del clima.
 
 ## Qué nos haría cambiar de decisión
 

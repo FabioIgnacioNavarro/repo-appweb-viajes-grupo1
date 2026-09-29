@@ -4,7 +4,7 @@ Todavía no hay resultados: este archivo define cómo se medirán y qué evidenc
 
 ## Hipótesis inicial
 
-Con al menos 500 choferes enviando ubicación cada dos segundos, la estrategia elegida para ubicación y búsqueda mantendrá el p95 de solicitud de viaje y el tiempo hasta asignación dentro de límites que el grupo declarará antes de medir, sin degradar de forma inaceptable `/health`.
+Con al menos 500 choferes enviando ubicación cada dos segundos, la estrategia elegida para ubicación y búsqueda mantendrá el p95 de solicitud de viaje y el tiempo hasta asignación dentro de límites que el grupo declarará antes de medir, sin degradar de forma inaceptable `/estado/health`.
 
 Antes de ejecutar la primera medición se deben completar los valores numéricos, no modificar la hipótesis para hacerla coincidir con el resultado.
 

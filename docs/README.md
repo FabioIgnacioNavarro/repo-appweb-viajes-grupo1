@@ -6,6 +6,7 @@ Esta carpeta reúne el diseño y la evidencia del trabajo práctico. Se completa
 
 - [Modelo de dominio](modelo.md): actores, entidades, estados e invariantes.
 - [API inicial](api.md): flujos y contrato HTTP preliminar.
+- [Alcance mínimo demostrable](alcance-minimo.md): primer recorrido de punta a punta y orden de trabajo.
 - [Glosario](glosario.md): vocabulario oficial del dominio.
 - [Contratos compartidos](contratos.md): convenciones de datos y comunicación.
 - [Flujo de trabajo](flujo-trabajo.md): reglas para colaborar entre agentes y personas.
@@ -22,6 +23,7 @@ Esta carpeta reúne el diseño y la evidencia del trabajo práctico. Se completa
 - Lenguaje: TypeScript.
 - Tiempo real: WebSocket o Server-Sent Events, pendiente de comparar y decidir.
 - Búsqueda geográfica: pendiente de comparar PostGIS, geohash y estructura en memoria.
+- Precio dinámico: vigencia de 3 minutos y franjas horarias decididas; fórmula, pesos, límites y fuente de lluvia pendientes.
 
 ## Criterio de avance
 
