@@ -115,3 +115,148 @@ Las transiciones válidas, los motivos y los efectos secundarios se definirán c
 - Canal de tiempo real y recuperación tras reconexión.
 - Fórmula propuesta, límites, redondeo y pesos relativos de demanda, disponibilidad, lluvia y franja horaria.
 - Fuente del dato de lluvia, frecuencia de actualización y comportamiento si esa fuente no está disponible.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+persona -> tiene uno o varios usuarios (pasajero, chofer, soporte y/o administrador)
+id, nombre_apellido, dni(unique), fecha_nacimiento, estado_civil, teléfono, correo(unique)
+  ej1: persona1 es pasajero y chofer
+  ej2: persona2 es pasajero y soporte
+  ej3: persona3 es pasajero, soporte y administrador
+*dejamos un sólo correo por persona porque no es común que se use más de un correo aunque sean roles distintos. la diferencia está en el usuario_rol.
+-------------
+usuario -> puede tener UN SOLO ROL a la vez: Chofer, Pasajero, Soporte, Administrador
+id, 
+nombre_usuario(unique), 
+rol_usuario, 
+estado, 
+fecha_creacion, 
+fecha_actualizacion
+----------
+credencial -> UNA por usuario
+id, usuario_id(fk,pk), contrasenia_hash, algoritmo, intentos_fallidos, bloqueado_hasta, ultimo_acceso_at, fecha_creacion, fecha_actualizacion
+-------------
+si usuario_rol=Chofer entonces
+  tiene una tabla de "UsuarioChofer" que tendría
+
+UsuarioChofer
+
+id PK
+usuario_id UNIQUE FK -> usuario.id
+disponibilidad
+carnet_conducir_validado
+fecha_creacion
+fecha_actualizacion
+
+--------------
+vehiculo -> asignado a UNO o MÁS choferes
+atributos:
+  id PK
+  patente UNIQUE
+  tipo_vehiculo
+  marca
+  modelo
+  anio_fabricacion
+  color
+  capacidad_pasajeros
+  estado
+  created_at
+  updated_at
+--------------
+chofer_vehiculo (tabla intermedia)
+
+id PK
+usuario_chofer_id FK -> usuario_chofer.id
+vehiculo_id FK -> vehiculo.id
+estado_asignacion
+asignado_at
+desasignado_at NULL (puede nunca haber sido desasignado)
+
+--------------
+si usuari_rol=Pasajero entonces
+  tiene una tabla de "UsuarioPasajero" que tendría
+    id, usuario_id, fecha_creacion, fecha_actualizacion
+
+    ESTO POR AHORA NO SERÍA ASI, PASAJEROS SOLO TIENEN USUARIO
+-----------------
+ubicacion_actual
+
+id pk
+usuario_id PK/FK -> usuario.id
+latitud
+longitud
+actualizado_at
+precision_metros
+--------------------
+ubicacion_historica
+
+id PK
+usuario_id FK -> usuario.id
+viaje_id FK -> viaje.id  (puede o no estar en un viaje)
+latitud
+longitud
+registrado_at
+precision_metros
+-------------------
+viaje -> tiene asignado UN chofer y UN pasajero
+  tendría puntos_seguimiento (punto de inicio, punto de fin)
+  atributos:
+    id PK
+    codigo UNIQUE
+    pasajero_usuario_id FK -> usuario.id
+    chofer_usuario_id FK -> usuario.id NULL (aún no tiene asignado chofer)
+    vehiculo_utilizado_id fk -> vehiculo.id
+    vehiculo_utilizado (json con los datos tipo snapshot del vehículo usado por el chofer en ese momento)
+    estado
+    origen_latitud
+    origen_longitud
+    destino_latitud
+    destino_longitud
+    precio_estimado
+    precio_final NULL (no se definió aún)
+    multiplicador_demanda
+    datos_demanda (json con los datos del momento)
+    solicitado_at
+    asignado_at
+    iniciado_at
+    finalizado_at
+    cancelado_at
+
+---------------------------------------
+oferta --> tiene UN pasajero asignado
+
+  id PK
+  viaje_id FK -> viaje.id
+  pasajero_usuario_id FK -> usuario.id
+  chofer_usuario_id FK -> usuario.id
+  estado
+  enviada_at
+  expira_at
+  respondida_at NULL (puede no haber sido respondida)
+  fecha_creacion
+  fecha_actualizacion
+
+-----------------------------------
+
+
+- Ubicación de viaje: posición histórica del chofer durante el viaje, sujeta a una política de retención.
+
+
+
+
+
+
+- Tarifa: parámetros configurables usados por la estimación y el cálculo final.
+- Precio dinámico: ajustes calculados según demanda y disponibilidad de una zona, lluvia y franja horaria, con evidencia de los datos utilizados.
+- Cobro: registro de cobro simulado asociado al viaje, con estado e idempotencia.
