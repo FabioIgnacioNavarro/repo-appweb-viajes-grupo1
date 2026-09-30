@@ -14,8 +14,8 @@ Este archivo define los términos oficiales. Los agentes deben reutilizar estos 
 | Oferta | Propuesta de un viaje enviada a un chofer, con vencimiento y resultado. |
 | Asignación | Operación atómica que vincula un viaje con un único chofer. |
 | Chofer disponible | Chofer habilitado, marcado como disponible y sin viaje activo. |
-| Ubicación actual | Última posición válida informada por un chofer. |
-| Ubicación histórica | Registro de posiciones conservado para reconstruir el recorrido, según la política de retención. |
+| Ubicación actual | Última posición válida informada por un usuario con rol Chofer o Pasajero. |
+| Ubicación histórica | Registro de posiciones de un Chofer o Pasajero, conservado según la política de retención. |
 | Estimación | Precio y duración calculados antes de confirmar el viaje. |
 | Tarifa final | Precio calculado por el servidor al finalizar el viaje. |
 | Cobro | Registro del intento o resultado de cobrar la tarifa final. |

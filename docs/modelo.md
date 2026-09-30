@@ -20,7 +20,8 @@ La plataforma recibe una solicitud de viaje, estima precio y duración, busca ch
 - Vehículo: datos necesarios para mostrar y validar el vehículo del chofer.
 - Viaje: pasajero, origen, destino, estimación, tarifa final, estado y chofer asignado.
 - Oferta: propuesta de un viaje a un chofer, con vencimiento y resultado.
-- Ubicación de viaje: posición histórica del chofer durante el viaje, sujeta a una política de retención.
+- Ubicación de viaje: posición histórica del chofer durante el viaje. Se consulta cada 5 segundos, se conserva un punto cada 15 segundos y los puntos se eliminan a los 60 días, según [ADR 0010](adr/0010-politica-retencion-ubicaciones.md).
+- Ubicación actual e histórica: entidades separadas referenciadas por `usuario.id`, habilitadas para usuarios con rol Chofer o Pasajero, según [ADR 0011](adr/0011-ubicaciones-genericas-por-usuario.md). Soporte y Administración no tienen ubicación persistida.
 - Tarifa: parámetros configurables usados por la estimación y el cálculo final.
 - Precio dinámico: ajustes calculados según demanda y disponibilidad de una zona, lluvia y franja horaria, con evidencia de los datos utilizados.
 - Cobro: registro de cobro simulado asociado al viaje, con estado e idempotencia.
@@ -111,7 +112,6 @@ Las transiciones válidas, los motivos y los efectos secundarios se definirán c
 
 - Mecanismo de bloqueo y orden de bloqueo para viaje y chofer.
 - Política exacta de expiración de ofertas.
-- Geolocalización y retención de ubicaciones.
 - Canal de tiempo real y recuperación tras reconexión.
 - Fórmula propuesta, límites, redondeo y pesos relativos de demanda, disponibilidad, lluvia y franja horaria.
 - Fuente del dato de lluvia, frecuencia de actualización y comportamiento si esa fuente no está disponible.
@@ -248,10 +248,22 @@ oferta --> tiene UN pasajero asignado
   fecha_actualizacion
 
 -----------------------------------
+Tarifa: 
+Distancia * Costo por kilometro,
+Disponibilidad de choferes, 
+Demanda de pasajeros,
+Multiplicador por demanda (desde 0,75 por baja demanda hasta 1,25 por alta demanda),
+Zona(Centro de la ciudad, alrededores)
+Clima (si llueve o no),
+Multiplicador por horarios (Madrugada(1,15), mañana(1), siesta(1), tarde(1) o noche(1,1))
 
-
-- Ubicación de viaje: posición histórica del chofer durante el viaje, sujeta a una política de retención.
-
+precio = tarifa_base
+       × multiplicador_demanda
+       × multiplicador_disponibilidad
+       × multiplicador_zona
+       × multiplicador_clima
+       × multiplicador_horario
+(Hay que definir su cálculo y sus umbrales.)
 
 
 

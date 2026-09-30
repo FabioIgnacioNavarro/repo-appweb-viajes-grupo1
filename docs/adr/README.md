@@ -15,3 +15,6 @@ Decisiones adicionales registradas:
 
 7. Representación de importes en pesos argentinos sin centavos.
 8. Fuente del dato de lluvia para el precio dinámico.
+9. Separación de ubicación actual e histórica del chofer.
+10. Política de retención de ubicaciones históricas de viajes.
+11. Referencias genéricas de ubicación por usuario y roles habilitados.

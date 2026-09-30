@@ -2,7 +2,7 @@
 
 - Estado: propuesto
 - Fecha: 2026-09-23
-- Participantes: pendiente de completar
+- Participantes: Echeverría Maximiliano Joel, Borchichi Valentino, Navarro Fabio
 
 ## Contexto
 

@@ -1,6 +1,6 @@
 # ADR 0009: Mantener la ubicación del chofer separada de `UsuarioChofer`
 
-- Estado: aceptado
+- Estado: reemplazado por otro
 - Fecha: 2026-09-30 - 10:30 am
 - Participantes: Echeverría Maximiliano Joel, Borchichi Valentino, Navarro Fabio
 
