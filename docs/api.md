@@ -125,3 +125,12 @@ Ejemplo de error:
   }
 }
 ```
+
+## Demo por terminal
+
+La demo local se ejecuta con `npm run demo`. Solicita el rol del actor, una latitud y longitud de la
+ubicación actual y una latitud y longitud de destino, muestra la estimación, confirma el viaje, lo
+inicia y lo finaliza. En una terminal las coordenadas actuales se ingresan manualmente porque el
+proceso no tiene acceso directo al GPS del dispositivo. No reemplaza los
+endpoints HTTP: sirve para demostrar el caso de uso mientras todavía no existe el adaptador web.
+Los datos se guardan en memoria durante el proceso y se muestran al finalizar.

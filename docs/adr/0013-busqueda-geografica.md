@@ -57,7 +57,9 @@ Desventajas:
 
 ## Decisión
 
-Pendiente de medición comparativa. La decisión final deberá elegir una opción, definir el índice o estructura concreta y demostrar su comportamiento con 500 choferes, incluyendo latencia de solicitud, tiempo hasta asignación, lag del event loop, throughput y memoria.
+Para la demo por terminal se posterga la decisión y se usa una asignación genérica determinista. No se incorpora PostGIS todavía porque el flujo no consulta una flota real ni persiste ubicaciones espaciales.
+
+La decisión productiva sigue pendiente de medición comparativa. Deberá elegir una opción, definir el índice o estructura concreta y demostrar su comportamiento con 500 choferes, incluyendo latencia de solicitud, tiempo hasta asignación, lag del event loop, throughput y memoria.
 
 ## Consecuencias
 
