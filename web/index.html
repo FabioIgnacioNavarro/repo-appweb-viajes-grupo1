@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7f4">
+    <title>Viajes · Demo de recorrido</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="/estilos.css">
+  </head>
+  <body>
+    <header class="encabezado">
+      <a class="marca" href="/" aria-label="Viajes, inicio">
+        <span class="marca-icono">V</span>
+        <span>viajes<span class="marca-punto">.</span></span>
+      </a>
+      <span class="etiqueta-demo"><span class="punto-vivo"></span> DEMO DE RECORRIDO</span>
+    </header>
+
+    <main class="contenedor">
+      <section class="presentacion">
+        <div>
+          <p class="sobrelinea">PROGRAMACIÓN IV · GRUPO 1</p>
+          <h1>Tu recorrido,<br><span>paso a paso.</span></h1>
+          <p class="introduccion">Elegí dos puntos del mapa y mirá cómo avanza un viaje de prueba.</p>
+        </div>
+        <div class="aviso-demo"><span aria-hidden="true">ⓘ</span> Simulación local: no crea ni guarda viajes.</div>
+      </section>
+
+      <section class="tablero" aria-label="Simulador de recorrido">
+        <aside class="panel">
+          <div class="panel-titulo">
+            <div><span class="sobrelinea">01 — RECORRIDO</span><h2>¿A dónde vamos?</h2></div>
+            <button id="boton-ubicacion" class="boton-icono" type="button" title="Usar mi ubicación" aria-label="Usar mi ubicación">◎</button>
+          </div>
+          <form id="formulario-ruta">
+            <fieldset class="campo-punto">
+              <legend><span class="marcador marcador-origen"></span> Punto de partida</legend>
+              <label for="latitud-origen">Latitud</label><label for="longitud-origen">Longitud</label>
+              <input id="latitud-origen" name="latitud-origen" type="number" step="any" min="-90" max="90" value="-27.451" required>
+              <input id="longitud-origen" name="longitud-origen" type="number" step="any" min="-180" max="180" value="-58.986" required>
+            </fieldset>
+            <div class="conector" aria-hidden="true"></div>
+            <fieldset class="campo-punto">
+              <legend><span class="marcador marcador-destino"></span> Punto de destino</legend>
+              <label for="latitud-destino">Latitud</label><label for="longitud-destino">Longitud</label>
+              <input id="latitud-destino" name="latitud-destino" type="number" step="any" min="-90" max="90" value="-27.462" required>
+              <input id="longitud-destino" name="longitud-destino" type="number" step="any" min="-180" max="180" value="-58.993" required>
+            </fieldset>
+            <button class="boton boton-principal" id="boton-calcular" type="submit">Mostrar recorrido <span aria-hidden="true">↗</span></button>
+            <p id="mensaje-ruta" class="mensaje" role="status" aria-live="polite">Ingresá las coordenadas o elegí tu ubicación.</p>
+          </form>
+
+          <div class="tarjeta-precio" aria-live="polite">
+            <div class="precio-cabecera"><span class="precio-icono">$</span><div><span class="texto-secundario">PRECIO ESTIMADO</span><strong id="precio-estimado">—</strong></div></div>
+            <p id="vigencia-precio">Calculá el recorrido para ver cuánto costaría.</p>
+            <small>Estimación orientativa según la tarifa actual de la demo.</small>
+          </div>
+
+          <div class="separador"></div>
+          <div class="panel-titulo titulo-estado">
+            <div><span class="sobrelinea">02 — VIAJE DE PRUEBA</span><h2>Estado del viaje</h2></div>
+          </div>
+          <div class="estado-actual" aria-live="polite">
+            <span id="icono-estado" class="icono-estado">…</span>
+            <div><span class="texto-secundario">ESTADO ACTUAL</span><strong id="nombre-estado">Sin iniciar</strong></div>
+          </div>
+          <div class="pasos" aria-label="Etapas del viaje">
+            <span data-paso="0">Solicitado</span><span data-paso="1">Asignado</span><span data-paso="2">En curso</span><span data-paso="3">Finalizado</span>
+          </div>
+          <button class="boton boton-secundario" id="boton-avanzar" type="button" disabled>Primero mostr&aacute; el recorrido</button>
+          <button class="boton-reiniciar" id="boton-reiniciar" type="button">Reiniciar simulación</button>
+        </aside>
+
+        <section class="mapa-panel" aria-label="Mapa y datos del recorrido">
+          <div id="mapa" role="application" aria-label="Mapa interactivo del recorrido"></div>
+          <div class="tarjeta-recorrido" aria-live="polite">
+            <div class="dato"><span class="dato-icono">↗</span><div><span class="texto-secundario">DISTANCIA</span><strong id="distancia-ruta">—</strong></div></div>
+            <div class="dato"><span class="dato-icono">◷</span><div><span class="texto-secundario">DURACIÓN APROX.</span><strong id="duracion-ruta">—</strong></div></div>
+          </div>
+          <div class="leyenda-mapa"><span class="marcador marcador-origen"></span> Origen <span class="marcador marcador-destino"></span> Destino</div>
+        </section>
+      </section>
+      <footer>Rutas por <strong>OSRM</strong> · Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></footer>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/aplicacion.js" defer></script>
+  </body>
+</html>

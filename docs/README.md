@@ -7,6 +7,7 @@ Esta carpeta reúne el diseño y la evidencia del trabajo práctico. Se completa
 - [Modelo de dominio](modelo.md): actores, entidades, estados e invariantes.
 - [API inicial](api.md): flujos y contrato HTTP preliminar.
 - [Alcance mínimo demostrable](alcance-minimo.md): primer recorrido de punta a punta y orden de trabajo.
+- [Demo web de recorrido](demo-web.md): mapa, ruta OSRM y simulación local de estados.
 - [Glosario](glosario.md): vocabulario oficial del dominio.
 - [Contratos compartidos](contratos.md): convenciones de datos y comunicación.
 - [Flujo de trabajo](flujo-trabajo.md): reglas para colaborar entre agentes y personas.

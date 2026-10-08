@@ -21,3 +21,4 @@ Decisiones adicionales registradas:
 12. Separación de persona, usuario y perfiles por rol.
 13. Estrategia de búsqueda geográfica.
 14. Proveedor de rutas para distancia y duración por calles.
+15. Demo web de recorrido con Leaflet y OpenStreetMap.

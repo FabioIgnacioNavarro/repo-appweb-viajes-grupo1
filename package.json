@@ -6,13 +6,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "demo": "npm run build && node dist/terminal.js",
+    "demo:web": "npm run build && node dist/servidor-web.js",
     "test": "npm run build && node --test dist/*.test.js"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.2"
   }

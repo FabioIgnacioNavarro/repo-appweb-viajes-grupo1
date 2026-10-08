@@ -18,7 +18,7 @@ Este documento define un contrato preliminar. Las rutas, los parámetros y los n
 | Método | Ruta | Propósito |
 |---|---|---|
 | GET | `/health` | Indicar que el proceso está vivo. |
-| GET | `/ready` | Indicar que el proceso está listo y que la base de datos está disponible. |
+| GET | `/ready` | Indicar que el proceso está listo y que la base de datos está disponible; responde `503` mientras esa dependencia no esté configurada. |
 
 ## Identidad y perfiles
 
@@ -138,3 +138,37 @@ Los datos se guardan en memoria durante el proceso y se muestran al finalizar.
 La demo usa el proveedor configurado en `RUTA_PROVEEDOR`: `OSRM` para rutas reales por calles,
 `GOOGLE` para Google Routes API o `HAVERSINE` para modo offline. La estimación informa el proveedor
 utilizado, la distancia real de ruta cuando está disponible y la duración devuelta por el proveedor.
+
+## Estimación de la demo web
+
+El servidor local de `npm run demo:web` expone `POST /demostracion/estimaciones` para que la pantalla
+muestre el precio calculado por el mismo caso de uso que utiliza la demo de terminal. Este recurso
+es auxiliar y local: no es parte del contrato final de producto y no crea ni confirma un viaje.
+
+Pedido:
+
+```json
+{
+  "origen": { "latitud": -27.451, "longitud": -58.986 },
+  "destino": { "latitud": -27.462, "longitud": -58.993 }
+}
+```
+
+La respuesta incluye `precio_estimado` como cadena entera de pesos, `moneda: "ARS"`,
+`distancia_metros`, `duracion_segundos`, `proveedor_ruta`, `polilinea` cuando el proveedor la
+devuelve e `vigente_hasta`. El cálculo usa la tarifa vigente en `src/viaje.ts` y el proveedor
+seleccionado mediante `RUTA_PROVEEDOR`. La fórmula actual aplica tarifa base, distancia y duración;
+los ajustes dinámicos por demanda, disponibilidad, clima y franja horaria siguen pendientes.
+
+## Primeros endpoints HTTP
+
+El servidor local también publica `GET /health`, `GET /ready` y el endpoint inicial del recorrido,
+`POST /viajes/estimacion`. Este último conserva la estimación en memoria durante sus tres minutos de
+vigencia y devuelve un `id_estimacion` único. La respuesta añade `multiplicador_demanda: 1`, porque
+la fórmula dinámica acordada todavía no está implementada. La zona, los factores y la versión de
+regla se incorporarán cuando se cierren DOM-003 y DOM-007; no se inventan valores mientras tanto.
+
+La estimación en memoria se pierde al reiniciar el proceso. `POST /viajes` todavía no está
+implementado: requiere vincular la estimación vigente a una identidad autenticada, aplicar
+idempotencia y persistir el precio aceptado. `GET /ready` responde `503` mientras la persistencia no
+esté configurada.
