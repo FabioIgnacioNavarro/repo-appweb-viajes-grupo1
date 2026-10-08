@@ -1,7 +1,7 @@
 # ADR 0011: Referenciar ubicaciones desde el usuario y limitar los roles habilitados
 
 - Estado: aceptado
-- Fecha: 2026-09-30
+- Fecha: 2026-09-30 - 12:20 am
 - Participantes: Echeverría Maximiliano Joel, Borchichi Valentino, Navarro Fabio
 
 ## Contexto

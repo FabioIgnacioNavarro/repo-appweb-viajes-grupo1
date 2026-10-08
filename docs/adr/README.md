@@ -18,3 +18,5 @@ Decisiones adicionales registradas:
 9. Separación de ubicación actual e histórica del chofer.
 10. Política de retención de ubicaciones históricas de viajes.
 11. Referencias genéricas de ubicación por usuario y roles habilitados.
+12. Separación de persona, usuario y perfiles por rol.
+13. Estrategia de búsqueda geográfica.

@@ -1,7 +1,7 @@
 # ADR 0010: Política de retención de ubicaciones históricas de viajes
 
 - Estado: aceptado
-- Fecha: 2026-09-30
+- Fecha: 2026-09-30 - 12:00 am
 - Participantes: Echeverría Maximiliano Joel, Borchichi Valentino, Navarro Fabio
 
 ## Contexto
