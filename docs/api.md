@@ -134,3 +134,7 @@ inicia y lo finaliza. En una terminal las coordenadas actuales se ingresan manua
 proceso no tiene acceso directo al GPS del dispositivo. No reemplaza los
 endpoints HTTP: sirve para demostrar el caso de uso mientras todavía no existe el adaptador web.
 Los datos se guardan en memoria durante el proceso y se muestran al finalizar.
+
+La demo usa el proveedor configurado en `RUTA_PROVEEDOR`: `OSRM` para rutas reales por calles,
+`GOOGLE` para Google Routes API o `HAVERSINE` para modo offline. La estimación informa el proveedor
+utilizado, la distancia real de ruta cuando está disponible y la duración devuelta por el proveedor.

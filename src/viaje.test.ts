@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { ejecutarViajeDeDemo, RepositorioViajesMemoria } from "./viaje";
+import { ejecutarViajeDeDemo, ejecutarViajeDeDemoConRuta, RepositorioViajesMemoria } from "./viaje";
 
 test("completa un viaje de demo para pasajero con chofer genérico", () => {
   const repositorio = new RepositorioViajesMemoria();
@@ -31,4 +31,20 @@ test("usa el origen informado para calcular el viaje", () => {
   );
   assert.deepEqual(estimacion.origen, { latitud: -34.6118, longitud: -58.4173 });
   assert.ok(estimacion.distanciaMetros > 0);
+});
+
+test("usa distancia y duración del proveedor de rutas para fijar el precio", async () => {
+  const calculadorRuta = {
+    calcular: async () => ({ distanciaMetros: 10_000, duracionSegundos: 1_200, proveedor: "OSRM" as const })
+  };
+  const { estimacion, viaje } = await ejecutarViajeDeDemoConRuta(
+    "PASAJERO",
+    { latitud: -34.6, longitud: -58.4 },
+    { latitud: -34.7, longitud: -58.5 },
+    new RepositorioViajesMemoria(),
+    calculadorRuta
+  );
+  assert.equal(estimacion.proveedorRuta, "OSRM");
+  assert.equal(estimacion.precioEstimado, 1000 + 10 * 600 + 20 * 120);
+  assert.equal(viaje.precioFinal, estimacion.precioEstimado);
 });

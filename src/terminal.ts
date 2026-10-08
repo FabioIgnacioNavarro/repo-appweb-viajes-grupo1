@@ -1,6 +1,8 @@
+import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { stdin as entrada, stdout as salida } from "node:process";
-import { ejecutarViajeDeDemo, RepositorioViajesMemoria, Rol } from "./viaje";
+import { ejecutarViajeDeDemoConRuta, RepositorioViajesMemoria, Rol } from "./viaje";
+import { crearCalculadorRuta } from "./rutas";
 
 function leerRol(valor: string): Rol {
   const normalizado = valor.trim().toUpperCase();
@@ -32,12 +34,14 @@ async function main(): Promise<void> {
       latitud: leerNumero(await interfaz.question("Latitud de destino: "), "La latitud"),
       longitud: leerNumero(await interfaz.question("Longitud de destino: "), "La longitud")
     };
-    const { estimacion, viaje } = ejecutarViajeDeDemo(rol, destino, repositorio, new Date(), origen);
+    const calculadorRuta = crearCalculadorRuta();
+    const { estimacion, viaje } = await ejecutarViajeDeDemoConRuta(rol, origen, destino, repositorio, calculadorRuta);
     console.log("\n--- Tarifa estimada ---");
     console.log(`Distancia: ${(estimacion.distanciaMetros / 1000).toFixed(2)} km`);
     console.log(`Duración estimada: ${Math.ceil(estimacion.duracionSegundos / 60)} min`);
     console.log(`Precio: ${estimacion.moneda} ${estimacion.precioEstimado}`);
     console.log(`Multiplicador de demanda: ${estimacion.multiplicadorDemanda}`);
+    console.log(`Proveedor de ruta: ${estimacion.proveedorRuta}`);
     console.log("\nViaje iniciado y finalizado de forma hipotética.");
     console.log(`Código: ${viaje.codigo}`);
     console.log(`Pasajero: ${viaje.pasajero} | Chofer: ${viaje.chofer}`);

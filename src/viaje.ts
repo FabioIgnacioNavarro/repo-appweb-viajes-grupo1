@@ -17,6 +17,8 @@ export interface Estimacion {
   multiplicadorDemanda: number;
   creadaEn: string;
   vigenteHasta: string;
+  proveedorRuta: string;
+  polilinea?: string;
 }
 
 export interface Viaje {
@@ -75,8 +77,28 @@ export function crearEstimacion(origen: Coordenada, destino: Coordenada, ahora =
   return {
     id: `estimacion-${ahora.getTime()}`,
     origen, destino, distanciaMetros, duracionSegundos, precioEstimado,
-    moneda: "ARS", multiplicadorDemanda: 1,
+    moneda: "ARS", multiplicadorDemanda: 1, proveedorRuta: "HAVERSINE",
     creadaEn: ahora.toISOString(), vigenteHasta: vigenteHasta.toISOString()
+  };
+}
+
+export async function crearEstimacionConRuta(
+  origen: Coordenada,
+  destino: Coordenada,
+  calculadorRuta: import("./rutas").CalculadorRuta,
+  ahora = new Date()
+): Promise<Estimacion> {
+  const ruta = await calculadorRuta.calcular(origen, destino);
+  const duracionSegundos = Math.max(60, ruta.duracionSegundos);
+  const precioEstimado = Math.round(PRECIO_BASE_ARS
+    + (ruta.distanciaMetros / 1000) * PRECIO_POR_KM_ARS
+    + (duracionSegundos / 60) * PRECIO_POR_MINUTO_ARS);
+  const vigenteHasta = new Date(ahora.getTime() + 3 * 60_000);
+  return {
+    id: `estimacion-${ahora.getTime()}`, origen, destino,
+    distanciaMetros: ruta.distanciaMetros, duracionSegundos, precioEstimado,
+    moneda: "ARS", multiplicadorDemanda: 1, proveedorRuta: ruta.proveedor,
+    polilinea: ruta.polilinea, creadaEn: ahora.toISOString(), vigenteHasta: vigenteHasta.toISOString()
   };
 }
 
@@ -129,6 +151,29 @@ export function ejecutarViajeDeDemo(
   viaje.estado = "FINALIZADO";
   viaje.finalizadoEn = new Date(ahora.getTime() + 2_000).toISOString();
   viaje.precioFinal = viaje.precioEstimado;
+  repositorio.guardar(viaje);
+  return { estimacion, viaje };
+}
+
+export async function ejecutarViajeDeDemoConRuta(
+  rol: Rol,
+  origen: Coordenada,
+  destino: Coordenada,
+  repositorio: RepositorioViajesMemoria,
+  calculadorRuta: import("./rutas").CalculadorRuta,
+  ahora = new Date()
+): Promise<{ estimacion: Estimacion; viaje: Viaje }> {
+  const estimacion = await crearEstimacionConRuta(origen, destino, calculadorRuta, ahora);
+  const viaje: Viaje = {
+    id: `viaje-${ahora.getTime()}`, codigo: `VIAJE-${ahora.getTime()}`,
+    pasajero: rol === "PASAJERO" ? "pasajero-demo" : "pasajero-generico",
+    chofer: rol === "CHOFER" ? "chofer-demo" : "chofer-generico",
+    origen: estimacion.origen, destino: estimacion.destino,
+    precioEstimado: estimacion.precioEstimado, moneda: "ARS", estado: "FINALIZADO",
+    distanciaMetros: estimacion.distanciaMetros, duracionSegundos: estimacion.duracionSegundos,
+    solicitadoEn: ahora.toISOString(), iniciadoEn: new Date(ahora.getTime() + 1_000).toISOString(),
+    finalizadoEn: new Date(ahora.getTime() + 2_000).toISOString(), precioFinal: estimacion.precioEstimado
+  };
   repositorio.guardar(viaje);
   return { estimacion, viaje };
 }

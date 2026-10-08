@@ -18,5 +18,9 @@ destino. El actor del rol opuesto se completa automáticamente. Los viajes se gu
 durante la ejecución. La terminal no puede leer GPS automáticamente; para eso hará falta un
 adaptador web o móvil con permiso de geolocalización.
 
+Por defecto usa OSRM para calcular rutas reales por calles. Para Google Routes API, copiá `.env.example`
+a `.env`, configurá `RUTA_PROVEEDOR=GOOGLE` y agregá una clave de Google Cloud en
+`GOOGLE_MAPS_API_KEY`. Para trabajar sin red usá `RUTA_PROVEEDOR=HAVERSINE`.
+
 El diseño y las decisiones de dominio están en [docs/modelo.md](docs/modelo.md) y la estrategia
 geográfica pendiente en [docs/adr/0013-busqueda-geografica.md](docs/adr/0013-busqueda-geografica.md).
