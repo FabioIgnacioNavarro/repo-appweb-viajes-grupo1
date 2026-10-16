@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { ValidadorJwtJwks } from "../compartido/jwt";
+import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConfirmarViaje,
   ConsultarViaje, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
@@ -12,7 +13,9 @@ import { crearRouterViajes } from "./http";
 const puerto = Number(process.env.PUERTO_MS_VIAJES ?? 3000);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_VIAJES debe ser un entero entre 1 y 65535.");
 const requerido = (nombre: string): string => { const valor = process.env[nombre]; if (!valor) throw new Error(`${nombre} es obligatoria.`); return valor; };
-const token = new ValidadorJwtJwks({ jwksUrl: requerido("JWT_JWKS_URL"), emisor: requerido("JWT_ISSUER"), audiencia: requerido("JWT_AUDIENCE"), campoRol: process.env.JWT_ROLE_CLAIM ?? "rol" });
+const token = process.env.JWT_MODO === "falso"
+  ? new ValidadorJwtFalso()
+  : new ValidadorJwtJwks({ jwksUrl: requerido("JWT_JWKS_URL"), emisor: requerido("JWT_ISSUER"), audiencia: requerido("JWT_AUDIENCE"), campoRol: process.env.JWT_ROLE_CLAIM ?? "rol" });
 const viajes = new RepositorioViajesMemoria();
 const ofertas = new RepositorioOfertasMemoria();
 const cobros = new RepositorioCobrosMemoria();
