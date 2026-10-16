@@ -32,3 +32,22 @@ y consultar el servicio público de OSRM.
 El diseño y las decisiones de dominio están en [docs/modelo.md](docs/modelo.md) y la estrategia
 geográfica pendiente en [docs/adr/0013-busqueda-geografica.md](docs/adr/0013-busqueda-geografica.md).
 El alcance y los límites de la página están en [docs/demo-web.md](docs/demo-web.md).
+
+## `ms-flota`
+
+Para compilar y ejecutar el servicio inicial en memoria:
+
+```text
+npm run flota
+```
+
+El servicio escucha por defecto en `http://localhost:3002` y exige un JWT externo mediante
+`Authorization: Bearer <token>`. El validador real todavía se inyecta por el adaptador de identidad;
+no existe login dentro del servicio. PostgreSQL se puede levantar con:
+
+```text
+docker compose up -d postgres
+```
+
+La estrategia inicial de cercanía y sus límites están en
+[docs/adr/0017-busqueda-flota-inicial.md](docs/adr/0017-busqueda-flota-inicial.md).

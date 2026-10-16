@@ -30,6 +30,26 @@ Este documento define un contrato preliminar. Las rutas, los parámetros y los n
 | PATCH | `/choferes/yo/disponibilidad` | Cambiar la disponibilidad del chofer autenticado. |
 | POST | `/choferes/yo/ubicacion` | Registrar la ubicación actual del chofer autenticado. |
 
+## `ms-flota`
+
+Las siguientes rutas pertenecen al servicio de flota y reciben un JWT externo en `Authorization`.
+No existe login dentro de este servicio.
+
+| Método | Ruta | Entrada | Resultado |
+|---|---|---|---|
+| PATCH | `/choferes/yo/disponibilidad` | `{ "disponibilidad": true\|false }` | Perfil actualizado del chofer autenticado. |
+| POST | `/choferes/yo/ubicacion` | `{ "latitud": number, "longitud": number, "actualizado_at"?: ISO-8601, "precision_metros"?: number }` | Última ubicación aceptada. |
+| GET | `/choferes/cercanos?latitud=&longitud=&radio_metros=` | Coordenada y radio en metros | Candidatos habilitados, disponibles, con ubicación reciente y sin viaje activo. Devuelve distancia, no expone coordenadas privadas. |
+| GET | `/choferes/:idChofer` | Identificador del usuario chofer | Perfil y ubicación solo si el actor está autorizado. |
+
+Reglas de `ms-flota`:
+
+- Solo un chofer habilitado y con carnet validado puede activarse o informar ubicación.
+- Una ubicación con marca temporal anterior o igual a la actual no sobrescribe la posición persistida.
+- El resultado de cercanos excluye choferes con viaje activo y ubicaciones cuya antigüedad supere el límite configurado.
+- `GET /choferes/:idChofer` responde `403` cuando el actor no tiene relación autorizada con la ubicación.
+- Errores usan la forma común `{ "error": { "codigo", "mensaje", "detalles" } }`.
+
 ## Viajes
 
 | Método | Ruta | Propósito |

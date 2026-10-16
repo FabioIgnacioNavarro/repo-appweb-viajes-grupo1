@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: viajes
+      POSTGRES_USER: viajes
+      POSTGRES_PASSWORD: viajes_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/ms-flota/schema.sql:/docker-entrypoint-initdb.d/001-ms-flota.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viajes -d viajes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

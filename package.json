@@ -7,18 +7,21 @@
     "build": "tsc -p tsconfig.json",
     "demo": "npm run build && node dist/terminal.js",
     "demo:web": "npm run build && node dist/servidor-web.js",
-    "test": "npm run build && node --test dist/viaje.test.js dist/ms-viajes/dominio.test.js"
+    "test": "npm run build && node --test dist/viaje.test.js dist/ms-viajes/dominio.test.js dist/ms-flota/dominio.test.js",
+    "flota": "npm run build && node dist/ms-flota/servidor.js"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.23.1",
     "typescript": "^5.7.2"
   }
 }

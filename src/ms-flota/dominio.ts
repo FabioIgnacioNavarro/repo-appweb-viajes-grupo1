@@ -1,0 +1,133 @@
+export type Rol = "PASAJERO" | "CHOFER" | "SOPORTE" | "ADMINISTRADOR";
+
+export interface ActorAutenticado { idUsuario: string; rol: Rol; }
+export interface Coordenada { latitud: number; longitud: number; }
+
+export interface Chofer {
+  id: string; usuarioId: string; habilitado: boolean; disponibilidad: boolean;
+  carnetConducirValidado: boolean; fechaCreacion: Date; fechaActualizacion: Date;
+}
+
+export interface UbicacionActual {
+  id: string; usuarioId: string; latitud: number; longitud: number;
+  actualizadoAt: Date; precisionMetros?: number;
+}
+
+export interface ChoferCercano extends UbicacionActual { distanciaMetros: number; }
+
+export interface RepositorioChoferes {
+  obtenerPorUsuario(usuarioId: string): Chofer | undefined;
+  guardar(chofer: Chofer): Chofer;
+  buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): ChoferCercano[];
+}
+
+export interface RepositorioUbicaciones {
+  obtenerActual(usuarioId: string): UbicacionActual | undefined;
+  guardarSiEsMasNueva(ubicacion: UbicacionActual): UbicacionActual;
+}
+
+export interface RepositorioViajesActivos { tieneViajeActivo(choferUsuarioId: string): boolean; }
+export interface AutorizadorUbicacion { puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): boolean; }
+
+export class ErrorFlota extends Error {
+  constructor(public readonly codigo: string, mensaje: string) { super(mensaje); this.name = "ErrorFlota"; }
+}
+
+export function validarCoordenada(coordenada: Coordenada): void {
+  if (!Number.isFinite(coordenada.latitud) || coordenada.latitud < -90 || coordenada.latitud > 90) throw new ErrorFlota("COORDENADAS_INVALIDAS", "La latitud debe estar entre -90 y 90.");
+  if (!Number.isFinite(coordenada.longitud) || coordenada.longitud < -180 || coordenada.longitud > 180) throw new ErrorFlota("COORDENADAS_INVALIDAS", "La longitud debe estar entre -180 y 180.");
+}
+
+export function distanciaHaversineMetros(origen: Coordenada, destino: Coordenada): number {
+  const radioTierra = 6_371_000;
+  const latitud = (destino.latitud - origen.latitud) * Math.PI / 180;
+  const longitud = (destino.longitud - origen.longitud) * Math.PI / 180;
+  const origenLatitud = origen.latitud * Math.PI / 180;
+  const destinoLatitud = destino.latitud * Math.PI / 180;
+  const a = Math.sin(latitud / 2) ** 2 + Math.cos(origenLatitud) * Math.cos(destinoLatitud) * Math.sin(longitud / 2) ** 2;
+  return 2 * radioTierra * Math.asin(Math.sqrt(a));
+}
+
+function exigirChofer(actor: ActorAutenticado): void {
+  if (actor.rol !== "CHOFER") throw new ErrorFlota("ROL_NO_AUTORIZADO", "Solo un chofer puede ejecutar esta operación.");
+}
+function exigirChoferExistente(chofer: Chofer | undefined): Chofer {
+  if (!chofer) throw new ErrorFlota("CHOFER_NO_ENCONTRADO", "El perfil de chofer no existe.");
+  return chofer;
+}
+
+export class CambiarDisponibilidadChofer {
+  constructor(private readonly choferes: RepositorioChoferes) {}
+  ejecutar(actor: ActorAutenticado, disponibilidad: boolean, ahora = new Date()): Chofer {
+    exigirChofer(actor);
+    const chofer = exigirChoferExistente(this.choferes.obtenerPorUsuario(actor.idUsuario));
+    if (!chofer.habilitado || !chofer.carnetConducirValidado) throw new ErrorFlota("CHOFER_NO_HABILITADO", "El chofer no está habilitado para operar.");
+    return this.choferes.guardar({ ...chofer, disponibilidad, fechaActualizacion: new Date(ahora) });
+  }
+}
+
+export class RegistrarUbicacionActual {
+  constructor(private readonly choferes: RepositorioChoferes, private readonly ubicaciones: RepositorioUbicaciones, private readonly id: () => string) {}
+  ejecutar(actor: ActorAutenticado, coordenada: Coordenada, actualizadoAt = new Date(), precisionMetros?: number): UbicacionActual {
+    exigirChofer(actor); validarCoordenada(coordenada);
+    const chofer = exigirChoferExistente(this.choferes.obtenerPorUsuario(actor.idUsuario));
+    if (!chofer.habilitado || !chofer.carnetConducirValidado) throw new ErrorFlota("CHOFER_NO_HABILITADO", "El chofer no está habilitado para informar ubicación.");
+    if (Number.isNaN(actualizadoAt.getTime())) throw new ErrorFlota("FECHA_INVALIDA", "La fecha de ubicación no es válida.");
+    if (precisionMetros !== undefined && (!Number.isFinite(precisionMetros) || precisionMetros < 0)) throw new ErrorFlota("PRECISION_INVALIDA", "La precisión debe ser un número positivo.");
+    return this.ubicaciones.guardarSiEsMasNueva({ id: this.id(), usuarioId: actor.idUsuario, ...coordenada, actualizadoAt: new Date(actualizadoAt), precisionMetros });
+  }
+}
+
+export class BuscarChoferesCercanos {
+  constructor(private readonly choferes: RepositorioChoferes, private readonly viajes: RepositorioViajesActivos) {}
+  ejecutar(actor: ActorAutenticado, origen: Coordenada, radioMetros: number, ahora = new Date(), antiguedadMaximaMs = 30_000): ChoferCercano[] {
+    if (!["PASAJERO", "SOPORTE", "ADMINISTRADOR"].includes(actor.rol)) throw new ErrorFlota("ROL_NO_AUTORIZADO", "El rol no puede buscar choferes.");
+    validarCoordenada(origen);
+    if (!Number.isFinite(radioMetros) || radioMetros <= 0 || radioMetros > 100_000) throw new ErrorFlota("RADIO_INVALIDO", "El radio debe estar entre 1 y 100000 metros.");
+    return this.choferes.buscarDisponiblesCercanos(origen, radioMetros, ahora, antiguedadMaximaMs).filter((chofer) => !this.viajes.tieneViajeActivo(chofer.usuarioId));
+  }
+}
+
+export class ConsultarUbicacionChofer {
+  constructor(private readonly choferes: RepositorioChoferes, private readonly ubicaciones: RepositorioUbicaciones, private readonly autorizador: AutorizadorUbicacion) {}
+  ejecutar(actor: ActorAutenticado, choferUsuarioId: string): { chofer: Chofer; ubicacion?: UbicacionActual } {
+    const chofer = exigirChoferExistente(this.choferes.obtenerPorUsuario(choferUsuarioId));
+    if (!this.autorizador.puedeConsultarUbicacion(actor, choferUsuarioId)) throw new ErrorFlota("UBICACION_NO_AUTORIZADA", "No tenés autorización para consultar la ubicación de este chofer.");
+    return { chofer, ubicacion: this.ubicaciones.obtenerActual(chofer.usuarioId) };
+  }
+}
+
+export class RepositorioChoferesMemoria implements RepositorioChoferes {
+  private readonly datos = new Map<string, Chofer>();
+  constructor(private readonly ubicaciones = new Map<string, UbicacionActual>()) {}
+  guardar(chofer: Chofer): Chofer { const copia = structuredClone(chofer); this.datos.set(chofer.usuarioId, copia); return structuredClone(copia); }
+  obtenerPorUsuario(usuarioId: string): Chofer | undefined { const chofer = this.datos.get(usuarioId); return chofer ? structuredClone(chofer) : undefined; }
+  guardarUbicacion(ubicacion: UbicacionActual): UbicacionActual { const anterior = this.ubicaciones.get(ubicacion.usuarioId); if (anterior && anterior.actualizadoAt.getTime() > ubicacion.actualizadoAt.getTime()) return structuredClone(anterior); const copia = structuredClone(ubicacion); this.ubicaciones.set(ubicacion.usuarioId, copia); return structuredClone(copia); }
+  obtenerUbicacion(usuarioId: string): UbicacionActual | undefined { const ubicacion = this.ubicaciones.get(usuarioId); return ubicacion ? structuredClone(ubicacion) : undefined; }
+  buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): ChoferCercano[] {
+    return [...this.datos.values()].flatMap((chofer) => {
+      if (!chofer.habilitado || !chofer.disponibilidad || !chofer.carnetConducirValidado) return [];
+      const ubicacion = this.ubicaciones.get(chofer.usuarioId);
+      if (!ubicacion || ahora.getTime() - ubicacion.actualizadoAt.getTime() > antiguedadMaximaMs) return [];
+      const distanciaMetros = distanciaHaversineMetros(origen, ubicacion);
+      return distanciaMetros <= radioMetros ? [{ ...structuredClone(ubicacion), distanciaMetros }] : [];
+    }).sort((a, b) => a.distanciaMetros - b.distanciaMetros);
+  }
+}
+
+export class RepositorioUbicacionesMemoria implements RepositorioUbicaciones {
+  constructor(private readonly ubicaciones = new Map<string, UbicacionActual>()) {}
+  obtenerActual(usuarioId: string): UbicacionActual | undefined { const ubicacion = this.ubicaciones.get(usuarioId); return ubicacion ? structuredClone(ubicacion) : undefined; }
+  guardarSiEsMasNueva(ubicacion: UbicacionActual): UbicacionActual { const anterior = this.ubicaciones.get(ubicacion.usuarioId); if (anterior && anterior.actualizadoAt.getTime() >= ubicacion.actualizadoAt.getTime()) return structuredClone(anterior); const copia = structuredClone(ubicacion); this.ubicaciones.set(ubicacion.usuarioId, copia); return structuredClone(copia); }
+}
+
+export class RepositorioViajesActivosMemoria implements RepositorioViajesActivos {
+  private readonly activos = new Set<string>();
+  marcarActivo(choferUsuarioId: string): void { this.activos.add(choferUsuarioId); }
+  liberar(choferUsuarioId: string): void { this.activos.delete(choferUsuarioId); }
+  tieneViajeActivo(choferUsuarioId: string): boolean { return this.activos.has(choferUsuarioId); }
+}
+
+export class AutorizadorUbicacionBasico implements AutorizadorUbicacion {
+  puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): boolean { return actor.idUsuario === choferUsuarioId || actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR"; }
+}

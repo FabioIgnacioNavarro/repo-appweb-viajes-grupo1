@@ -1,6 +1,6 @@
 # ADR 0013: Definir una estrategia espacial para buscar choferes cercanos
 
-- Estado: propuesto
+- Estado: reemplazado por ADR 0017
 - Fecha: 2026-10-08
 - Participantes: pendiente de completar con los integrantes del grupo
 

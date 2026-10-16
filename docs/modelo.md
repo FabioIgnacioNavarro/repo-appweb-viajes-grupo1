@@ -110,6 +110,7 @@ usuario_chofer
 --------------
 id PK
 usuario_id UNIQUE FK -> usuario.id
+habilitado
 disponibilidad
 carnet_conducir_validado
 fecha_creacion
@@ -446,4 +447,5 @@ Estas entidades son necesarias para completar todo el alcance, pero pueden incor
 - ADR 0010: retención de ubicaciones históricas.
 - ADR 0011: ubicaciones genéricas por usuario.
 - ADR 0012: separación de persona, usuario y perfiles por rol.
-- ADR 0013: estrategia de búsqueda geográfica.
+- ADR 0013: comparación inicial de estrategias geográficas.
+- ADR 0017: estrategia inicial de búsqueda de choferes cercanos.

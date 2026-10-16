@@ -22,3 +22,8 @@ Decisiones adicionales registradas:
 13. Estrategia de búsqueda geográfica.
 14. Proveedor de rutas para distancia y duración por calles.
 15. Demo web de recorrido con Leaflet y OpenStreetMap.
+16. Límites de microservicios y autenticación externa.
+17. Estrategia inicial de búsqueda de choferes cercanos.
+18. Persistencia de ubicación actual y rechazo de observaciones antiguas.
+19. Coordinación del estado ocupado del chofer.
+20. Configuración del contenedor de `ms-flota`.
