@@ -54,3 +54,28 @@ Las operaciones con efectos no repetibles deben aceptar `Clave-Idempotencia`. La
 ## Cambios de contrato
 
 Un cambio incompatible requiere actualizar `docs/api.md`, agregar o modificar un ADR y registrar pruebas de contrato. Si el cambio afecta otro módulo, debe explicitarse en el pull request.
+
+## Servicios y actor autenticado
+
+La primera separacion de responsabilidades queda definida por el ADR 0016. Los servicios no
+implementan login: reciben un JWT en `Authorization: Bearer <token>` y entregan sus claims a los
+casos de uso mediante un puerto de validacion. El contrato interno minimo del actor es:
+
+```text
+ActorAutenticado {
+  id_usuario: string
+  rol: PASAJERO | CHOFER | SOPORTE | ADMINISTRADOR
+}
+```
+
+Mientras no exista una especificacion oficial del emisor, algoritmo y claims, los adaptadores de
+prueba pueden construir este actor directamente. Un servicio debe rechazar el pedido si el token
+esta vencido, tiene un emisor o audiencia incorrectos, o no permite la operacion solicitada.
+
+Los contratos de servicio se mantienen asi:
+
+- `ms-viajes` consume una estimacion vigente de `ms-tarifas` y candidatos habilitados de `ms-flota`.
+- `ms-tarifas` no crea viajes ni asigna choferes.
+- `ms-flota` no modifica estados de viajes.
+- La confirmacion de viaje conserva `id_estimacion`, `precio_estimado`, `multiplicador_demanda`,
+  `factores_precio` y `vigente_hasta` como fotografia auditable.

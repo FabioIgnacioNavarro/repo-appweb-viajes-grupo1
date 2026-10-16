@@ -24,11 +24,11 @@ Desventajas: agrega estado y consultas por request; requiere resolver almacenami
 
 ## Decisión
 
-Se propone JWT para autenticación y autorización por recurso dentro de los casos de uso, con pruebas explícitas de acceso permitido y denegado.
+Se propone validar JWT emitidos por un proveedor externo en cada servicio y aplicar la autorización por recurso dentro de los casos de uso, con pruebas explícitas de acceso permitido y denegado. El login y la emisión del token quedan fuera del repositorio. La validación entra por un puerto para poder usar un adaptador falso en los tests mientras la cátedra confirma emisor, audiencia, algoritmo y claims.
 
 ## Consecuencias
 
-Los casos de uso recibirán un actor autenticado y deberán verificar pertenencia, rol y estado antes de devolver o modificar datos.
+Los casos de uso recibirán un actor autenticado y deberán verificar pertenencia, rol y estado antes de devolver o modificar datos. Una caída o respuesta inválida del proveedor se trata como autenticación fallida.
 
 ## Qué nos haría cambiar de decisión
 

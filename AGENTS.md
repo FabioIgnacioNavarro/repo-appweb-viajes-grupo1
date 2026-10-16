@@ -14,7 +14,9 @@ La prioridad del proyecto es cumplir el enunciado académico y poder demostrar e
 - CommonJS como sistema de módulos inicial.
 - PostgreSQL como base de datos relacional candidata y opción predeterminada mientras se completa el ADR de persistencia.
 - Docker y Docker Compose para reproducir el entorno.
-- Arquitectura hexagonal: dominio aislado, puertos, adaptadores y un único punto de composición.
+- Arquitectura hexagonal: cada servicio mantiene su dominio aislado, puertos, adaptadores y punto de composición.
+- Servicios iniciales: `ms-viajes`, `ms-tarifas` y `ms-flota`, integrados mediante contratos documentados.
+- La autenticación es externa: los servicios validan JWT y no implementan login propio.
 
 ## Reglas de trabajo
 

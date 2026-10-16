@@ -44,6 +44,19 @@ Este documento define un contrato preliminar. Las rutas, los parámetros y los n
 | GET | `/viajes` | Consultar el historial permitido para el usuario autenticado. |
 | GET | `/viajes/:idViaje/seguimiento` | Consultar el seguimiento en tiempo real; el canal queda pendiente de decisión. |
 
+## Limites de los servicios
+
+La implementacion se separa en tres servicios, sin cambiar las rutas publicas del contrato:
+
+| Servicio | Responsabilidad | Dependencias contractuales |
+|---|---|---|
+| `ms-viajes` | Ciclo de vida, ofertas, asignacion, cancelacion, finalizacion, cobro simulado e idempotencia. | Consume estimaciones de `ms-tarifas` y candidatos de `ms-flota`. |
+| `ms-tarifas` | Rutas, distancia, duracion, tarifa dinamica y vigencia de estimaciones. | Recibe origen, destino y factores de demanda configurados. |
+| `ms-flota` | Choferes, habilitacion, disponibilidad, ubicaciones y cercania. | Informa candidatos y su marca temporal de ubicacion. |
+
+Cada servicio valida el JWT en su entrada y entrega un actor autenticado al dominio. Ningun servicio
+emite credenciales ni implementa el login.
+
 ## Ofertas
 
 | Método | Ruta | Propósito |

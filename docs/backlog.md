@@ -22,6 +22,8 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 | CON-001 | Definir caso de cancelación simultánea | Alta | pendiente | El resultado de carrera está especificado y testeado. |
 | MED-001 | Diseñar simulador de 500 choferes | Media | pendiente | Se puede ejecutar carga sostenida y medir p50, p95, p99, lag y memoria. |
 | OPS-001 | Definir arranque, readiness y apagado | Alta | pendiente | La secuencia de clon limpio queda documentada y verificable. |
+| ARC-006 | Definir limites de microservicios y autenticacion externa | Alta | en progreso | ADR 0016 y contratos compartidos documentan servicios, actor JWT y dependencias. |
+| VIA-001 | Implementar dominio inicial de ms-viajes | Alta | en progreso | Estados, confirmacion, ofertas, asignacion, cancelacion, finalizacion y cobro tienen puertos y tests. |
 | MVP-002 | Implementar demo de viaje por terminal | Alta | terminado | Un pasajero o chofer elige rol, informa destino, confirma tarifa, inicia y finaliza un viaje con datos persistidos en memoria y precio final visible. Implementado en `src/viaje.ts` y `src/terminal.ts`, con tests en `src/viaje.test.ts`. |
 | MVP-003 | Calcular tarifa con rutas reales | Alta | terminado | La demo usa un proveedor configurable de rutas por calles y calcula el precio con distancia y duración reales; incluye Google Routes API, OSRM y fallback Haversine. |
 | MVP-004 | Mostrar recorrido y estimación en una demo web | Baja | terminado | Una página local permite ingresar origen y destino, muestra la ruta, distancia, duración, precio orientativo en ARS y vigencia usando el caso de uso de estimación existente, y simula los estados del viaje sin persistirlo. |

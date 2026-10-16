@@ -8,6 +8,11 @@ La variante obligatoria del grupo es **A: precio dinámico por demanda**. El pre
 
 ## Decisiones generales del modelo
 
+La implementacion se organiza en tres servicios con limites explicitos: `ms-viajes` es dueño del
+ciclo de vida del viaje y sus efectos, `ms-tarifas` es dueño de las estimaciones y reglas de precio,
+y `ms-flota` es dueño de choferes, disponibilidad y ubicaciones. La autenticacion es externa; el
+dominio recibe un actor ya validado mediante un puerto y no conoce el proveedor del JWT.
+
 - `Persona` contiene los datos personales compartidos.
 - Una `Persona` puede tener uno o varios registros en `Usuario`.
 - Cada `Usuario` tiene exactamente un rol y ese rol no cambia durante su ciclo de vida.
