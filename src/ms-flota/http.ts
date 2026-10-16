@@ -1,8 +1,8 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import type { ValidadorToken } from "../compartido/jwt";
 import { BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, type ActorAutenticado, type AutorizadorUbicacion, type RepositorioChoferes, type RepositorioUbicaciones, type RepositorioViajesActivos } from "./dominio";
 
-export interface ValidadorToken { validar(token: string): Promise<ActorAutenticado>; }
 export interface DependenciasFlota { choferes: RepositorioChoferes; ubicaciones: RepositorioUbicaciones; viajes: RepositorioViajesActivos; validadorToken: ValidadorToken; autorizador: AutorizadorUbicacion; }
 
 function objeto(valor: unknown): valor is Record<string, unknown> { return typeof valor === "object" && valor !== null; }
@@ -22,20 +22,20 @@ export function crearRouterFlota(dependencias: DependenciasFlota): express.Route
   router.use(express.json({ limit: "10kb" }));
   router.use(autenticar);
 
-  router.patch("/choferes/yo/disponibilidad", (pedido, respuesta) => {
-    try { const cuerpo = pedido.body as unknown; if (!objeto(cuerpo) || typeof cuerpo.disponibilidad !== "boolean") { respuesta.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "disponibilidad debe ser boolean.", detalles: {} } }); return; } const actor = actorDe(pedido); respuesta.status(200).json(serializarChofer(new CambiarDisponibilidadChofer(dependencias.choferes).ejecutar(actor, cuerpo.disponibilidad))); } catch (error) { errorHttp(error, respuesta); }
+  router.patch("/choferes/yo/disponibilidad", async (pedido, respuesta) => {
+    try { const cuerpo = pedido.body as unknown; if (!objeto(cuerpo) || typeof cuerpo.disponibilidad !== "boolean") { respuesta.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "disponibilidad debe ser boolean.", detalles: {} } }); return; } const actor = actorDe(pedido); respuesta.status(200).json(serializarChofer(await new CambiarDisponibilidadChofer(dependencias.choferes).ejecutar(actor, cuerpo.disponibilidad))); } catch (error) { errorHttp(error, respuesta); }
   });
 
-  router.post("/choferes/yo/ubicacion", (pedido, respuesta) => {
-    try { const cuerpo = pedido.body as unknown; if (!objeto(cuerpo) || typeof cuerpo.latitud !== "number" || typeof cuerpo.longitud !== "number") { respuesta.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "latitud y longitud son obligatorias.", detalles: {} } }); return; } const actualizado = typeof cuerpo.actualizado_at === "string" ? new Date(cuerpo.actualizado_at) : new Date(); const precision = typeof cuerpo.precision_metros === "number" ? cuerpo.precision_metros : undefined; const actor = actorDe(pedido); respuesta.status(200).json(serializarUbicacion(new RegistrarUbicacionActual(dependencias.choferes, dependencias.ubicaciones, randomUUID).ejecutar(actor, { latitud: cuerpo.latitud, longitud: cuerpo.longitud }, actualizado, precision))); } catch (error) { errorHttp(error, respuesta); }
+  router.post("/choferes/yo/ubicacion", async (pedido, respuesta) => {
+    try { const cuerpo = pedido.body as unknown; if (!objeto(cuerpo) || typeof cuerpo.latitud !== "number" || typeof cuerpo.longitud !== "number") { respuesta.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "latitud y longitud son obligatorias.", detalles: {} } }); return; } const actualizado = typeof cuerpo.actualizado_at === "string" ? new Date(cuerpo.actualizado_at) : new Date(); const precision = typeof cuerpo.precision_metros === "number" ? cuerpo.precision_metros : undefined; const actor = actorDe(pedido); respuesta.status(200).json(serializarUbicacion(await new RegistrarUbicacionActual(dependencias.choferes, dependencias.ubicaciones, randomUUID).ejecutar(actor, { latitud: cuerpo.latitud, longitud: cuerpo.longitud }, actualizado, precision))); } catch (error) { errorHttp(error, respuesta); }
   });
 
-  router.get("/choferes/cercanos", (pedido, respuesta) => {
-    try { const latitud = Number(pedido.query.latitud); const longitud = Number(pedido.query.longitud); const radio = Number(pedido.query.radio_metros ?? 5000); const candidatos = new BuscarChoferesCercanos(dependencias.choferes, dependencias.viajes).ejecutar(actorDe(pedido), { latitud, longitud }, radio); respuesta.status(200).json({ candidatos: candidatos.map((candidato) => ({ id_chofer: candidato.usuarioId, distancia_metros: Math.round(candidato.distanciaMetros), ubicacion_actualizada_at: candidato.actualizadoAt.toISOString() })) }); } catch (error) { errorHttp(error, respuesta); }
+  router.get("/choferes/cercanos", async (pedido, respuesta) => {
+    try { const latitud = Number(pedido.query.latitud); const longitud = Number(pedido.query.longitud); const radio = Number(pedido.query.radio_metros ?? 5000); const candidatos = await new BuscarChoferesCercanos(dependencias.choferes, dependencias.viajes).ejecutar(actorDe(pedido), { latitud, longitud }, radio); respuesta.status(200).json({ candidatos: candidatos.map((candidato) => ({ id_chofer: candidato.usuarioId, distancia_metros: Math.round(candidato.distanciaMetros), ubicacion_actualizada_at: candidato.actualizadoAt.toISOString() })) }); } catch (error) { errorHttp(error, respuesta); }
   });
 
-  router.get("/choferes/:idChofer", (pedido, respuesta) => {
-    try { const resultado = new ConsultarUbicacionChofer(dependencias.choferes, dependencias.ubicaciones, dependencias.autorizador).ejecutar(actorDe(pedido), pedido.params.idChofer); respuesta.status(200).json({ chofer: serializarChofer(resultado.chofer), ubicacion: resultado.ubicacion ? serializarUbicacion(resultado.ubicacion) : null }); } catch (error) { errorHttp(error, respuesta); }
+  router.get("/choferes/:idChofer", async (pedido, respuesta) => {
+    try { const resultado = await new ConsultarUbicacionChofer(dependencias.choferes, dependencias.ubicaciones, dependencias.autorizador).ejecutar(actorDe(pedido), pedido.params.idChofer); respuesta.status(200).json({ chofer: serializarChofer(resultado.chofer), ubicacion: resultado.ubicacion ? serializarUbicacion(resultado.ubicacion) : null }); } catch (error) { errorHttp(error, respuesta); }
   });
   return router;
 }

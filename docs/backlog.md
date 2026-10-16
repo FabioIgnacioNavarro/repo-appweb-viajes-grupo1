@@ -28,8 +28,8 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 | MVP-003 | Calcular tarifa con rutas reales | Alta | terminado | La demo usa un proveedor configurable de rutas por calles y calcula el precio con distancia y duración reales; incluye Google Routes API, OSRM y fallback Haversine. |
 | MVP-004 | Mostrar recorrido y estimación en una demo web | Baja | terminado | Una página local permite ingresar origen y destino, muestra la ruta, distancia, duración, precio orientativo en ARS y vigencia usando el caso de uso de estimación existente, y simula los estados del viaje sin persistirlo. |
 | FLOT-001 | Implementar dominio inicial de ms-flota | Alta | terminado | Disponibilidad, ubicación, candidatos, ocupación y autorización tienen puertos y tests en memoria. |
-| FLOT-002 | Integrar adaptador PostgreSQL y esquema inicial | Alta | en progreso | El esquema y el adaptador parametrizado permiten persistir choferes y ubicación actual. |
-| FLOT-003 | Publicar endpoints iniciales de ms-flota | Alta | en progreso | Las cuatro rutas están documentadas y protegidas por un puerto de validación JWT externo. |
+| FLOT-002 | Integrar adaptador PostgreSQL y esquema inicial | Alta | terminado | PostgreSQL se compone en `ms-flota`, persiste disponibilidad y ubicación actual, aplica actualización condicional y expone readiness con `SELECT 1`. |
+| FLOT-003 | Publicar endpoints iniciales de ms-flota | Alta | terminado | Las cuatro rutas están documentadas y protegidas por JWT externo o por el proveedor falso explícito de desarrollo. |
 | TAR-001 | Implementar dominio de `ms-tarifas` | Alta | en progreso | Dominio y pruebas cubren fórmula inicial, factores, BigInt, auditoría y vigencia; falta validar política y conectar extremos. |
 | TAR-002 | Adaptadores de `ms-tarifas` | Alta | en progreso | Existen adaptadores OSRM/Google/Haversine, clima y PostgreSQL; falta ejecutar integración con servicios reales y Compose. |
 | INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | pendiente | Demanda no tiene endpoint en `ms-viajes` y flota sigue en memoria; no hay flujo integrado demostrable. |

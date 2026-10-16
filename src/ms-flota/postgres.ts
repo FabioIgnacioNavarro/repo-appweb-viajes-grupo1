@@ -17,23 +17,18 @@ function mapearUbicacion(fila: FilaUbicacion): UbicacionActual {
 export class RepositorioChoferesPostgres implements RepositorioChoferes {
   constructor(private readonly pool: Pool) {}
 
-  obtenerPorUsuario(usuarioId: string): undefined { throw new Error("Usá obtenerPorUsuarioAsync en el adaptador PostgreSQL."); }
-  guardar(_chofer: Chofer): Chofer { throw new Error("Usá guardarAsync en el adaptador PostgreSQL."); }
-
-  async obtenerPorUsuarioAsync(usuarioId: string): Promise<Chofer | undefined> {
+  async obtenerPorUsuario(usuarioId: string): Promise<Chofer | undefined> {
     const resultado = await this.pool.query<FilaChofer>("SELECT id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado, fecha_creacion, fecha_actualizacion FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
     return resultado.rows[0] ? mapearChofer(resultado.rows[0]) : undefined;
   }
 
-  async guardarAsync(chofer: Chofer): Promise<Chofer> {
+  async guardar(chofer: Chofer): Promise<Chofer> {
     const resultado = await this.pool.query<FilaChofer>(`UPDATE usuario_chofer SET habilitado = $2, disponibilidad = $3, carnet_conducir_validado = $4, fecha_actualizacion = $5 WHERE usuario_id = $1 RETURNING id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado, fecha_creacion, fecha_actualizacion`, [chofer.usuarioId, chofer.habilitado, chofer.disponibilidad, chofer.carnetConducirValidado, chofer.fechaActualizacion]);
     if (!resultado.rows[0]) throw new Error("El perfil de chofer no existe.");
     return mapearChofer(resultado.rows[0]);
   }
 
-  buscarDisponiblesCercanos(_origen: Coordenada, _radioMetros: number, _ahora: Date, _antiguedadMaximaMs: number): ChoferCercano[] { throw new Error("Usá buscarDisponiblesCercanosAsync en el adaptador PostgreSQL."); }
-
-  async buscarDisponiblesCercanosAsync(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): Promise<ChoferCercano[]> {
+  async buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): Promise<ChoferCercano[]> {
     const radioTierra = 6_371_000;
     const latitudDelta = radioMetros / radioTierra * 180 / Math.PI;
     const longitudDelta = radioMetros / (radioTierra * Math.cos(origen.latitud * Math.PI / 180)) * 180 / Math.PI;
@@ -60,18 +55,15 @@ export class RepositorioChoferesPostgres implements RepositorioChoferes {
 export class RepositorioUbicacionesPostgres implements RepositorioUbicaciones {
   constructor(private readonly pool: Pool, private readonly generarId: () => string) {}
 
-  async obtenerActualAsync(usuarioId: string): Promise<UbicacionActual | undefined> {
+  async obtenerActual(usuarioId: string): Promise<UbicacionActual | undefined> {
     const resultado = await this.pool.query<FilaUbicacion>("SELECT id, usuario_id, latitud, longitud, actualizado_at, precision_metros FROM ubicacion_actual WHERE usuario_id = $1", [usuarioId]);
     return resultado.rows[0] ? mapearUbicacion(resultado.rows[0]) : undefined;
   }
 
-  obtenerActual(_usuarioId: string): undefined { throw new Error("Usá obtenerActualAsync en el adaptador PostgreSQL."); }
-  guardarSiEsMasNueva(_ubicacion: UbicacionActual): UbicacionActual { throw new Error("Usá guardarSiEsMasNuevaAsync en el adaptador PostgreSQL."); }
-
-  async guardarSiEsMasNuevaAsync(ubicacion: UbicacionActual): Promise<UbicacionActual> {
+  async guardarSiEsMasNueva(ubicacion: UbicacionActual): Promise<UbicacionActual> {
     const resultado = await this.pool.query<FilaUbicacion>(`INSERT INTO ubicacion_actual (id, usuario_id, latitud, longitud, actualizado_at, precision_metros) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (usuario_id) DO UPDATE SET latitud = EXCLUDED.latitud, longitud = EXCLUDED.longitud, actualizado_at = EXCLUDED.actualizado_at, precision_metros = EXCLUDED.precision_metros WHERE ubicacion_actual.actualizado_at < EXCLUDED.actualizado_at RETURNING id, usuario_id, latitud, longitud, actualizado_at, precision_metros`, [ubicacion.id || this.generarId(), ubicacion.usuarioId, ubicacion.latitud, ubicacion.longitud, ubicacion.actualizadoAt, ubicacion.precisionMetros ?? null]);
     if (resultado.rows[0]) return mapearUbicacion(resultado.rows[0]);
-    const anterior = await this.obtenerActualAsync(ubicacion.usuarioId);
+    const anterior = await this.obtenerActual(ubicacion.usuarioId);
     if (!anterior) throw new Error("No se pudo guardar la ubicación.");
     return anterior;
   }

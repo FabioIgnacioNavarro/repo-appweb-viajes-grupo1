@@ -2,6 +2,7 @@ import { createPublicKey, verify as verificarFirma } from "node:crypto";
 
 export type RolJWT = "PASAJERO" | "CHOFER" | "SOPORTE" | "ADMINISTRADOR";
 export interface ActorJWT { idUsuario: string; rol: RolJWT; }
+export interface ValidadorToken { validar(token: string): Promise<ActorJWT>; }
 type ClaveJwk = { kid?: string; kty: string; use?: string; alg?: string; [clave: string]: unknown };
 type PayloadJWT = { sub?: string; iss?: string; aud?: string | string[]; exp?: number; nbf?: number; [clave: string]: unknown };
 

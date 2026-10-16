@@ -16,18 +16,18 @@ export interface UbicacionActual {
 export interface ChoferCercano extends UbicacionActual { distanciaMetros: number; }
 
 export interface RepositorioChoferes {
-  obtenerPorUsuario(usuarioId: string): Chofer | undefined;
-  guardar(chofer: Chofer): Chofer;
-  buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): ChoferCercano[];
+  obtenerPorUsuario(usuarioId: string): Promise<Chofer | undefined>;
+  guardar(chofer: Chofer): Promise<Chofer>;
+  buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): Promise<ChoferCercano[]>;
 }
 
 export interface RepositorioUbicaciones {
-  obtenerActual(usuarioId: string): UbicacionActual | undefined;
-  guardarSiEsMasNueva(ubicacion: UbicacionActual): UbicacionActual;
+  obtenerActual(usuarioId: string): Promise<UbicacionActual | undefined>;
+  guardarSiEsMasNueva(ubicacion: UbicacionActual): Promise<UbicacionActual>;
 }
 
-export interface RepositorioViajesActivos { tieneViajeActivo(choferUsuarioId: string): boolean; }
-export interface AutorizadorUbicacion { puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): boolean; }
+export interface RepositorioViajesActivos { tieneViajeActivo(choferUsuarioId: string): Promise<boolean>; }
+export interface AutorizadorUbicacion { puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): Promise<boolean>; }
 
 export class ErrorFlota extends Error {
   constructor(public readonly codigo: string, mensaje: string) { super(mensaje); this.name = "ErrorFlota"; }
@@ -58,9 +58,9 @@ function exigirChoferExistente(chofer: Chofer | undefined): Chofer {
 
 export class CambiarDisponibilidadChofer {
   constructor(private readonly choferes: RepositorioChoferes) {}
-  ejecutar(actor: ActorAutenticado, disponibilidad: boolean, ahora = new Date()): Chofer {
+  async ejecutar(actor: ActorAutenticado, disponibilidad: boolean, ahora = new Date()): Promise<Chofer> {
     exigirChofer(actor);
-    const chofer = exigirChoferExistente(this.choferes.obtenerPorUsuario(actor.idUsuario));
+    const chofer = exigirChoferExistente(await this.choferes.obtenerPorUsuario(actor.idUsuario));
     if (!chofer.habilitado || !chofer.carnetConducirValidado) throw new ErrorFlota("CHOFER_NO_HABILITADO", "El chofer no está habilitado para operar.");
     return this.choferes.guardar({ ...chofer, disponibilidad, fechaActualizacion: new Date(ahora) });
   }
@@ -68,9 +68,9 @@ export class CambiarDisponibilidadChofer {
 
 export class RegistrarUbicacionActual {
   constructor(private readonly choferes: RepositorioChoferes, private readonly ubicaciones: RepositorioUbicaciones, private readonly id: () => string) {}
-  ejecutar(actor: ActorAutenticado, coordenada: Coordenada, actualizadoAt = new Date(), precisionMetros?: number): UbicacionActual {
+  async ejecutar(actor: ActorAutenticado, coordenada: Coordenada, actualizadoAt = new Date(), precisionMetros?: number): Promise<UbicacionActual> {
     exigirChofer(actor); validarCoordenada(coordenada);
-    const chofer = exigirChoferExistente(this.choferes.obtenerPorUsuario(actor.idUsuario));
+    const chofer = exigirChoferExistente(await this.choferes.obtenerPorUsuario(actor.idUsuario));
     if (!chofer.habilitado || !chofer.carnetConducirValidado) throw new ErrorFlota("CHOFER_NO_HABILITADO", "El chofer no está habilitado para informar ubicación.");
     if (Number.isNaN(actualizadoAt.getTime())) throw new ErrorFlota("FECHA_INVALIDA", "La fecha de ubicación no es válida.");
     if (precisionMetros !== undefined && (!Number.isFinite(precisionMetros) || precisionMetros < 0)) throw new ErrorFlota("PRECISION_INVALIDA", "La precisión debe ser un número positivo.");
@@ -80,31 +80,34 @@ export class RegistrarUbicacionActual {
 
 export class BuscarChoferesCercanos {
   constructor(private readonly choferes: RepositorioChoferes, private readonly viajes: RepositorioViajesActivos) {}
-  ejecutar(actor: ActorAutenticado, origen: Coordenada, radioMetros: number, ahora = new Date(), antiguedadMaximaMs = 30_000): ChoferCercano[] {
+  async ejecutar(actor: ActorAutenticado, origen: Coordenada, radioMetros: number, ahora = new Date(), antiguedadMaximaMs = 30_000): Promise<ChoferCercano[]> {
     if (!["PASAJERO", "SOPORTE", "ADMINISTRADOR"].includes(actor.rol)) throw new ErrorFlota("ROL_NO_AUTORIZADO", "El rol no puede buscar choferes.");
     validarCoordenada(origen);
     if (!Number.isFinite(radioMetros) || radioMetros <= 0 || radioMetros > 100_000) throw new ErrorFlota("RADIO_INVALIDO", "El radio debe estar entre 1 y 100000 metros.");
-    return this.choferes.buscarDisponiblesCercanos(origen, radioMetros, ahora, antiguedadMaximaMs).filter((chofer) => !this.viajes.tieneViajeActivo(chofer.usuarioId));
+    const candidatos = await this.choferes.buscarDisponiblesCercanos(origen, radioMetros, ahora, antiguedadMaximaMs);
+    const ocupados = await Promise.all(candidatos.map(async (chofer) => [chofer.usuarioId, await this.viajes.tieneViajeActivo(chofer.usuarioId)] as const));
+    const idsOcupados = new Set(ocupados.filter(([, ocupado]) => ocupado).map(([usuarioId]) => usuarioId));
+    return candidatos.filter((chofer) => !idsOcupados.has(chofer.usuarioId));
   }
 }
 
 export class ConsultarUbicacionChofer {
   constructor(private readonly choferes: RepositorioChoferes, private readonly ubicaciones: RepositorioUbicaciones, private readonly autorizador: AutorizadorUbicacion) {}
-  ejecutar(actor: ActorAutenticado, choferUsuarioId: string): { chofer: Chofer; ubicacion?: UbicacionActual } {
-    const chofer = exigirChoferExistente(this.choferes.obtenerPorUsuario(choferUsuarioId));
-    if (!this.autorizador.puedeConsultarUbicacion(actor, choferUsuarioId)) throw new ErrorFlota("UBICACION_NO_AUTORIZADA", "No tenés autorización para consultar la ubicación de este chofer.");
-    return { chofer, ubicacion: this.ubicaciones.obtenerActual(chofer.usuarioId) };
+  async ejecutar(actor: ActorAutenticado, choferUsuarioId: string): Promise<{ chofer: Chofer; ubicacion?: UbicacionActual }> {
+    const chofer = exigirChoferExistente(await this.choferes.obtenerPorUsuario(choferUsuarioId));
+    if (!await this.autorizador.puedeConsultarUbicacion(actor, choferUsuarioId)) throw new ErrorFlota("UBICACION_NO_AUTORIZADA", "No tenés autorización para consultar la ubicación de este chofer.");
+    return { chofer, ubicacion: await this.ubicaciones.obtenerActual(chofer.usuarioId) };
   }
 }
 
 export class RepositorioChoferesMemoria implements RepositorioChoferes {
   private readonly datos = new Map<string, Chofer>();
   constructor(private readonly ubicaciones = new Map<string, UbicacionActual>()) {}
-  guardar(chofer: Chofer): Chofer { const copia = structuredClone(chofer); this.datos.set(chofer.usuarioId, copia); return structuredClone(copia); }
-  obtenerPorUsuario(usuarioId: string): Chofer | undefined { const chofer = this.datos.get(usuarioId); return chofer ? structuredClone(chofer) : undefined; }
+  async guardar(chofer: Chofer): Promise<Chofer> { const copia = structuredClone(chofer); this.datos.set(chofer.usuarioId, copia); return structuredClone(copia); }
+  async obtenerPorUsuario(usuarioId: string): Promise<Chofer | undefined> { const chofer = this.datos.get(usuarioId); return chofer ? structuredClone(chofer) : undefined; }
   guardarUbicacion(ubicacion: UbicacionActual): UbicacionActual { const anterior = this.ubicaciones.get(ubicacion.usuarioId); if (anterior && anterior.actualizadoAt.getTime() > ubicacion.actualizadoAt.getTime()) return structuredClone(anterior); const copia = structuredClone(ubicacion); this.ubicaciones.set(ubicacion.usuarioId, copia); return structuredClone(copia); }
   obtenerUbicacion(usuarioId: string): UbicacionActual | undefined { const ubicacion = this.ubicaciones.get(usuarioId); return ubicacion ? structuredClone(ubicacion) : undefined; }
-  buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): ChoferCercano[] {
+  async buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): Promise<ChoferCercano[]> {
     return [...this.datos.values()].flatMap((chofer) => {
       if (!chofer.habilitado || !chofer.disponibilidad || !chofer.carnetConducirValidado) return [];
       const ubicacion = this.ubicaciones.get(chofer.usuarioId);
@@ -117,17 +120,17 @@ export class RepositorioChoferesMemoria implements RepositorioChoferes {
 
 export class RepositorioUbicacionesMemoria implements RepositorioUbicaciones {
   constructor(private readonly ubicaciones = new Map<string, UbicacionActual>()) {}
-  obtenerActual(usuarioId: string): UbicacionActual | undefined { const ubicacion = this.ubicaciones.get(usuarioId); return ubicacion ? structuredClone(ubicacion) : undefined; }
-  guardarSiEsMasNueva(ubicacion: UbicacionActual): UbicacionActual { const anterior = this.ubicaciones.get(ubicacion.usuarioId); if (anterior && anterior.actualizadoAt.getTime() >= ubicacion.actualizadoAt.getTime()) return structuredClone(anterior); const copia = structuredClone(ubicacion); this.ubicaciones.set(ubicacion.usuarioId, copia); return structuredClone(copia); }
+  async obtenerActual(usuarioId: string): Promise<UbicacionActual | undefined> { const ubicacion = this.ubicaciones.get(usuarioId); return ubicacion ? structuredClone(ubicacion) : undefined; }
+  async guardarSiEsMasNueva(ubicacion: UbicacionActual): Promise<UbicacionActual> { const anterior = this.ubicaciones.get(ubicacion.usuarioId); if (anterior && anterior.actualizadoAt.getTime() >= ubicacion.actualizadoAt.getTime()) return structuredClone(anterior); const copia = structuredClone(ubicacion); this.ubicaciones.set(ubicacion.usuarioId, copia); return structuredClone(copia); }
 }
 
 export class RepositorioViajesActivosMemoria implements RepositorioViajesActivos {
   private readonly activos = new Set<string>();
   marcarActivo(choferUsuarioId: string): void { this.activos.add(choferUsuarioId); }
   liberar(choferUsuarioId: string): void { this.activos.delete(choferUsuarioId); }
-  tieneViajeActivo(choferUsuarioId: string): boolean { return this.activos.has(choferUsuarioId); }
+  async tieneViajeActivo(choferUsuarioId: string): Promise<boolean> { return this.activos.has(choferUsuarioId); }
 }
 
 export class AutorizadorUbicacionBasico implements AutorizadorUbicacion {
-  puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): boolean { return actor.idUsuario === choferUsuarioId || actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR"; }
+  async puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): Promise<boolean> { return actor.idUsuario === choferUsuarioId || actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR"; }
 }

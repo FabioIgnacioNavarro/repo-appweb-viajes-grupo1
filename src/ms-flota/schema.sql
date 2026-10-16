@@ -19,3 +19,16 @@ CREATE TABLE IF NOT EXISTS ubicacion_actual (
 
 CREATE INDEX IF NOT EXISTS ix_ubicacion_actual_coordenadas ON ubicacion_actual (latitud, longitud);
 CREATE INDEX IF NOT EXISTS ix_ubicacion_actual_actualizado ON ubicacion_actual (actualizado_at);
+
+CREATE TABLE IF NOT EXISTS ubicacion_historica (
+  id UUID PRIMARY KEY,
+  usuario_id UUID NOT NULL,
+  viaje_id UUID NULL,
+  latitud NUMERIC(9,6) NOT NULL CHECK (latitud BETWEEN -90 AND 90),
+  longitud NUMERIC(9,6) NOT NULL CHECK (longitud BETWEEN -180 AND 180),
+  registrado_at TIMESTAMPTZ NOT NULL,
+  precision_metros NUMERIC(10,2) CHECK (precision_metros IS NULL OR precision_metros >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS ix_ubicacion_historica_usuario_fecha ON ubicacion_historica (usuario_id, registrado_at DESC);
+CREATE INDEX IF NOT EXISTS ix_ubicacion_historica_viaje_fecha ON ubicacion_historica (viaje_id, registrado_at DESC);

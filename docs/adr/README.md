@@ -34,3 +34,5 @@ Decisiones adicionales registradas:
 25. Validación de JWT externo.
 26. PostgreSQL como fuente de verdad y decisión de no incorporar Redis inicialmente.
 27. Composición reproducible de servicios con Docker Compose.
+28. Persistencia real de `ms-flota` en PostgreSQL.
+29. Proveedor JWT falso restringido a desarrollo y tests.

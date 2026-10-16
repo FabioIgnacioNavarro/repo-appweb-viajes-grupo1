@@ -35,16 +35,45 @@ El alcance y los límites de la página están en [docs/demo-web.md](docs/demo-w
 
 ## `ms-flota`
 
-Para compilar y ejecutar el servicio inicial en memoria:
+Para compilar y ejecutar `ms-flota`:
 
 ```text
 npm run flota
 ```
 
-El servicio escucha por defecto en `http://localhost:3002` y valida JWT externos con JWKS
-(`JWT_JWKS_URL`, `JWT_ISSUER`, `JWT_AUDIENCE` y `JWT_ROLE_CLAIM`). No implementa login. En esta
-versión el servidor todavía usa repositorios en memoria; el adaptador PostgreSQL está pendiente de
-integración con los puertos asíncronos.
+El servicio escucha por defecto en `http://localhost:3002`, usa PostgreSQL cuando existe `DATABASE_URL`
+y valida JWT externos con JWKS (`JWT_JWKS_URL`, `JWT_ISSUER`, `JWT_AUDIENCE` y `JWT_ROLE_CLAIM`). No
+implementa login. Si no se configura `DATABASE_URL`, el proceso usa memoria solo para desarrollo/tests.
+
+Para iniciar PostgreSQL y aplicar el esquema:
+
+```text
+docker compose up -d postgres
+docker compose exec -T postgres psql -U viajes -d viajes < src/ms-flota/schema.sql
+npm run flota
+```
+
+En PowerShell, si la redirección `<` no está habilitada por la versión instalada, puede aplicarse el
+esquema desde Git Bash o ejecutarse el comando equivalente con `Get-Content src/ms-flota/schema.sql |
+docker compose exec -T postgres psql -U viajes -d viajes`.
+El readiness consulta efectivamente PostgreSQL mediante `SELECT 1`.
+
+Para probar endpoints protegidos sin Firebase, usar un entorno que no sea producción y activar el proveedor
+falso con `JWT_MODO=falso`. En PowerShell:
+
+```text
+$env:JWT_MODO='falso'; $env:NODE_ENV='development'; npm.cmd run flota
+```
+
+Después de compilar, se puede generar un actor de prueba con:
+
+```text
+node -e "const {ValidadorJwtFalso}=require('./dist/compartido/jwt-falso'); console.log(new ValidadorJwtFalso().generar({idUsuario:'chofer-1',rol:'CHOFER'}))"
+```
+
+El token tiene la forma
+`falso.<payload-base64url>`. Acepta `PASAJERO`, `CHOFER`, `SOPORTE` y `ADMINISTRADOR`; no firma tokens y
+se rechaza explícitamente cuando `NODE_ENV=production`.
 
 ## `ms-tarifas` (prototipo de dominio y HTTP)
 
