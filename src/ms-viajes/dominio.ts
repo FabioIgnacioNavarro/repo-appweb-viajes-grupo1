@@ -77,11 +77,13 @@ export interface Cobro {
 export interface RepositorioViajes {
   guardar(viaje: Viaje): Viaje;
   obtener(id: string): Viaje | undefined;
+  listar(): Viaje[];
 }
 
 export interface RepositorioOfertas {
   guardar(oferta: Oferta): Oferta;
   obtener(id: string): Oferta | undefined;
+  listarPorChofer(choferId: string): Oferta[];
 }
 
 export interface RepositorioCobros {
@@ -133,6 +135,10 @@ export class RepositorioViajesMemoria implements RepositorioViajes {
     const viaje = this.datos.get(id);
     return viaje ? structuredClone(viaje) : undefined;
   }
+
+  listar(): Viaje[] {
+    return [...this.datos.values()].map((viaje) => structuredClone(viaje));
+  }
 }
 
 export class RepositorioOfertasMemoria implements RepositorioOfertas {
@@ -147,6 +153,10 @@ export class RepositorioOfertasMemoria implements RepositorioOfertas {
   obtener(id: string): Oferta | undefined {
     const oferta = this.datos.get(id);
     return oferta ? structuredClone(oferta) : undefined;
+  }
+
+  listarPorChofer(choferId: string): Oferta[] {
+    return [...this.datos.values()].filter((oferta) => oferta.choferId === choferId).map((oferta) => structuredClone(oferta));
   }
 }
 
@@ -277,6 +287,19 @@ export class AceptarOferta {
     const actualizado = this.viajes.guardar({ ...viaje, choferId: actor.idUsuario, estado: "ASIGNADO" });
     this.ofertas.guardar({ ...oferta, estado: "ACEPTADA", respondidaEm: new Date(ahora) });
     return actualizado;
+  }
+}
+
+export class RechazarOferta {
+  constructor(private readonly ofertas: RepositorioOfertas) {}
+
+  ejecutar(actor: ActorAutenticado, ofertaId: string, ahora = new Date()): Oferta {
+    exigirRol(actor, "CHOFER");
+    const oferta = this.ofertas.obtener(ofertaId);
+    if (!oferta) throw new ErrorDominio("OFERTA_NO_ENCONTRADA", "La oferta no existe.");
+    if (oferta.choferId !== actor.idUsuario) throw new ErrorDominio("OFERTA_NO_AUTORIZADA", "La oferta no pertenece al chofer.");
+    if (oferta.estado !== "PENDIENTE") throw new ErrorDominio("OFERTA_NO_DISPONIBLE", "La oferta ya fue respondida.");
+    return this.ofertas.guardar({ ...oferta, estado: "RECHAZADA", respondidaEm: new Date(ahora) });
   }
 }
 

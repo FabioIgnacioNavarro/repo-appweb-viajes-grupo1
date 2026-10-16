@@ -64,6 +64,13 @@ Reglas de `ms-flota`:
 | GET | `/viajes` | Consultar el historial permitido para el usuario autenticado. |
 | GET | `/viajes/:idViaje/seguimiento` | Consultar el seguimiento en tiempo real; el canal queda pendiente de decisión. |
 
+### API HTTP de `ms-viajes`
+
+Las rutas de viajes requieren `Authorization: Bearer <token>`. `POST /viajes` requiere además
+`Clave-Idempotencia` y un cuerpo `{ "id_estimacion": "..." }`. La API conserva el precio y los
+factores de la estimación; el cliente no puede enviar un precio alternativo. Los handlers traducen
+los errores del dominio a la forma común y nunca devuelven stack traces.
+
 ## Limites de los servicios
 
 La implementacion se separa en tres servicios, sin cambiar las rutas publicas del contrato:

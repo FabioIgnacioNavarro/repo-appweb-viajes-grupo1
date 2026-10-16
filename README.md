@@ -76,6 +76,19 @@ El token tiene la forma
 `falso.<payload-base64url>`. Acepta `PASAJERO`, `CHOFER`, `SOPORTE` y `ADMINISTRADOR`; no firma tokens y
 se rechaza explícitamente cuando `NODE_ENV=production`.
 
+## `ms-viajes`
+
+Para compilar y ejecutar el servicio HTTP de viajes:
+
+```text
+npm run viajes
+```
+
+Escucha por defecto en `http://localhost:3000`. Requiere `JWT_JWKS_URL`, `JWT_ISSUER` y
+`JWT_AUDIENCE`. La confirmación usa `POST /viajes` con `id_estimacion` y `Clave-Idempotencia`; la
+estimación se consulta en `MS_TARIFAS_URL` y el dominio conserva el precio y los factores recibidos.
+Los adaptadores de persistencia todavía son de memoria en esta etapa.
+
 ## `ms-tarifas` (prototipo de dominio y HTTP)
 
 Se agregaron cálculo exacto en pesos enteros, snapshots auditables, vigencia de 3 minutos,

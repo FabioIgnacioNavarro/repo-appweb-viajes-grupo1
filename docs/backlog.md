@@ -34,6 +34,7 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 | TAR-002 | Adaptadores de `ms-tarifas` | Alta | en progreso | Existen adaptadores OSRM/Google/Haversine, clima y PostgreSQL; falta ejecutar integración con servicios reales y Compose. |
 | INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | pendiente | Demanda no tiene endpoint en `ms-viajes` y flota sigue en memoria; no hay flujo integrado demostrable. |
 | OPS-002 | Completar gateway, JWT y Compose | Alta | en progreso | Hay ADR de diseño, validador JWKS RS256 y archivo Nginx inicial; faltan servidores de viajes, Compose integrado y readiness real de flota. |
+| VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |
 
 ## Regla de actualización
 
