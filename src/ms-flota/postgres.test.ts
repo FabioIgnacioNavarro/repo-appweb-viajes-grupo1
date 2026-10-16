@@ -12,7 +12,8 @@ test("persistencia real de disponibilidad y ubicación en PostgreSQL", { skip: !
   const perfilId = "00000000-0000-0000-0000-000000000022";
   try {
     await pool.query(await readFile("src/ms-flota/schema.sql", "utf8"));
-    await pool.query("DELETE FROM ubicacion_actual WHERE usuario_id = $1; DELETE FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
+    await pool.query("DELETE FROM ubicacion_actual WHERE usuario_id = $1", [usuarioId]);
+    await pool.query("DELETE FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
     await pool.query("INSERT INTO usuario_chofer (id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado) VALUES ($1, $2, TRUE, FALSE, TRUE)", [perfilId, usuarioId]);
     const choferes = new RepositorioChoferesPostgres(pool);
     const ubicaciones = new RepositorioUbicacionesPostgres(pool, () => "00000000-0000-0000-0000-000000000023");
@@ -24,7 +25,8 @@ test("persistencia real de disponibilidad y ubicación en PostgreSQL", { skip: !
     const anterior = await ubicaciones.guardarSiEsMasNueva({ id: "", usuarioId, latitud: -27.46, longitud: -58.99, actualizadoAt: new Date("2026-10-15T12:00:01Z") });
     assert.equal(nueva.latitud, anterior.latitud);
   } finally {
-    await pool.query("DELETE FROM ubicacion_actual WHERE usuario_id = $1; DELETE FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
+    await pool.query("DELETE FROM ubicacion_actual WHERE usuario_id = $1", [usuarioId]);
+    await pool.query("DELETE FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
     await pool.end();
   }
 });

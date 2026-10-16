@@ -53,6 +53,7 @@ docker compose exec -T postgres psql -U viajes -d viajes < src/ms-flota/schema.s
 npm run flota
 ```
 
+La conexión desde el host usa el puerto `5434`; dentro del contenedor PostgreSQL sigue usando `5432`.
 En PowerShell, si la redirección `<` no está habilitada por la versión instalada, puede aplicarse el
 esquema desde Git Bash o ejecutarse el comando equivalente con `Get-Content src/ms-flota/schema.sql |
 docker compose exec -T postgres psql -U viajes -d viajes`.
