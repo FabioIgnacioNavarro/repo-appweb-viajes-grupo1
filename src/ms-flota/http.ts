@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 import type { ValidadorToken } from "../compartido/jwt";
 import { BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, type ActorAutenticado, type AutorizadorUbicacion, type RepositorioChoferes, type RepositorioUbicaciones, type RepositorioViajesActivos } from "./dominio";
 
-export interface DependenciasFlota { choferes: RepositorioChoferes; ubicaciones: RepositorioUbicaciones; viajes: RepositorioViajesActivos; validadorToken: ValidadorToken; autorizador: AutorizadorUbicacion; }
+export interface DependenciasFlota { choferes: RepositorioChoferes; ubicaciones: RepositorioUbicaciones; viajes: RepositorioViajesActivos; crearRepositorioViajes?(jwt: string): RepositorioViajesActivos; validadorToken: ValidadorToken; autorizador: AutorizadorUbicacion; }
 
 function objeto(valor: unknown): valor is Record<string, unknown> { return typeof valor === "object" && valor !== null; }
 function errorHttp(error: unknown, respuesta: Response): void {
-  const mapa: Record<string, number> = { ROL_NO_AUTORIZADO: 403, CHOFER_NO_ENCONTRADO: 404, UBICACION_NO_AUTORIZADA: 403, CHOFER_NO_HABILITADO: 409, COORDENADAS_INVALIDAS: 400, RADIO_INVALIDO: 400, FECHA_INVALIDA: 400, PRECISION_INVALIDA: 400 };
-  if (error instanceof ErrorFlota) { respuesta.status(mapa[error.codigo] ?? 422).json({ error: { codigo: error.codigo, mensaje: error.message, detalles: {} } }); return; }
+  const mapa: Record<string, number> = { ROL_NO_AUTORIZADO: 403, CHOFER_NO_ENCONTRADO: 404, UBICACION_NO_AUTORIZADA: 403, CHOFER_NO_HABILITADO: 409, COORDENADAS_INVALIDAS: 400, RADIO_INVALIDO: 400, FECHA_INVALIDA: 400, PRECISION_INVALIDA: 400, DEPENDENCIA_NO_DISPONIBLE: 503 };
+  if (error instanceof ErrorFlota) { respuesta.status(mapa[error.codigo] ?? 422).json({ error: { codigo: error.codigo, mensaje: error.codigo === "DEPENDENCIA_NO_DISPONIBLE" ? "No se pudo verificar la disponibilidad de los choferes." : error.message, detalles: {} } }); return; }
   respuesta.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "Ocurrió un error interno.", detalles: {} } });
 }
 
@@ -17,7 +17,7 @@ export function crearRouterFlota(dependencias: DependenciasFlota): express.Route
   const autenticar = async (pedido: Request, respuesta: Response, siguiente: NextFunction): Promise<void> => {
     const encabezado = pedido.header("Authorization");
     if (!encabezado?.startsWith("Bearer ")) { respuesta.status(401).json({ error: { codigo: "TOKEN_REQUERIDO", mensaje: "Se requiere Authorization Bearer.", detalles: {} } }); return; }
-    try { resaltarActor(pedido, await dependencias.validadorToken.validar(encabezado.slice(7))); siguiente(); } catch { respuesta.status(401).json({ error: { codigo: "TOKEN_INVALIDO", mensaje: "El token no es válido.", detalles: {} } }); }
+    try { resaltarActor(pedido, await dependencias.validadorToken.validar(encabezado.slice(7))); pedido.jwtExterno = encabezado.slice(7); siguiente(); } catch { respuesta.status(401).json({ error: { codigo: "TOKEN_INVALIDO", mensaje: "El token no es válido.", detalles: {} } }); }
   };
   router.use(express.json({ limit: "10kb" }));
   router.use(autenticar);
@@ -31,7 +31,7 @@ export function crearRouterFlota(dependencias: DependenciasFlota): express.Route
   });
 
   router.get("/choferes/cercanos", async (pedido, respuesta) => {
-    try { const latitud = Number(pedido.query.latitud); const longitud = Number(pedido.query.longitud); const radio = Number(pedido.query.radio_metros ?? 5000); const candidatos = await new BuscarChoferesCercanos(dependencias.choferes, dependencias.viajes).ejecutar(actorDe(pedido), { latitud, longitud }, radio); respuesta.status(200).json({ candidatos: candidatos.map((candidato) => ({ id_chofer: candidato.usuarioId, distancia_metros: Math.round(candidato.distanciaMetros), ubicacion_actualizada_at: candidato.actualizadoAt.toISOString() })) }); } catch (error) { errorHttp(error, respuesta); }
+    try { const latitud = Number(pedido.query.latitud); const longitud = Number(pedido.query.longitud); const radio = Number(pedido.query.radio_metros ?? 5000); const viajes = dependencias.crearRepositorioViajes?.(pedido.jwtExterno!) ?? dependencias.viajes; const candidatos = await new BuscarChoferesCercanos(dependencias.choferes, viajes).ejecutar(actorDe(pedido), { latitud, longitud }, radio); respuesta.status(200).json({ candidatos: candidatos.map((candidato) => ({ id_chofer: candidato.usuarioId, distancia_metros: Math.round(candidato.distanciaMetros), ubicacion_actualizada_at: candidato.actualizadoAt.toISOString() })) }); } catch (error) { errorHttp(error, respuesta); }
   });
 
   router.get("/choferes/:idChofer", async (pedido, respuesta) => {

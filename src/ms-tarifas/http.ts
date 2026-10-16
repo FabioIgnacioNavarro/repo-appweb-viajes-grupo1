@@ -16,7 +16,7 @@ function coord(valor: unknown): Coordenada | undefined {
 }
 function error(res: Response, causa: unknown): void {
   if (causa instanceof ErrorTarifas) {
-    const status = causa.codigo === "COORDENADAS_INVALIDAS" ? 400 : causa.codigo === "ZONA_NO_ENCONTRADA" ? 422 : causa.codigo.includes("DESACTUALIZADO") || causa.codigo.includes("NO_DISPONIBLE") || causa.codigo.includes("RESPUESTA") ? 503 : 422;
+    const status = causa.codigo === "COORDENADAS_INVALIDAS" ? 400 : causa.codigo === "ZONA_NO_ENCONTRADA" ? 422 : causa.codigo.startsWith("DEPENDENCIA") || causa.codigo.includes("DESACTUALIZADO") || causa.codigo.includes("RESPUESTA") ? 503 : 422;
     res.status(status).json({ error: { codigo: causa.codigo, mensaje: causa.message, detalles: {} } }); return;
   }
   res.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "Ocurrió un error interno.", detalles: {} } });
@@ -25,7 +25,7 @@ function dto(e: NonNullable<Awaited<ReturnType<RepositorioEstimaciones["obtener"
   const f = e.factoresPrecio;
   return { id_estimacion: e.id, precio_estimado: e.precioEstimado.toString(), moneda: e.moneda, distancia_metros: e.distanciaMetros, duracion_segundos: e.duracionSegundos,
     multiplicador_demanda: e.multiplicadorDemandaEscalado / 10_000, zona: e.zona.nombre,
-    factores_precio: { choferes_disponibles: f.choferesDisponibles, solicitudes_activas: f.solicitudesActivas, precipitacion_mm: f.precipitacionMm, llueve: f.llueve, fuente_clima: f.fuenteClima, clima_observado_en: f.climaObservadoEn.toISOString(), franja_horaria: f.franjaHoraria.toLowerCase(), factor_lluvia: f.factorLluviaEscalado / 10_000, factor_disponibilidad: f.factorDisponibilidadEscalado / 10_000, factor_demanda: f.factorDemandaEscalado / 10_000, factor_horario: f.factorHorarioEscalado / 10_000 },
+    factores_precio: { zona_id: e.zona.id, choferes_disponibles: f.choferesDisponibles, solicitudes_activas: f.solicitudesActivas, precipitacion_mm: f.precipitacionMm, llueve: f.llueve, fuente_clima: f.fuenteClima, clima_observado_en: f.climaObservadoEn.toISOString(), franja_horaria: f.franjaHoraria.toLowerCase(), factor_lluvia: f.factorLluviaEscalado / 10_000, factor_disponibilidad: f.factorDisponibilidadEscalado / 10_000, factor_demanda: f.factorDemandaEscalado / 10_000, factor_horario: f.factorHorarioEscalado / 10_000 },
     version_regla: e.versionRegla, creada_en: e.creadaEn.toISOString(), vigente_hasta: e.vigenteHasta.toISOString(), origen: e.origen, destino: e.destino, polilinea: e.polilinea ?? null };
 }
 export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
@@ -48,6 +48,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
     const e = await deps.estimaciones.obtener(req.params.idEstimacion);
     if (!e) { res.status(404).json({ error: { codigo: "ESTIMACION_NO_ENCONTRADA", mensaje: "No existe la estimación.", detalles: {} } }); return; }
     if (req.actor?.idUsuario !== e.pasajeroId && !["SOPORTE", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) { res.status(403).json({ error: { codigo: "ESTIMACION_NO_AUTORIZADA", mensaje: "No podés consultar esta estimación.", detalles: {} } }); return; }
+    if (e.vigenteHasta.getTime() <= Date.now()) { res.status(409).json({ error: { codigo: "ESTIMACION_VENCIDA", mensaje: "La estimación ya venció.", detalles: {} } }); return; }
     res.json(dto(e));
   });
   return router;

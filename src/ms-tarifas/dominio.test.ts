@@ -6,7 +6,7 @@ import {
   type ObservacionClima, type ReglaTarifa, type RepositorioReglas, type RepositorioZonas,
   type RutaCalculada, type ZonaTarifaria
 } from "./dominio";
-import { RutaHaversine, RutaOsrm } from "./proveedores";
+import { FuenteDemandaHttp, FuenteFlotaHttp, RutaHaversine, RutaOsrm } from "./proveedores";
 
 const zona: ZonaTarifaria = { id: "resistencia", nombre: "Resistencia", centro: { latitud: -27.45, longitud: -58.98 }, radioMetros: 15_000, zonaHoraria: "America/Argentina/Buenos_Aires" };
 const regla: ReglaTarifa = {
@@ -79,4 +79,18 @@ test("OSRM usa geometría y distancia recibidas del servidor configurado", async
   assert.equal(resultado.duracionSegundos, 91);
   assert.equal(resultado.polilinea, "polyline");
   assert.match(url, /route\/v1\/driving/);
+});
+
+test("ms-tarifas consulta candidatos de flota y demanda reenviando el JWT", async () => {
+  const autorizaciones: string[] = [];
+  const obtener = async (url: string, opciones?: RequestInit) => {
+    autorizaciones.push(new Headers(opciones?.headers).get("Authorization") ?? "");
+    if (url.includes("choferes/cercanos")) return Response.json({ candidatos: [{ id_chofer: "chofer-1" }, { id_chofer: "chofer-2" }] });
+    return Response.json({ zona_id: "resistencia", solicitudes_activas: 7 });
+  };
+  const flota = await new FuenteFlotaHttp("http://ms-flota:3002", "jwt-original", 1500, obtener).contarDisponibles(zona, zona.centro);
+  const demanda = await new FuenteDemandaHttp("http://ms-viajes:3000", "jwt-original", 1500, obtener).contarSolicitudesActivas(zona);
+  assert.equal(flota, 2);
+  assert.equal(demanda, 7);
+  assert.deepEqual(autorizaciones, ["Bearer jwt-original", "Bearer jwt-original"]);
 });

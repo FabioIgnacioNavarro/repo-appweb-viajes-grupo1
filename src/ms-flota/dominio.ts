@@ -26,7 +26,7 @@ export interface RepositorioUbicaciones {
   guardarSiEsMasNueva(ubicacion: UbicacionActual): Promise<UbicacionActual>;
 }
 
-export interface RepositorioViajesActivos { tieneViajeActivo(choferUsuarioId: string): Promise<boolean>; }
+export interface RepositorioViajesActivos { buscarChoferesOcupados(idsChoferes: string[]): Promise<Set<string>>; }
 export interface AutorizadorUbicacion { puedeConsultarUbicacion(actor: ActorAutenticado, choferUsuarioId: string): Promise<boolean>; }
 
 export class ErrorFlota extends Error {
@@ -85,8 +85,7 @@ export class BuscarChoferesCercanos {
     validarCoordenada(origen);
     if (!Number.isFinite(radioMetros) || radioMetros <= 0 || radioMetros > 100_000) throw new ErrorFlota("RADIO_INVALIDO", "El radio debe estar entre 1 y 100000 metros.");
     const candidatos = await this.choferes.buscarDisponiblesCercanos(origen, radioMetros, ahora, antiguedadMaximaMs);
-    const ocupados = await Promise.all(candidatos.map(async (chofer) => [chofer.usuarioId, await this.viajes.tieneViajeActivo(chofer.usuarioId)] as const));
-    const idsOcupados = new Set(ocupados.filter(([, ocupado]) => ocupado).map(([usuarioId]) => usuarioId));
+    const idsOcupados = await this.viajes.buscarChoferesOcupados(candidatos.map((chofer) => chofer.usuarioId));
     return candidatos.filter((chofer) => !idsOcupados.has(chofer.usuarioId));
   }
 }
@@ -128,7 +127,7 @@ export class RepositorioViajesActivosMemoria implements RepositorioViajesActivos
   private readonly activos = new Set<string>();
   marcarActivo(choferUsuarioId: string): void { this.activos.add(choferUsuarioId); }
   liberar(choferUsuarioId: string): void { this.activos.delete(choferUsuarioId); }
-  async tieneViajeActivo(choferUsuarioId: string): Promise<boolean> { return this.activos.has(choferUsuarioId); }
+  async buscarChoferesOcupados(idsChoferes: string[]): Promise<Set<string>> { return new Set(idsChoferes.filter((id) => this.activos.has(id))); }
 }
 
 export class AutorizadorUbicacionBasico implements AutorizadorUbicacion {

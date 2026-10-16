@@ -98,16 +98,58 @@ Haversine offline, adaptadores OSRM/Google Routes, Open-Meteo y repositorios Pos
 Para OSRM se debe configurar una instancia propia en `OSRM_BASE_URL`; no se debe usar el servidor
 público para pruebas de carga. `RUTA_PROVEEDOR=HAVERSINE` activa modo offline.
 
-Para probar el dominio, ejecutá `npm test`. Para intentar iniciar el proceso de tarifas, completá las
-variables de autenticación y base de datos en `.env`, aplicá manualmente
-`src/ms-tarifas/schema.sql` y ejecutá `npm run tarifas`. La integración de demanda, disponibilidad,
-`ms-viajes`, PostgreSQL de flota, Nginx y Compose de punta a punta todavía no está terminada; el
-flujo completo de estimar, confirmar, ofertar, aceptar y cobrar no se puede demostrar aún.
+La estimación consulta disponibilidad de `ms-flota` y demanda interna de `ms-viajes`; ambos reciben el
+JWT del pasajero. Al confirmar, `ms-viajes` consulta candidatos y genera ofertas para hasta veinte
+choferes únicos. `ms-flota` comprueba la ocupación consultando `ms-viajes`; si ese servicio cae, no
+devuelve candidatos. Las llamadas internas usan timeout y reintento configurables. El matching y la
+consulta de candidatos tienen pruebas con dobles HTTP.
 
 `/health` indica que el proceso vive y `/ready` comprueba la base en `ms-tarifas`. La configuración
 de precios semilla y sus límites están descritos en los ADR de `docs/adr/`.
 
-PostgreSQL se puede levantar con:
+## Integración local con Docker Compose
+
+El archivo `env.example` es una plantilla de desarrollo, no contiene credenciales reales. En
+PowerShell, desde la raíz del repositorio:
+
+```powershell
+Copy-Item env.example .env
+docker compose config
+docker compose up --build
+```
+
+Compose arranca PostgreSQL, los tres servicios y Nginx. El único puerto HTTP publicado es el gateway
+`http://localhost:8080`; PostgreSQL se publica en `localhost:5434` para administración local. Los
+puertos de los servicios solo están en la red privada. Por defecto Compose usa `HAVERSINE` para
+poder probar sin un servidor de rutas; Open-Meteo sí requiere salida a internet. Para rutas por
+calles, configurá `RUTA_PROVEEDOR=OSRM` y `OSRM_BASE_URL` con una instancia propia. No se usa el
+servidor público de OSRM para carga.
+
+El proveedor JWT falso funciona solo fuera de producción. Para obtener tokens de prueba, compilá y
+generá, por ejemplo, un pasajero:
+
+```powershell
+npm.cmd run build
+node -e "const {ValidadorJwtFalso}=require('./dist/compartido/jwt-falso'); console.log(new ValidadorJwtFalso().generar({idUsuario:'pasajero-demo',rol:'PASAJERO'}))"
+```
+
+Usá `/health` para verificar que el gateway vive y `/ready/viajes`, `/ready/tarifas` o
+`/ready/flota` para consultar readiness de cada servicio. En este corte `/ready/viajes` responde
+`503` intencionalmente: su repositorio sigue en memoria. `/interno/` y `/estimaciones/` están
+bloqueados desde el gateway.
+
+**Limitación actual:** `ms-viajes` aún usa repositorios en memoria y su `/ready` responde `503` hasta
+que se integre PostgreSQL; el asignador no es atómico entre réplicas. Por lo tanto, el matching HTTP y
+la confirmación funcionan dentro de una instancia, pero reinicios y concurrencia distribuida aún
+requieren completar persistencia/transacciones PostgreSQL antes de considerar el recorrido de
+producción. El readiness real de `ms-flota` y `ms-tarifas` sí ejecuta `SELECT 1`.
+
+Los endpoints internos, errores y límites de reintento están en [docs/contratos.md](docs/contratos.md)
+y [docs/adr/0030-integracion-http-entre-servicios.md](docs/adr/0030-integracion-http-entre-servicios.md).
+
+## PostgreSQL
+
+Para levantar solo PostgreSQL:
 
 ```text
 docker compose up -d postgres

@@ -7,6 +7,8 @@ import { AutorizadorUbicacionBasico, RepositorioChoferesMemoria, RepositorioUbic
 import { crearPoolPostgres, RepositorioChoferesPostgres, RepositorioUbicacionesPostgres } from "./postgres";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import { ValidadorJwtJwks } from "../compartido/jwt";
+import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-servicios";
+import { RepositorioViajesActivosHttp } from "./viajes-http";
 
 const puerto = Number(process.env.PUERTO_MS_FLOTA ?? 3002);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_FLOTA debe ser un entero entre 1 y 65535.");
@@ -24,7 +26,9 @@ aplicacion.get("/ready", async (_pedido, respuesta) => {
   try { await pool.query("SELECT 1"); respuesta.json({ estado: "listo", servicio: "ms-flota" }); }
   catch { respuesta.status(503).json({ estado: "no_listo", servicio: "ms-flota", motivo: "PostgreSQL no disponible" }); }
 });
-aplicacion.use(crearRouterFlota({ choferes, ubicaciones, viajes: new RepositorioViajesActivosMemoria(), validadorToken: validador, autorizador: new AutorizadorUbicacionBasico() }));
+const urlViajes = exigirBaseInterna(process.env.MS_VIAJES_URL, "MS_VIAJES_URL");
+const clienteInterno = new ClienteServiciosHttp({ timeoutMs: Number(process.env.TIMEOUT_SERVICIO_MS ?? 1500), reintentos: Number(process.env.REINTENTOS_SERVICIO ?? 1) });
+aplicacion.use(crearRouterFlota({ choferes, ubicaciones, viajes: new RepositorioViajesActivosMemoria(), crearRepositorioViajes: (jwt) => new RepositorioViajesActivosHttp(urlViajes, jwt, clienteInterno), validadorToken: validador, autorizador: new AutorizadorUbicacionBasico() }));
 
 const servidor = aplicacion.listen(puerto, () => console.log(`ms-flota disponible en http://localhost:${puerto}`));
 async function cerrar(): Promise<void> { servidor.close(); await pool?.end(); }

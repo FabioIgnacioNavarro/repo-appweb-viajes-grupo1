@@ -4,17 +4,18 @@ import test from "node:test";
 import { strict as assert } from "node:assert";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConfirmarViaje,
-  ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
+  ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
 } from "./dominio";
 import { crearRouterViajes, ValidadorTokenFalso, type DependenciasViajes } from "./http";
+import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
 
 const ahoraPrueba = new Date();
 const estimacion: EstimacionVigente = {
   id: "estimacion-http-1", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 },
   precioEstimado: "8086", moneda: "ARS", multiplicadorDemanda: 1.5,
-  factoresPrecio: { solicitudes_activas: 24, choferes_disponibles: 8 },
+  factoresPrecio: { zona_id: "resistencia", solicitudes_activas: 24, choferes_disponibles: 8 },
   creadaEn: ahoraPrueba, vigenteHasta: new Date(ahoraPrueba.getTime() + 180_000)
 };
 
@@ -41,7 +42,9 @@ async function servidorDePrueba(): Promise<{ base: string; servidor: Server; dep
       chofer: { idUsuario: "chofer-1", rol: "CHOFER" },
       otroChofer: { idUsuario: "chofer-2", rol: "CHOFER" }
     }),
-    obtenerEstimacion: async (actor, id) => actor.idUsuario === "pasajero-1" ? estimaciones.get(id) : undefined
+    obtenerEstimacion: async (actor, id) => actor.idUsuario === "pasajero-1" ? estimaciones.get(id) : undefined,
+    consultarDemanda: new ConsultarDemandaPorZona(viajes),
+    consultarOcupacion: new ConsultarChoferesOcupados(viajes)
   };
   const app = express();
   app.use(crearRouterViajes(deps));
@@ -102,5 +105,31 @@ test("la API acepta una oferta solo por su chofer y traduce una transicion inval
     const llegadaRepetida = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/llegada`, "chofer", { method: "POST", body: "{}" });
     assert.equal(llegadaRepetida.status, 422);
     assert.equal((await llegadaRepetida.json() as { error: { codigo: string } }).error.codigo, "TRANSICION_INVALIDA");
+  } finally { await cerrar(contexto.servidor); }
+});
+
+test("la API devuelve el contrato 503 cuando una dependencia de matching cae", async () => {
+  const contexto = await servidorDePrueba();
+  contexto.deps.confirmarConOfertas = async () => { throw new ErrorDependenciaHttp("ms-flota", "buscar_candidatos"); };
+  try {
+    const respuesta = await pedido(contexto.base, "/viajes", "pasajero", { method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "http-dependencia" } });
+    const cuerpo = await respuesta.json() as { error: { codigo: string; mensaje: string; detalles: object } };
+    assert.equal(respuesta.status, 503);
+    assert.deepEqual(cuerpo.error, { codigo: "DEPENDENCIA_NO_DISPONIBLE", mensaje: "No se pudo completar la operación por una dependencia temporalmente no disponible.", detalles: {} });
+    assert.equal(JSON.stringify(cuerpo).includes("ms-flota"), false);
+  } finally { await cerrar(contexto.servidor); }
+});
+
+test("las rutas internas exponen demanda por zona y solo los choferes ocupados solicitados", async () => {
+  const contexto = await servidorDePrueba();
+  try {
+    const creado = await pedido(contexto.base, "/viajes", "pasajero", { method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "http-interno" } });
+    const viaje = await creado.json() as { id_viaje: string };
+    const demanda = await pedido(contexto.base, "/interno/demanda-por-zona?zona_id=resistencia", "pasajero");
+    assert.deepEqual(await demanda.json(), { zona_id: "resistencia", solicitudes_activas: 1 });
+    const oferta = new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, new GeneradorIdMemoria()).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
+    await pedido(contexto.base, `/choferes/yo/ofertas/${oferta.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
+    const ocupados = await pedido(contexto.base, "/interno/choferes/ocupados?ids_choferes=chofer-1,otro-chofer", "pasajero");
+    assert.deepEqual(await ocupados.json(), { ids_choferes_ocupados: ["chofer-1"] });
   } finally { await cerrar(contexto.servidor); }
 });

@@ -36,3 +36,4 @@ Decisiones adicionales registradas:
 27. Composición reproducible de servicios con Docker Compose.
 28. Persistencia real de `ms-flota` en PostgreSQL.
 29. Proveedor JWT falso restringido a desarrollo y tests.
+30. Integración HTTP entre servicios, propagación JWT y recuperación idempotente.

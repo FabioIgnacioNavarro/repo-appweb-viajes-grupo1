@@ -13,5 +13,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY src/ms-flota/schema.sql ./dist/ms-flota/schema.sql
-EXPOSE 3002
-CMD ["node", "dist/ms-flota/servidor.js"]
+COPY src/ms-tarifas/schema.sql ./dist/ms-tarifas/schema.sql
+EXPOSE 3000 3001 3002
+CMD ["node", "dist/ms-viajes/servidor.js"]

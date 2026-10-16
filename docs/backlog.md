@@ -32,8 +32,9 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 | FLOT-003 | Publicar endpoints iniciales de ms-flota | Alta | terminado | Las cuatro rutas están documentadas y protegidas por JWT externo o por el proveedor falso explícito de desarrollo. |
 | TAR-001 | Implementar dominio de `ms-tarifas` | Alta | en progreso | Dominio y pruebas cubren fórmula inicial, factores, BigInt, auditoría y vigencia; falta validar política y conectar extremos. |
 | TAR-002 | Adaptadores de `ms-tarifas` | Alta | en progreso | Existen adaptadores OSRM/Google/Haversine, clima y PostgreSQL; falta ejecutar integración con servicios reales y Compose. |
-| INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | pendiente | Demanda no tiene endpoint en `ms-viajes` y flota sigue en memoria; no hay flujo integrado demostrable. |
-| OPS-002 | Completar gateway, JWT y Compose | Alta | en progreso | Hay ADR de diseño, validador JWKS RS256 y archivo Nginx inicial; faltan servidores de viajes, Compose integrado y readiness real de flota. |
+| INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | en progreso | Estimación, demanda, candidatos y ocupación se consultan entre servicios con JWT propagado, timeout, reintento GET limitado y error seguro; falta persistencia y asignación atómica distribuida de viajes. |
+| INT-002 | Persistir viajes, ofertas, cobros e idempotencia en PostgreSQL | Alta | pendiente | Los casos HTTP usan repositorios PostgreSQL y transacciones que preservan idempotencia y una sola asignación por viaje/chofer entre instancias. |
+| OPS-002 | Completar gateway, JWT y Compose | Alta | en progreso | Compose valida, arranca los tres procesos, PostgreSQL y Nginx; flota/tarifas comprueban PostgreSQL, pero `ms-viajes` todavía no persiste y su readiness no está completa. |
 | VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |
 
 ## Regla de actualización

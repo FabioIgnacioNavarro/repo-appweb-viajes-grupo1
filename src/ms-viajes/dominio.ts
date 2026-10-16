@@ -84,6 +84,7 @@ export interface RepositorioOfertas {
   guardar(oferta: Oferta): Oferta;
   obtener(id: string): Oferta | undefined;
   listarPorChofer(choferId: string): Oferta[];
+  listarPorViaje(viajeId: string): Oferta[];
 }
 
 export interface RepositorioCobros {
@@ -94,6 +95,11 @@ export interface RepositorioCobros {
 export interface RepositorioIdempotencia {
   obtener(actorId: string, clave: string): unknown | undefined;
   guardar(actorId: string, clave: string, resultado: unknown): void;
+}
+
+/** Puerto para obtener candidatos; no conoce HTTP ni JWT. */
+export interface FuenteCandidatos {
+  buscar(origen: Coordenada, jwt: string): Promise<string[]>;
 }
 
 /** El adaptador real debe implementar esta operación dentro de una transacción. */
@@ -141,6 +147,24 @@ export class RepositorioViajesMemoria implements RepositorioViajes {
   }
 }
 
+const ESTADOS_QUE_OCUPAN_CHOFER = new Set<EstadoViaje>(["ASIGNADO", "CHOFER_EN_CAMINO", "EN_CURSO"]);
+
+/** Consultas de servicio usadas por los adaptadores internos de integración. */
+export class ConsultarDemandaPorZona {
+  constructor(private readonly viajes: RepositorioViajes) {}
+  ejecutar(zonaId: string): number {
+    return this.viajes.listar().filter((viaje) => viaje.estado === "SOLICITADO" && viaje.factoresPrecio.zona_id === zonaId).length;
+  }
+}
+
+export class ConsultarChoferesOcupados {
+  constructor(private readonly viajes: RepositorioViajes) {}
+  ejecutar(idsChoferes: string[]): string[] {
+    const solicitados = new Set(idsChoferes);
+    return [...new Set(this.viajes.listar().filter((viaje) => ESTADOS_QUE_OCUPAN_CHOFER.has(viaje.estado) && viaje.choferId && solicitados.has(viaje.choferId)).map((viaje) => viaje.choferId!))];
+  }
+}
+
 export class RepositorioOfertasMemoria implements RepositorioOfertas {
   private readonly datos = new Map<string, Oferta>();
 
@@ -157,6 +181,22 @@ export class RepositorioOfertasMemoria implements RepositorioOfertas {
 
   listarPorChofer(choferId: string): Oferta[] {
     return [...this.datos.values()].filter((oferta) => oferta.choferId === choferId).map((oferta) => structuredClone(oferta));
+  }
+
+  listarPorViaje(viajeId: string): Oferta[] {
+    return [...this.datos.values()].filter((oferta) => oferta.viajeId === viajeId).map((oferta) => structuredClone(oferta));
+  }
+}
+
+/** Regla de aplicación: solo abre ofertas para un viaje solicitado y evita duplicarlas en reintentos. */
+export class CrearOfertasParaCandidatos {
+  constructor(private readonly ofertas: RepositorioOfertas, private readonly ids: GeneradorId) {}
+  ejecutar(viaje: Viaje, choferes: string[], ahora = new Date(), vigenciaMs = 60_000): Oferta[] {
+    if (viaje.estado !== "SOLICITADO") throw new ErrorDominio("VIAJE_NO_OFERTABLE", "El viaje no admite nuevas ofertas.");
+    if (!Number.isSafeInteger(vigenciaMs) || vigenciaMs <= 0) throw new ErrorDominio("OFERTA_INVALIDA", "La vigencia de oferta no es válida.");
+    const existentes = new Set(this.ofertas.listarPorViaje(viaje.id).map((oferta) => oferta.choferId));
+    const unicos = [...new Set(choferes)].filter((id) => id && !existentes.has(id)).slice(0, 20);
+    return unicos.map((choferId) => this.ofertas.guardar({ id: this.ids.generar("oferta"), viajeId: viaje.id, choferId, estado: "PENDIENTE", enviadaEm: new Date(ahora), expiraEm: new Date(ahora.getTime() + vigenciaMs) }));
   }
 }
 

@@ -1,9 +1,11 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import {
   AceptarOferta, AvanzarViaje, CancelarViaje, ConfirmarViaje, ConsultarViaje,
+  ConsultarChoferesOcupados, ConsultarDemandaPorZona,
   ErrorDominio, FinalizarViaje, RechazarOferta,
   type ActorAutenticado, type EstimacionVigente, type RepositorioOfertas, type RepositorioViajes
 } from "./dominio";
+import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
 
 export interface ValidadorToken {
   validar(token: string): Promise<ActorAutenticado>;
@@ -21,6 +23,9 @@ export interface DependenciasViajes {
   consultar: ConsultarViaje;
   validadorToken: ValidadorToken;
   obtenerEstimacion: (actor: ActorAutenticado, idEstimacion: string, token: string) => Promise<EstimacionVigente | undefined>;
+  confirmarConOfertas?: (actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, token: string) => Promise<ReturnType<ConfirmarViaje["ejecutar"]>>;
+  consultarDemanda?: ConsultarDemandaPorZona;
+  consultarOcupacion?: ConsultarChoferesOcupados;
 }
 
 declare global {
@@ -36,6 +41,10 @@ function actorDe(pedido: Request): ActorAutenticado {
 }
 
 function errorHttp(error: unknown, respuesta: Response): void {
+  if (error instanceof ErrorDependenciaHttp) {
+    respuesta.status(503).json({ error: { codigo: "DEPENDENCIA_NO_DISPONIBLE", mensaje: "No se pudo completar la operación por una dependencia temporalmente no disponible.", detalles: {} } });
+    return;
+  }
   const mapa: Record<string, number> = {
     TOKEN_REQUERIDO: 401, TOKEN_INVALIDO: 401, ROL_NO_AUTORIZADO: 403, VIAJE_NO_AUTORIZADO: 403,
     OFERTA_NO_AUTORIZADA: 403, VIAJE_NO_ENCONTRADO: 404, OFERTA_NO_ENCONTRADA: 404,
@@ -86,6 +95,25 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     } catch { errorHttp(new ErrorDominio("TOKEN_INVALIDO", "El token no es válido."), respuesta); }
   });
 
+  router.get("/interno/demanda-por-zona", (pedido, respuesta) => {
+    const actor = actorDe(pedido);
+    const zonaId = pedido.query.zona_id;
+    if (actor.rol !== "PASAJERO" || typeof zonaId !== "string" || zonaId.length < 1 || zonaId.length > 100 || !deps.consultarDemanda) {
+      respuesta.status(actor.rol !== "PASAJERO" ? 403 : 400).json({ error: { codigo: actor.rol !== "PASAJERO" ? "ROL_NO_AUTORIZADO" : "ENTRADA_INVALIDA", mensaje: "No se pudo consultar la demanda para esa zona.", detalles: {} } }); return;
+    }
+    respuesta.status(200).json({ zona_id: zonaId, solicitudes_activas: deps.consultarDemanda.ejecutar(zonaId) });
+  });
+
+  router.get("/interno/choferes/ocupados", (pedido, respuesta) => {
+    const actor = actorDe(pedido);
+    const parametro = pedido.query.ids_choferes;
+    const ids = typeof parametro === "string" ? [...new Set(parametro.split(",").filter((id) => id.length > 0 && id.length <= 200))] : [];
+    if (actor.rol !== "PASAJERO" || !deps.consultarOcupacion || ids.length > 100 || ids.length === 0) {
+      respuesta.status(actor.rol !== "PASAJERO" ? 403 : 400).json({ error: { codigo: actor.rol !== "PASAJERO" ? "ROL_NO_AUTORIZADO" : "ENTRADA_INVALIDA", mensaje: "No se pudo consultar la ocupación.", detalles: {} } }); return;
+    }
+    respuesta.status(200).json({ ids_choferes_ocupados: deps.consultarOcupacion.ejecutar(ids) });
+  });
+
   router.post("/viajes", async (pedido, respuesta) => {
     try {
       const cuerpo = pedido.body as unknown;
@@ -93,7 +121,10 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
       if (!objeto(cuerpo) || Object.keys(cuerpo).some((campo) => campo !== "id_estimacion") || !validarId(cuerpo.id_estimacion) || !clave || clave.length > 200) throw new ErrorDominio("ENTRADA_INVALIDA", "id_estimacion y Clave-Idempotencia son obligatorios.");
       const estimacion = await deps.obtenerEstimacion(actorDe(pedido), cuerpo.id_estimacion, pedido.tokenExterno!);
       if (!estimacion) throw new ErrorDominio("ESTIMACION_NO_ENCONTRADA", "La estimación no existe o no está autorizada.");
-      respuesta.status(201).json(viajeDto(deps.confirmar.ejecutar(actorDe(pedido), estimacion, clave)));
+      const viaje = deps.confirmarConOfertas
+        ? await deps.confirmarConOfertas(actorDe(pedido), estimacion, clave, pedido.tokenExterno!)
+        : deps.confirmar.ejecutar(actorDe(pedido), estimacion, clave);
+      respuesta.status(201).json(viajeDto(viaje));
     } catch (error) { errorHttp(error, respuesta); }
   });
 

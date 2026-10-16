@@ -20,6 +20,10 @@ Este documento define un contrato preliminar. Las rutas, los parámetros y los n
 | GET | `/health` | Indicar que el proceso está vivo. |
 | GET | `/ready` | Indicar que el proceso está listo y que la base de datos está disponible; responde `503` mientras esa dependencia no esté configurada. |
 
+En el gateway, el estado de cada servicio se consulta con `GET /ready/viajes`, `GET /ready/tarifas`
+y `GET /ready/flota`. `ms-viajes` responde `503` hasta que se integre su persistencia PostgreSQL;
+`ms-tarifas` y `ms-flota` responden listo solo después de `SELECT 1`.
+
 ## Identidad y perfiles
 
 | Método | Ruta | Propósito |
@@ -94,8 +98,12 @@ minutos. Si ruta, clima, flota, viajes o PostgreSQL no responden dentro del pres
 devuelve `503 DEPENDENCIA_NO_DISPONIBLE`; no usa factores neutrales ni Haversine implícito.
 
 `GET /estimaciones/:idEstimacion` es una consulta interna de `ms-viajes`; requiere el mismo JWT del
-pasajero y solo devuelve la estimación si está vigente y pertenece al sujeto del token. `ms-viajes`
-persiste una copia inmutable de precio y factores durante la confirmación.
+pasajero y solo devuelve la estimación si está vigente y pertenece al sujeto del token. El dominio
+de `ms-viajes` conserva una copia inmutable de precio y factores durante la confirmación; la
+persistencia SQL de viajes queda pendiente.
+
+`factores_precio.zona_id` identifica la zona usada para la regla y el conteo de solicitudes activas.
+Es un dato auditable adicional; no permite al cliente elegir la zona ni alterar el precio.
 
 El error de entrada es `400 ENTRADA_INVALIDA`; la falta de token o un token incorrecto es `401`;
 un rol sin permiso es `403`. Todos los errores respetan el objeto `{ error: { codigo, mensaje,
@@ -108,6 +116,28 @@ detalles } }`.
 | GET | `/choferes/yo/ofertas` | Ver las ofertas activas del chofer autenticado. |
 | POST | `/choferes/yo/ofertas/:idOferta/aceptacion` | Aceptar una oferta antes de su vencimiento. |
 | POST | `/choferes/yo/ofertas/:idOferta/rechazo` | Rechazar una oferta. |
+
+Al confirmar un viaje, `ms-viajes` consulta automáticamente candidatos cercanos en `ms-flota` y
+crea ofertas para hasta veinte choferes únicos. La oferta vence a los 60 segundos. Si la consulta de
+flota falla, `POST /viajes` responde `503 DEPENDENCIA_NO_DISPONIBLE`; en la implementación actual
+en memoria, un reintento en el mismo proceso y con la misma `Clave-Idempotencia` devuelve el mismo
+viaje y reanuda la búsqueda sin duplicar ofertas. La persistencia de esta garantía entre reinicios
+queda pendiente del adaptador PostgreSQL de `ms-viajes`.
+
+### Contratos internos entre servicios
+
+Estos recursos se consumen solo dentro de la red privada; Nginx no los publica:
+
+| Servicio que responde | Método y ruta | Respuesta |
+|---|---|---|
+| `ms-viajes` | `GET /interno/demanda-por-zona?zona_id=` | `{ "zona_id": "...", "solicitudes_activas": 0 }`, para el actor pasajero autenticado. |
+| `ms-viajes` | `GET /interno/choferes/ocupados?ids_choferes=id1,id2` | `{ "ids_choferes_ocupados": [] }`; limita la consulta a 100 IDs. |
+
+Los clientes internos reenvían el JWT recibido, usan timeout configurable `TIMEOUT_SERVICIO_MS`
+(1500 ms por defecto) y un solo reintento GET (`REINTENTOS_SERVICIO=1`) luego de 100 ms ante timeout,
+429, 502, 503 o 504. Una caída, rechazo de autenticación o respuesta inválida se traduce a
+`503 DEPENDENCIA_NO_DISPONIBLE`; el sistema no trata una dependencia caída como una respuesta vacía.
+Los logs incluyen servicio, operación y resultado, nunca JWT, URL, coordenadas ni cuerpo.
 
 ## Operación y administración
 

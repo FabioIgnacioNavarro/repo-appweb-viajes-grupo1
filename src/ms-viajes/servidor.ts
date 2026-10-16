@@ -4,11 +4,14 @@ import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConfirmarViaje,
-  ConsultarViaje, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
+  ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
 } from "./dominio";
 import { crearRouterViajes } from "./http";
+import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-servicios";
+import { ClienteFlotaHttp, ClienteTarifasHttp } from "./clientes-http";
+import { ConfirmarViajeYBuscarChoferes } from "./integracion";
 
 const puerto = Number(process.env.PUERTO_MS_VIAJES ?? 3000);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_VIAJES debe ser un entero entre 1 y 65535.");
@@ -21,26 +24,17 @@ const ofertas = new RepositorioOfertasMemoria();
 const cobros = new RepositorioCobrosMemoria();
 const ids = new GeneradorIdMemoria();
 const asignador = new AsignadorAtomicoMemoria();
-const estimaciones = async (actor: ActorAutenticado, id: string, jwt: string): Promise<EstimacionVigente | undefined> => {
-  const base = process.env.MS_TARIFAS_URL ?? "http://ms-tarifas:3001";
-  let respuesta: Response;
-  try { respuesta = await fetch(`${base}/estimaciones/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${jwt}` }, signal: AbortSignal.timeout(1500) }); }
-  catch { return undefined; }
-  if (!respuesta.ok) return undefined;
-  const cuerpo = await respuesta.json() as Record<string, unknown>;
-  if (typeof cuerpo.id_estimacion !== "string" || typeof cuerpo.precio_estimado !== "string" || typeof cuerpo.vigente_hasta !== "string") return undefined;
-  const origen = coordenada(cuerpo.origen); const destino = coordenada(cuerpo.destino);
-  if (!origen || !destino || actor.rol !== "PASAJERO") return undefined;
-  return {
-    id: cuerpo.id_estimacion, origen, destino, precioEstimado: cuerpo.precio_estimado, moneda: "ARS",
-    multiplicadorDemanda: typeof cuerpo.multiplicador_demanda === "number" ? cuerpo.multiplicador_demanda : 1,
-    factoresPrecio: objeto(cuerpo.factores_precio) ? cuerpo.factores_precio : {},
-    creadaEn: new Date(String(cuerpo.creada_en)), vigenteHasta: new Date(cuerpo.vigente_hasta)
-  };
-};
+const timeoutServicio = Number(process.env.TIMEOUT_SERVICIO_MS ?? "1500");
+const reintentosServicio = Number(process.env.REINTENTOS_SERVICIO ?? "1");
+const clienteHttp = new ClienteServiciosHttp({ timeoutMs: timeoutServicio, reintentos: reintentosServicio });
+const clienteTarifas = new ClienteTarifasHttp(exigirBaseInterna(process.env.MS_TARIFAS_URL, "MS_TARIFAS_URL"), clienteHttp);
+const clienteFlota = new ClienteFlotaHttp(exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL"), clienteHttp, Number(process.env.RADIO_BUSQUEDA_CHOFERES_METROS ?? "5000"));
+const confirmar = new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids);
+const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(confirmar, clienteFlota, new CrearOfertasParaCandidatos(ofertas, ids));
 const dependencias = {
   viajes, ofertas,
-  confirmar: new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids),
+  confirmar,
+  confirmarConOfertas: (actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, jwt: string) => confirmarConOfertas.ejecutar(actor, estimacion, clave, jwt),
   aceptar: new AceptarOferta(ofertas, viajes, asignador),
   rechazar: new RechazarOferta(ofertas),
   cancelar: new CancelarViaje(viajes, asignador),
@@ -48,16 +42,12 @@ const dependencias = {
   finalizar: new FinalizarViaje(viajes, cobros, asignador, ids),
   consultar: new ConsultarViaje(viajes),
   validadorToken: token,
-  obtenerEstimacion: estimaciones
+  obtenerEstimacion: (_actor: ActorAutenticado, id: string, jwt: string) => clienteTarifas.obtenerEstimacion(id, jwt),
+  consultarDemanda: new ConsultarDemandaPorZona(viajes),
+  consultarOcupacion: new ConsultarChoferesOcupados(viajes)
 };
 const aplicacion = express();
 aplicacion.get("/health", (_pedido, respuesta) => respuesta.json({ estado: "activo", servicio: "ms-viajes" }));
-aplicacion.get("/ready", (_pedido, respuesta) => respuesta.json({ estado: "listo", servicio: "ms-viajes" }));
+aplicacion.get("/ready", (_pedido, respuesta) => respuesta.status(503).json({ estado: "no_listo", servicio: "ms-viajes", motivo: "Persistencia PostgreSQL de viajes pendiente" }));
 aplicacion.use(crearRouterViajes(dependencias));
 aplicacion.listen(puerto, () => console.log(`ms-viajes disponible en http://localhost:${puerto}`));
-
-function objeto(valor: unknown): valor is Record<string, unknown> { return typeof valor === "object" && valor !== null && !Array.isArray(valor); }
-function coordenada(valor: unknown): { latitud: number; longitud: number } | undefined {
-  if (!objeto(valor) || typeof valor.latitud !== "number" || typeof valor.longitud !== "number") return undefined;
-  return { latitud: valor.latitud, longitud: valor.longitud };
-}
