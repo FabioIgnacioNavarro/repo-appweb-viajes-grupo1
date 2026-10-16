@@ -8,7 +8,7 @@ Este documento define un contrato preliminar. Las rutas, los parámetros y los n
 - Los nombres de rutas y parámetros están en español, sin tildes ni espacios; se usa `kebab-case` en rutas y `camelCase` en parámetros de ruta.
 - Los campos JSON están en español y usan `snake_case`.
 - La moneda del sistema es el peso argentino (`ARS`), sin centavos. Los importes se representan como cadenas con dígitos enteros en JSON, por ejemplo `"8086"`; el dominio y PostgreSQL los manejan como enteros exactos. Las respuestas incluyen `moneda: "ARS"` junto a los importes. No convertir importes a `number` de JavaScript.
-- Autenticación mediante `Authorization: Bearer <token>`; el mecanismo final queda pendiente del ADR correspondiente.
+- Autenticación mediante `Authorization: Bearer <token>`; los servicios verifican tokens externos por JWKS según ADR 0025.
 - Las operaciones que crean o confirman efectos irrepetibles aceptan el encabezado `Clave-Idempotencia`.
 - Los errores tienen una forma uniforme: `codigo`, `mensaje` y, cuando corresponda, `detalles`.
 - El servidor valida tipos, campos permitidos, tamaños y valores límite en tiempo de ejecución.
@@ -76,6 +76,23 @@ La implementacion se separa en tres servicios, sin cambiar las rutas publicas de
 
 Cada servicio valida el JWT en su entrada y entrega un actor autenticado al dominio. Ningun servicio
 emite credenciales ni implementa el login.
+
+### Contrato de estimación de `ms-tarifas`
+
+`POST /viajes/estimacion` recibe solo origen y destino; nunca acepta precio, multiplicador ni factores
+del cliente. La respuesta de éxito `201` contiene `id_estimacion`, `precio_estimado` (cadena entera),
+`moneda`, `distancia_metros`, `duracion_segundos`, `multiplicador_demanda`, `zona`,
+`factores_precio`, `version_regla`, `creada_en` y `vigente_hasta`. La estimación vence a los tres
+minutos. Si ruta, clima, flota, viajes o PostgreSQL no responden dentro del presupuesto definido,
+devuelve `503 DEPENDENCIA_NO_DISPONIBLE`; no usa factores neutrales ni Haversine implícito.
+
+`GET /estimaciones/:idEstimacion` es una consulta interna de `ms-viajes`; requiere el mismo JWT del
+pasajero y solo devuelve la estimación si está vigente y pertenece al sujeto del token. `ms-viajes`
+persiste una copia inmutable de precio y factores durante la confirmación.
+
+El error de entrada es `400 ENTRADA_INVALIDA`; la falta de token o un token incorrecto es `401`;
+un rol sin permiso es `403`. Todos los errores respetan el objeto `{ error: { codigo, mensaje,
+detalles } }`.
 
 ## Ofertas
 

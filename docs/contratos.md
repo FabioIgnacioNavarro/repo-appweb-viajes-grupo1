@@ -79,3 +79,15 @@ Los contratos de servicio se mantienen asi:
 - `ms-flota` no modifica estados de viajes.
 - La confirmacion de viaje conserva `id_estimacion`, `precio_estimado`, `multiplicador_demanda`,
   `factores_precio` y `vigente_hasta` como fotografia auditable.
+
+## Integración inicial de tarifas
+
+`POST /viajes/estimacion` valida JWT y recibe `{ origen: { latitud, longitud }, destino: { latitud,
+longitud } }`. `ms-tarifas` resuelve zona, ruta, regla, clima actual, choferes cercanos y solicitudes
+activas mediante puertos. La salida incluye importe ARS en string, distancia en metros, duración en
+segundos, multiplicador, zona, desglose auditable, versión y vigencia.
+
+Para armar esos factores, `ms-tarifas` reenvía el JWT del pasajero al contrato de cercanía de
+`ms-flota` y al contrato interno de demanda de `ms-viajes`. Cada llamada tiene timeout, un reintento
+solo para GET transitorios y falla cerrada al superar el presupuesto. Los servicios internos no
+publican sus puertos fuera de la red privada de Compose.

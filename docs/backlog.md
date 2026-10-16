@@ -6,11 +6,11 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 |---|---|---:|---|---|
 | MVP-001 | Definir el recorrido mínimo demostrable | Alta | terminado | `docs/alcance-minimo.md` describe el flujo, los endpoints, los soportes necesarios y el criterio de aceptación sin reducir requisitos del enunciado. |
 | DOM-001 | Documentar variante A: precio dinámico por demanda | Alta | terminado | La variante está registrada en AGENTS, modelo, API y backlog. |
-| DOM-003 | Definir regla configurable de precio dinámico | Alta | pendiente | Se acuerdan fórmula, pesos, límites y ejemplos para disponibilidad, demanda por zona, lluvia y franja horaria; la demanda creciente sube y la decreciente baja el componente de demanda. |
-| DOM-004 | Congelar precio al confirmar | Alta | pendiente | Una estimación vence a los 3 minutos; confirmar una vigente conserva exactamente el precio visto pese a cambios posteriores de factores. |
+| DOM-003 | Definir regla configurable de precio dinámico | Alta | en revisión | ADR 0021 documenta una regla inicial configurable por versión, importes exactos y límites; requiere validación del equipo. |
+| DOM-004 | Congelar precio al confirmar | Alta | en progreso | Dominio de viajes ya congela importe y factores; falta integración HTTP y persistente con tarifas. |
 | DOM-005 | Resolver carrera entre recálculo y confirmación | Alta | pendiente | Un test concurrente demuestra que nunca se confirma un precio distinto al aceptado. |
-| DOM-006 | Registrar evidencia de cálculo dinámico | Alta | pendiente | Cada viaje guarda precio ARS confirmado, versión de regla y los datos usados de disponibilidad, demanda, lluvia y franja horaria. |
-| DOM-007 | Elegir fuente del dato de lluvia | Alta | pendiente | ADR compara permiso de uso, disponibilidad, resolución, límites y costo; el adaptador registra fuente y fecha del dato y tiene alternativa de prueba. |
+| DOM-006 | Registrar evidencia de cálculo dinámico | Alta | en progreso | Tarifas guarda un snapshot auditable; falta persistirlo junto al viaje confirmado. |
+| DOM-007 | Elegir fuente del dato de lluvia | Alta | en revisión | ADR 0008 acepta Open-Meteo para el prototipo académico; el adaptador aplica caché y rechaza observaciones vencidas. |
 | DOM-002 | Cerrar estados y transiciones del viaje | Alta | en progreso | Cada transición válida e inválida está documentada y testeada. |
 | ARC-001 | Completar ADR de módulos | Alta | en progreso | La decisión CommonJS/ESM queda aceptada y reproducida desde clon limpio. |
 | ARC-002 | Completar ADR de persistencia | Alta | en progreso | PostgreSQL y estrategia de acceso a datos tienen alternativas y consecuencias. |
@@ -30,6 +30,10 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 | FLOT-001 | Implementar dominio inicial de ms-flota | Alta | terminado | Disponibilidad, ubicación, candidatos, ocupación y autorización tienen puertos y tests en memoria. |
 | FLOT-002 | Integrar adaptador PostgreSQL y esquema inicial | Alta | en progreso | El esquema y el adaptador parametrizado permiten persistir choferes y ubicación actual. |
 | FLOT-003 | Publicar endpoints iniciales de ms-flota | Alta | en progreso | Las cuatro rutas están documentadas y protegidas por un puerto de validación JWT externo. |
+| TAR-001 | Implementar dominio de `ms-tarifas` | Alta | en progreso | Dominio y pruebas cubren fórmula inicial, factores, BigInt, auditoría y vigencia; falta validar política y conectar extremos. |
+| TAR-002 | Adaptadores de `ms-tarifas` | Alta | en progreso | Existen adaptadores OSRM/Google/Haversine, clima y PostgreSQL; falta ejecutar integración con servicios reales y Compose. |
+| INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | pendiente | Demanda no tiene endpoint en `ms-viajes` y flota sigue en memoria; no hay flujo integrado demostrable. |
+| OPS-002 | Completar gateway, JWT y Compose | Alta | en progreso | Hay ADR de diseño, validador JWKS RS256 y archivo Nginx inicial; faltan servidores de viajes, Compose integrado y readiness real de flota. |
 
 ## Regla de actualización
 

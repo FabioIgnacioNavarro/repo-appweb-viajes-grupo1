@@ -327,7 +327,8 @@ La zona permite calcular demanda y disponibilidad. La implementación geográfic
 
 ### Factores de la estimación
 
-La fórmula propuesta es:
+La regla inicial versionada está en ADR 0021. Su base y multiplicadores son configurables; la
+estimación guarda una copia de la regla y de sus insumos:
 
 ```text
 factor_total = limitar(
@@ -336,14 +337,21 @@ factor_total = limitar(
   multiplicador_maximo
 )
 
-precio_estimado = redondear(
+precio_base =
   tarifa_base
   + distancia_km * precio_por_kilometro
   + duracion_minutos * precio_por_minuto
-) * factor_total
+
+precio_estimado = redondear_a_peso(precio_base * factor_total)
 ```
 
-La estimación tiene una vigencia de tres minutos. Al confirmar, el servidor verifica que no haya vencido y persiste el precio, el multiplicador y `datos_demanda`.
+Los factores se aplican en el orden lluvia, disponibilidad, demanda y franja horaria. Sus valores,
+umbrales, límites y versión se mantienen en la regla activa. La aritmética monetaria usa enteros
+escalados y redondea una sola vez al peso más cercano.
+
+La estimación tiene una vigencia de tres minutos. Al confirmar, el servidor verifica que no haya
+vencido y persiste el precio, el multiplicador, la versión de regla y `datos_demanda` sin volver a
+calcularlos.
 
 ## Estados del viaje
 

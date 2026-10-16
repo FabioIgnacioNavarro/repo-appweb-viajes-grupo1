@@ -33,6 +33,11 @@ Antes de ejecutar la primera medición se deben completar los valores numéricos
 
 Completar con sistema operativo, CPU, RAM, Node.js, PostgreSQL, Docker, servicios activos, volumen de datos y comandos exactos. La medición debe usar `monitorEventLoopDelay` dentro del servidor y un simulador versionado propio.
 
+Las mediciones de rutas deben usar una instancia OSRM propia o un adaptador falso. El endpoint
+público de OSRM queda excluido de toda prueba automatizada o de carga. Las pruebas de precio usan
+proveedores meteorológicos y de flota falsos para que lluvia, disponibilidad y demanda sean
+reproducibles; una medición end-to-end separada registra si incluye dependencias externas.
+
 ## Conclusión
 
 Se completará después de medir, indicando si la hipótesis se cumplió, qué trade-offs aparecieron y qué decisión se tomó a partir de los números.

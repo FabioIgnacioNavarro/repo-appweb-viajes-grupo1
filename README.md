@@ -41,9 +41,29 @@ Para compilar y ejecutar el servicio inicial en memoria:
 npm run flota
 ```
 
-El servicio escucha por defecto en `http://localhost:3002` y exige un JWT externo mediante
-`Authorization: Bearer <token>`. El validador real todavía se inyecta por el adaptador de identidad;
-no existe login dentro del servicio. PostgreSQL se puede levantar con:
+El servicio escucha por defecto en `http://localhost:3002` y valida JWT externos con JWKS
+(`JWT_JWKS_URL`, `JWT_ISSUER`, `JWT_AUDIENCE` y `JWT_ROLE_CLAIM`). No implementa login. En esta
+versión el servidor todavía usa repositorios en memoria; el adaptador PostgreSQL está pendiente de
+integración con los puertos asíncronos.
+
+## `ms-tarifas` (prototipo de dominio y HTTP)
+
+Se agregaron cálculo exacto en pesos enteros, snapshots auditables, vigencia de 3 minutos,
+Haversine offline, adaptadores OSRM/Google Routes, Open-Meteo y repositorios PostgreSQL. El endpoint
+`POST /viajes/estimacion` y la consulta interna `GET /estimaciones/:idEstimacion` requieren JWT.
+Para OSRM se debe configurar una instancia propia en `OSRM_BASE_URL`; no se debe usar el servidor
+público para pruebas de carga. `RUTA_PROVEEDOR=HAVERSINE` activa modo offline.
+
+Para probar el dominio, ejecutá `npm test`. Para intentar iniciar el proceso de tarifas, completá las
+variables de autenticación y base de datos en `.env`, aplicá manualmente
+`src/ms-tarifas/schema.sql` y ejecutá `npm run tarifas`. La integración de demanda, disponibilidad,
+`ms-viajes`, PostgreSQL de flota, Nginx y Compose de punta a punta todavía no está terminada; el
+flujo completo de estimar, confirmar, ofertar, aceptar y cobrar no se puede demostrar aún.
+
+`/health` indica que el proceso vive y `/ready` comprueba la base en `ms-tarifas`. La configuración
+de precios semilla y sus límites están descritos en los ADR de `docs/adr/`.
+
+PostgreSQL se puede levantar con:
 
 ```text
 docker compose up -d postgres

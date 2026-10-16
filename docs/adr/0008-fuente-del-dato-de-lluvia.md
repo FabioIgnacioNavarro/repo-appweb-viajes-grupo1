@@ -1,6 +1,6 @@
 # ADR 0008: Proponer Open-Meteo para consultar la lluvia
 
-- Estado: propuesto
+- Estado: aceptado para el prototipo académico
 - Fecha: 2026-09-29
 - Participantes: Echeverría Maximiliano Joel, Borchichi Valentino
 
@@ -28,17 +28,17 @@ Ventajas: ofrecen información meteorológica para usuarios finales.
 
 Desventajas: en la documentación pública revisada, InfoClima describe un código para insertar un pronóstico en un sitio web, no una API de backend; para 1Weather no encontramos documentación pública de una API para desarrolladores. No se debe extraer datos de sus páginas mediante scraping; habría que pedirles acceso y condiciones de uso.
 
-## Decisión propuesta
+## Decisión
 
-Proponemos usar Open-Meteo para el prototipo académico, sujeto a que el grupo acepte la atribución CC BY 4.0 y confirme que el uso sigue siendo no comercial. Se consultará por coordenadas de la zona, se mapeará la respuesta a un puerto del dominio en español y se guardarán proveedor, ubicación/zona, precipitación, instante y antigüedad del dato. El código del proveedor y sus campos externos quedan confinados al adaptador.
+Se usa Open-Meteo para el prototipo académico no comercial y se conserva la atribución CC BY 4.0. Se consulta por coordenadas de la zona, se mapea la respuesta a un puerto del dominio en español y se guarda proveedor, ubicación/zona, precipitación, instante y antigüedad del dato. El código del proveedor y sus campos externos quedan confinados al adaptador.
 
-La respuesta actual basada en modelo se tomará como dato de lluvia solo si la variable de lluvia del intervalo informado es mayor que cero milímetros. La consulta se hará por zona con caché, nunca por cada chofer ni en cada actualización de ubicación. Se propone refrescar como máximo con la frecuencia de 15 minutos del dato actual y reutilizar esa instantánea durante la vigencia de la estimación. Si el dato supera la antigüedad máxima configurada o el proveedor falla sin una instantánea utilizable, no se clasificará silenciosamente como “no llueve”; el caso debe quedar explícito en la política de errores de estimación.
+La variable actual `precipitation` se toma como lluvia cuando supera cero milímetros. La consulta se hace por zona con caché, nunca por chofer ni actualización de ubicación. La caché vence a los 15 minutos y la instantánea se reutiliza durante la vigencia de la estimación. Si el dato supera esa antigüedad o el proveedor falla sin una instantánea utilizable, se rechaza la estimación; no se clasifica silenciosamente como “no llueve”.
 
-Para desarrollar y probar se usará un adaptador falso con escenarios de lluvia, sin lluvia y proveedor caído. No se necesita una clave secreta para la API gratuita de Open-Meteo según la documentación actual; si se elige un plan comercial o cambia esa condición, las credenciales se guardan en variables de entorno.
+Para desarrollar y probar se usa un adaptador falso con escenarios de lluvia, sin lluvia y proveedor caído. La API gratuita actual no requiere clave; si se elige un plan comercial o cambia esa condición, las credenciales se guardan en variables de entorno.
 
 ## Consecuencias
 
-La variante puede demostrarse sin depender de una página visual o scraping, y el simulador de 500 choferes no multiplicará llamadas meteorológicas por chofer. La interfaz del dominio queda intercambiable si el SMN publica una API adecuada o el grupo obtiene autorización de otro proveedor. Hay que atribuir Open-Meteo en la documentación/demo y revisar sus términos antes de publicar o distribuir el sistema.
+La variante puede demostrarse sin depender de scraping, y el simulador no multiplica llamadas por chofer. La interfaz queda intercambiable si el SMN publica una API adecuada. El nivel gratuito admite contenido educativo no comercial con atribución CC BY 4.0, no ofrece SLA y publica límites de frecuencia; se revisarán sus [términos vigentes](https://open-meteo.com/en/terms) antes de distribuir el sistema.
 
 ## Qué nos haría cambiar de decisión
 

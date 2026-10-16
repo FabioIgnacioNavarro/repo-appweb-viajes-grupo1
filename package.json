@@ -7,8 +7,9 @@
     "build": "tsc -p tsconfig.json",
     "demo": "npm run build && node dist/terminal.js",
     "demo:web": "npm run build && node dist/servidor-web.js",
-    "test": "npm run build && node --test dist/viaje.test.js dist/ms-viajes/dominio.test.js dist/ms-flota/dominio.test.js",
-    "flota": "npm run build && node dist/ms-flota/servidor.js"
+    "test": "npm run build && node --test dist/viaje.test.js dist/ms-viajes/dominio.test.js dist/ms-flota/dominio.test.js dist/ms-tarifas/dominio.test.js",
+    "flota": "npm run build && node dist/ms-flota/servidor.js",
+    "tarifas": "npm run build && node dist/ms-tarifas/servidor.js"
   },
   "engines": {
     "node": ">=22"

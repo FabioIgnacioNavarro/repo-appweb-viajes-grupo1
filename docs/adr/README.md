@@ -27,3 +27,10 @@ Decisiones adicionales registradas:
 18. Persistencia de ubicación actual y rechazo de observaciones antiguas.
 19. Coordinación del estado ocupado del chofer.
 20. Configuración del contenedor de `ms-flota`.
+21. Regla inicial configurable de precio dinámico.
+22. Comportamiento ante fallas de dependencias.
+23. Timeouts y reintentos de servicios.
+24. Nginx como gateway.
+25. Validación de JWT externo.
+26. PostgreSQL como fuente de verdad y decisión de no incorporar Redis inicialmente.
+27. Composición reproducible de servicios con Docker Compose.
