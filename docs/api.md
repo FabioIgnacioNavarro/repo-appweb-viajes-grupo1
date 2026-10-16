@@ -255,7 +255,12 @@ vigencia y devuelve un `id_estimacion` único. La respuesta añade `multiplicado
 la fórmula dinámica acordada todavía no está implementada. La zona, los factores y la versión de
 regla se incorporarán cuando se cierren DOM-003 y DOM-007; no se inventan valores mientras tanto.
 
-La estimación en memoria se pierde al reiniciar el proceso. `POST /viajes` todavía no está
-implementado: requiere vincular la estimación vigente a una identidad autenticada, aplicar
-idempotencia y persistir el precio aceptado. `GET /ready` responde `503` mientras la persistencia no
-esté configurada.
+Las estimaciones se persisten en PostgreSQL y los viajes se mantienen en memoria en esta etapa. El
+precio confirmado conserva el snapshot de la estimación y `Clave-Idempotencia` evita duplicados. El
+readiness de `ms-viajes` informa que el proceso está listo y explicita esa limitación de persistencia.
+## Ejecución integrada
+
+En Compose, Nginx publica `POST /viajes/estimacion` hacia `ms-tarifas`, las rutas de ciclo de vida
+`/viajes` hacia `ms-viajes`, `/choferes` hacia `ms-flota` y `/choferes/yo/ofertas` hacia
+`ms-viajes`. La prueba reproducible usa `JWT_MODO=falso`, Haversine y clima controlado; está
+documentada en `requests/flujo-e2e.http` y no modifica los contratos de producción.

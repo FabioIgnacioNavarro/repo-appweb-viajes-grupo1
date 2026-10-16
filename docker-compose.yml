@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-viajes}
       POSTGRES_USER: ${POSTGRES_USER:-viajes}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-viajes_dev_only}
-    ports:
-      - "${PUERTO_POSTGRES_HOST:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./src/ms-flota/schema.sql:/docker-entrypoint-initdb.d/001-ms-flota.sql:ro
@@ -39,7 +37,7 @@ services:
         condition: service_healthy
     expose: ["3000"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -50,6 +48,7 @@ services:
     environment:
       <<: *servicio_base
       RUTA_PROVEEDOR: ${RUTA_PROVEEDOR:-HAVERSINE}
+      PROVEEDORES_MODO: ${PROVEEDORES_MODO:-falso}
       OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       TIMEOUT_PROVEEDOR_MS: ${TIMEOUT_PROVEEDOR_MS:-1800}
@@ -63,7 +62,7 @@ services:
         condition: service_started
     expose: ["3001"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -81,7 +80,7 @@ services:
         condition: service_started
     expose: ["3002"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5

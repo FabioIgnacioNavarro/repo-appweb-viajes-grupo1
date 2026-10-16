@@ -32,3 +32,8 @@ CREATE TABLE IF NOT EXISTS ubicacion_historica (
 
 CREATE INDEX IF NOT EXISTS ix_ubicacion_historica_usuario_fecha ON ubicacion_historica (usuario_id, registrado_at DESC);
 CREATE INDEX IF NOT EXISTS ix_ubicacion_historica_viaje_fecha ON ubicacion_historica (viaje_id, registrado_at DESC);
+
+-- Datos de prueba reproducibles; no son credenciales ni datos personales.
+INSERT INTO usuario_chofer (id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado)
+VALUES ('11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', TRUE, FALSE, TRUE)
+ON CONFLICT (usuario_id) DO NOTHING;

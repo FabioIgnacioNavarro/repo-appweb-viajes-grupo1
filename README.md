@@ -109,19 +109,21 @@ de precios semilla y sus límites están descritos en los ADR de `docs/adr/`.
 
 ## Integración local con Docker Compose
 
-El archivo `env.example` es una plantilla de desarrollo, no contiene credenciales reales. En
+El archivo `.env.example` es una plantilla de desarrollo, no contiene credenciales reales. En
 PowerShell, desde la raíz del repositorio:
 
 ```powershell
-Copy-Item env.example .env
+Copy-Item .env.example .env
 docker compose config
-docker compose up --build
+docker compose up --build -d
+$env:E2E_BASE_URL = "http://localhost:8080"
+npm.cmd run test:e2e
 ```
 
 Compose arranca PostgreSQL, los tres servicios y Nginx. El único puerto HTTP publicado es el gateway
-`http://localhost:8080`; PostgreSQL se publica en `localhost:5434` para administración local. Los
+`http://localhost:8080`; PostgreSQL permanece dentro de la red de Compose. Los
 puertos de los servicios solo están en la red privada. Por defecto Compose usa `HAVERSINE` para
-poder probar sin un servidor de rutas; Open-Meteo sí requiere salida a internet. Para rutas por
+poder probar sin un servidor de rutas; el modo E2E usa clima controlado y no requiere salida a internet. Para rutas por
 calles, configurá `RUTA_PROVEEDOR=OSRM` y `OSRM_BASE_URL` con una instancia propia. No se usa el
 servidor público de OSRM para carga.
 
@@ -135,11 +137,10 @@ node -e "const {ValidadorJwtFalso}=require('./dist/compartido/jwt-falso'); conso
 
 Usá `/health` para verificar que el gateway vive y `/ready/viajes`, `/ready/tarifas` o
 `/ready/flota` para consultar readiness de cada servicio. En este corte `/ready/viajes` responde
-`503` intencionalmente: su repositorio sigue en memoria. `/interno/` y `/estimaciones/` están
+`listo` e informa que su repositorio sigue en memoria. `/interno/` y `/estimaciones/` están
 bloqueados desde el gateway.
 
-**Limitación actual:** `ms-viajes` aún usa repositorios en memoria y su `/ready` responde `503` hasta
-que se integre PostgreSQL; el asignador no es atómico entre réplicas. Por lo tanto, el matching HTTP y
+**Limitación actual:** `ms-viajes` aún usa repositorios en memoria y el asignador no es atómico entre réplicas. Por lo tanto, el matching HTTP y
 la confirmación funcionan dentro de una instancia, pero reinicios y concurrencia distribuida aún
 requieren completar persistencia/transacciones PostgreSQL antes de considerar el recorrido de
 producción. El readiness real de `ms-flota` y `ms-tarifas` sí ejecuta `SELECT 1`.

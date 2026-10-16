@@ -1,0 +1,61 @@
+@gateway = http://localhost:8080
+@pasajero = falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwicm9sIjoiUEFTQUpFUk8ifQ
+@chofer = falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwicm9sIjoiQ0hPRkVSIn0
+
+GET {{gateway}}/health
+
+POST {{gateway}}/choferes/yo/ubicacion
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{"latitud":-27.45,"longitud":-58.98}
+
+PATCH {{gateway}}/choferes/yo/disponibilidad
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{"disponibilidad":true}
+
+POST {{gateway}}/viajes/estimacion
+Authorization: Bearer {{pasajero}}
+Content-Type: application/json
+
+{"origen":{"latitud":-27.45,"longitud":-58.98},"destino":{"latitud":-27.46,"longitud":-58.97}}
+
+# Copiar id_estimacion de la respuesta siguiente.
+POST {{gateway}}/viajes
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: manual-001
+Content-Type: application/json
+
+{"id_estimacion":"PEGAR_ID_ESTIMACION"}
+
+GET {{gateway}}/choferes/yo/ofertas
+Authorization: Bearer {{chofer}}
+
+# Copiar id_oferta e id_viaje de la respuesta anterior.
+POST {{gateway}}/choferes/yo/ofertas/PEGAR_ID_OFERTA/aceptacion
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{}
+
+POST {{gateway}}/viajes/PEGAR_ID_VIAJE/llegada
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{}
+
+POST {{gateway}}/viajes/PEGAR_ID_VIAJE/inicio
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{}
+
+POST {{gateway}}/viajes/PEGAR_ID_VIAJE/finalizacion
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{}
+
+GET {{gateway}}/viajes

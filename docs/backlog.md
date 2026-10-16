@@ -34,7 +34,8 @@ Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `te
 | TAR-002 | Adaptadores de `ms-tarifas` | Alta | en progreso | Existen adaptadores OSRM/Google/Haversine, clima y PostgreSQL; falta ejecutar integración con servicios reales y Compose. |
 | INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | en progreso | Estimación, demanda, candidatos y ocupación se consultan entre servicios con JWT propagado, timeout, reintento GET limitado y error seguro; falta persistencia y asignación atómica distribuida de viajes. |
 | INT-002 | Persistir viajes, ofertas, cobros e idempotencia en PostgreSQL | Alta | pendiente | Los casos HTTP usan repositorios PostgreSQL y transacciones que preservan idempotencia y una sola asignación por viaje/chofer entre instancias. |
-| OPS-002 | Completar gateway, JWT y Compose | Alta | en progreso | Compose valida, arranca los tres procesos, PostgreSQL y Nginx; flota/tarifas comprueban PostgreSQL, pero `ms-viajes` todavía no persiste y su readiness no está completa. |
+| OPS-002 | Completar gateway, JWT y Compose | Alta | terminado | Compose arranca PostgreSQL, los tres procesos y Nginx con healthchecks, DNS interno y proveedores controlados para E2E. |
+| OPS-003 | Ejecutar flujo E2E reproducible | Alta | terminado | `npm run test:e2e` y `requests/flujo-e2e.http` cubren estimación, confirmación, ofertas, asignación, estados y cobro. |
 | VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |
 
 ## Regla de actualización

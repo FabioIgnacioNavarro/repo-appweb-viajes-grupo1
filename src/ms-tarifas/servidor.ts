@@ -3,7 +3,7 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { crearPoolTarifas, RepositorioEstimacionesPostgres, RepositorioReglasPostgres, RepositorioZonasPostgres } from "./postgres";
 import { CrearEstimacion } from "./dominio";
-import { FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, crearCalculadorRuta } from "./proveedores";
+import { FuenteClimaFalsa, FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, crearCalculadorRuta } from "./proveedores";
 import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import { exigirBaseInterna } from "../compartido/cliente-servicios";
@@ -21,7 +21,8 @@ if (!Number.isInteger(timeoutServicio) || timeoutServicio < 1 || !Number.isInteg
 const urlFlota = exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL");
 const urlViajes = exigirBaseInterna(process.env.MS_VIAJES_URL, "MS_VIAJES_URL");
 const crear = (pasajeroId: string, origen: { latitud: number; longitud: number }, destino: { latitud: number; longitud: number }, token: string) => {
-  return new CrearEstimacion(crearCalculadorRuta(process.env, timeoutProveedor), new FuenteClimaOpenMeteo(timeoutProveedor), new FuenteFlotaHttp(urlFlota, token, timeoutServicio, fetch, reintentos), new FuenteDemandaHttp(urlViajes, token, timeoutServicio, fetch, reintentos), new RepositorioZonasPostgres(pool), new RepositorioReglasPostgres(pool), estimaciones, { generar: randomUUID }).ejecutar(pasajeroId, origen, destino);
+  const clima = process.env.PROVEEDORES_MODO === "falso" ? new FuenteClimaFalsa() : new FuenteClimaOpenMeteo(timeoutProveedor);
+  return new CrearEstimacion(crearCalculadorRuta(process.env, timeoutProveedor), clima, new FuenteFlotaHttp(urlFlota, token, timeoutServicio, fetch, reintentos), new FuenteDemandaHttp(urlViajes, token, timeoutServicio, fetch, reintentos), new RepositorioZonasPostgres(pool), new RepositorioReglasPostgres(pool), estimaciones, { generar: randomUUID }).ejecutar(pasajeroId, origen, destino);
 };
 const app = express();
 app.use(crearRouterTarifas({ estimar: crear, estimaciones, validador, comprobarBase: async () => { await pool.query("SELECT 1"); } }));

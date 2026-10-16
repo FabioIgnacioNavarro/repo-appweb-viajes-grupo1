@@ -8,6 +8,7 @@
     "demo": "npm run build && node dist/terminal.js",
     "demo:web": "npm run build && node dist/servidor-web.js",
     "test": "npm run build && node --test dist/viaje.test.js dist/ms-viajes/dominio.test.js dist/ms-viajes/http.test.js dist/ms-viajes/clientes-http.test.js dist/ms-viajes/integracion.test.js dist/ms-flota/dominio.test.js dist/ms-flota/http.test.js dist/ms-flota/postgres.test.js dist/ms-tarifas/dominio.test.js dist/compartido/jwt-falso.test.js",
+    "test:e2e": "npm run build && node --test dist/e2e.test.js",
     "flota": "npm run build && node dist/ms-flota/servidor.js",
     "tarifas": "npm run build && node dist/ms-tarifas/servidor.js",
     "viajes": "npm run build && node dist/ms-viajes/servidor.js"

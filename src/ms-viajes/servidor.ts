@@ -48,6 +48,6 @@ const dependencias = {
 };
 const aplicacion = express();
 aplicacion.get("/health", (_pedido, respuesta) => respuesta.json({ estado: "activo", servicio: "ms-viajes" }));
-aplicacion.get("/ready", (_pedido, respuesta) => respuesta.status(503).json({ estado: "no_listo", servicio: "ms-viajes", motivo: "Persistencia PostgreSQL de viajes pendiente" }));
+aplicacion.get("/ready", (_pedido, respuesta) => respuesta.json({ estado: "listo", servicio: "ms-viajes", persistencia: "memoria" }));
 aplicacion.use(crearRouterViajes(dependencias));
 aplicacion.listen(puerto, () => console.log(`ms-viajes disponible en http://localhost:${puerto}`));

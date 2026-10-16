@@ -113,6 +113,13 @@ export class FuenteClimaOpenMeteo implements FuenteClima {
   }
 }
 
+/** Fuente determinista para Compose y E2E; no realiza llamadas a servicios públicos. */
+export class FuenteClimaFalsa implements FuenteClima {
+  async consultar(_zona: ZonaTarifaria): Promise<ObservacionClima> {
+    return { precipitacionMm: 0, observadaEn: new Date(Date.now() - 1000), fuente: "FAKE" };
+  }
+}
+
 export class FuenteFlotaHttp implements FuenteDisponibilidad {
   constructor(private readonly baseUrl: string, private readonly token: string, private readonly timeoutMs = 1500, private readonly obtener: Obtener = fetch, private readonly reintentos = 1) {}
   async contarDisponibles(zona: ZonaTarifaria, origen: Coordenada): Promise<number> {

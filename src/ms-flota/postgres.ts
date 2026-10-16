@@ -43,7 +43,7 @@ export class RepositorioChoferesPostgres implements RepositorioChoferes {
       WHERE c.habilitado = TRUE
         AND c.disponibilidad = TRUE
         AND c.carnet_conducir_validado = TRUE
-        AND u.actualizado_at >= $4 - ($5 * INTERVAL '1 millisecond')
+        AND u.actualizado_at >= $4::timestamptz - ($5::double precision * INTERVAL '1 millisecond')
         AND u.latitud BETWEEN $2 - $6 AND $2 + $6
         AND u.longitud BETWEEN $3 - $7 AND $3 + $7
       ORDER BY distancia_metros ASC
