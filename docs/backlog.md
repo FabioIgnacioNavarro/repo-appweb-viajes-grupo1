@@ -22,7 +22,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | DOM-002 | Cerrar estados y transiciones del viaje | Alta | en progreso | Flujo A | Cada transición válida e inválida está documentada y testeada. |
 | ARC-001 | Completar ADR de módulos | Alta | en progreso | Común | La decisión CommonJS/ESM queda aceptada y reproducida desde clon limpio. |
 | ARC-002 | Completar ADR de persistencia | Alta | en progreso | Flujo A | PostgreSQL y estrategia de acceso a datos tienen alternativas y consecuencias. |
-| ARC-003 | Elegir mecanismo de asignación concurrente | Alta | pendiente | Flujo A | Cincuenta aceptaciones concurrentes dejan exactamente un ganador. |
+| ARC-003 | Elegir mecanismo de asignación concurrente | Alta | en progreso | Flujo A | Cincuenta aceptaciones concurrentes dejan exactamente un ganador. ADR 0033 propone bloqueo ordenado más índice único parcial; falta demostrarlo con el test concurrente contra PostgreSQL. |
 | ARC-004 | Elegir geolocalización | Alta | pendiente | Flujo B | Se comparan al menos dos opciones y se define política de retención. |
 | ARC-005 | Elegir canal de tiempo real | Media | pendiente | Flujo B | El canal y la recuperación tras reconexión están documentados. |
 | API-001 | Consolidar contrato HTTP | Alta | pendiente | Flujo C | Endpoints, códigos, errores, autenticación e idempotencia están definidos. |
@@ -41,7 +41,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | TAR-001 | Implementar dominio de `ms-tarifas` | Alta | en progreso | Flujo C | Dominio y pruebas cubren fórmula inicial, factores, BigInt, auditoría y vigencia; falta validar política y conectar extremos. |
 | TAR-002 | Adaptadores de `ms-tarifas` | Alta | en progreso | Flujo C | Existen adaptadores OSRM/Google/Haversine, clima y PostgreSQL; falta ejecutar integración con servicios reales y Compose. |
 | INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | en progreso | Común | Estimación, demanda, candidatos y ocupación se consultan entre servicios con JWT propagado, timeout, reintento GET limitado y error seguro; falta persistencia y asignación atómica distribuida de viajes. |
-| INT-002 | Persistir viajes, ofertas, cobros e idempotencia en PostgreSQL | Alta | pendiente | Flujo A | Los casos HTTP usan repositorios PostgreSQL y transacciones que preservan idempotencia y una sola asignación por viaje/chofer entre instancias. |
+| INT-002 | Persistir viajes, ofertas, cobros e idempotencia en PostgreSQL | Alta | en progreso | Flujo A | Los casos HTTP usan repositorios PostgreSQL y transacciones que preservan idempotencia y una sola asignación por viaje/chofer entre instancias. Decisiones en ADR 0033 y 0034. |
 | OPS-002 | Completar gateway, JWT y Compose | Alta | terminado | Flujo C | Compose arranca PostgreSQL, los tres procesos y Nginx con healthchecks, DNS interno y proveedores controlados para E2E. |
 | OPS-003 | Ejecutar flujo E2E reproducible | Alta | terminado | Común | `npm run test:e2e` y `requests/flujo-e2e.http` cubren estimación, confirmación, ofertas, asignación, estados y cobro. |
 | VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Flujo A | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |

@@ -45,5 +45,7 @@ Decisiones adicionales registradas:
 Para evitar conflictos de numeración durante el desarrollo en paralelo de los flujos de trabajo:
 
 - **Flujo A (Núcleo de Viajes, Persistencia y Concurrencia):** ADR 0033 a 0039.
+  - 33. Asignación concurrente con bloqueo ordenado e índice único parcial.
+  - 34. Persistencia de ms-viajes con SQL directo y puertos asíncronos.
 - **Flujo B (Flota, Tarea Pesada, Búsqueda Geo y Tiempo Real):** ADR 0040 a 0049.
 - **Flujo C (Seguridad, Observabilidad, Google Maps y Operación):** ADR 0050 a 0059.
