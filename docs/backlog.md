@@ -46,7 +46,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | OPS-003 | Ejecutar flujo E2E reproducible | Alta | terminado | Común | `npm run test:e2e` y `requests/flujo-e2e.http` cubren estimación, confirmación, ofertas, asignación, estados y cobro. |
 | VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Flujo A | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |
 | TIE-001 | WebSockets y tiempo real (Tema 20) | Alta | pendiente | Flujo B | Canal bidireccional para notificación de ofertas al chofer y seguimiento de viaje al pasajero con reconexión demostrable. |
-| OBS-001 | Observabilidad con OpenTelemetry y Jaeger (Tema 18) | Alta | en progreso | Flujo C | ADR 0050 aceptado. SDK OpenTelemetry en servicios, propagación de trace_id en headers y logs JSON, y visualización de traza distribuida con error en Jaeger. |
+| OBS-001 | Observabilidad con OpenTelemetry y Jaeger (Tema 18) | Alta | terminado | Flujo C | ADR 0050 y `docs/demo-observabilidad.md`. SDK OpenTelemetry en servicios, propagación W3C traceparent y logs correlacionados, y servicio Jaeger en Compose. |
 | SEG-002 | Firebase Emulator Suite y RBAC (Tema 19) | Alta | pendiente | Flujo C | Contenedor de Firebase Emulator en Compose, validación JWKS con roles en claims, y comparación de token válido, vencido y sin permiso. |
 | GEO-001 | Google Maps Rutas y Geocodificación | Media | pendiente | Flujo C | Geocoding para aceptar direcciones textuales, Routes API para distancias/duración reales y fallback offline Haversine para tests. |
 
