@@ -1,5 +1,9 @@
 import "dotenv/config";
 import express from "express";
+import { iniciarObservabilidad, middlewareObservabilidad } from "../compartido/observabilidad";
+
+iniciarObservabilidad("ms-flota");
+
 import { randomUUID } from "node:crypto";
 import { crearRouterFlota } from "./http";
 import type { ValidadorToken } from "../compartido/jwt";
@@ -19,6 +23,7 @@ const choferes = pool ? new RepositorioChoferesPostgres(pool) : new RepositorioC
 const ubicaciones = pool ? new RepositorioUbicacionesPostgres(pool, randomUUID) : new RepositorioUbicacionesMemoria(posiciones);
 const validador = crearValidador();
 const aplicacion = express();
+aplicacion.use(middlewareObservabilidad("ms-flota"));
 
 aplicacion.get("/health", (_pedido, respuesta) => respuesta.json({ estado: "activo", servicio: "ms-flota" }));
 aplicacion.get("/ready", async (_pedido, respuesta) => {
