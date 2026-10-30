@@ -395,6 +395,7 @@ Un viaje finalizado o cancelado es terminal y no puede volver a recibir ofertas.
 9. El chofer marca CHOFER_EN_CAMINO.
 10. El chofer inicia y el viaje pasa a EN_CURSO.
 11. El chofer finaliza y se calcula el precio final.
+```
 
 ## Demo de terminal
 
@@ -409,7 +410,6 @@ usa una regla fija documentada en el código de aplicación. Como una terminal n
 al GPS, las coordenadas actuales se ingresan manualmente; un adaptador web o móvil podrá proveerlas
 automáticamente más adelante. Esto permite validar el recorrido sin introducir PostGIS antes de
 tener una necesidad de persistencia espacial y una medición de carga.
-```
 
 ## Invariantes
 

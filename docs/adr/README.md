@@ -37,3 +37,13 @@ Decisiones adicionales registradas:
 28. Persistencia real de `ms-flota` en PostgreSQL.
 29. Proveedor JWT falso restringido a desarrollo y tests.
 30. Integración HTTP entre servicios, propagación JWT y recuperación idempotente.
+31. API HTTP de `ms-viajes` sobre casos de uso.
+32. E2E reproducible con proveedores controlados.
+
+## Rangos reservados para flujos paralelos
+
+Para evitar conflictos de numeración durante el desarrollo en paralelo de los flujos de trabajo:
+
+- **Flujo A (Núcleo de Viajes, Persistencia y Concurrencia):** ADR 0033 a 0039.
+- **Flujo B (Flota, Tarea Pesada, Búsqueda Geo y Tiempo Real):** ADR 0040 a 0049.
+- **Flujo C (Seguridad, Observabilidad, Google Maps y Operación):** ADR 0050 a 0059.

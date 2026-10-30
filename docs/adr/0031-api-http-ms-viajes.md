@@ -1,4 +1,4 @@
-# ADR 0028: API HTTP de ms-viajes sobre casos de uso
+# ADR 0031: API HTTP de ms-viajes sobre casos de uso
 
 - Estado: aceptado
 - Fecha: 2026-10-16
