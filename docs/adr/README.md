@@ -39,6 +39,7 @@ Decisiones adicionales registradas:
 30. Integración HTTP entre servicios, propagación JWT y recuperación idempotente.
 31. API HTTP de `ms-viajes` sobre casos de uso.
 32. E2E reproducible con proveedores controlados.
+50. Observabilidad distribuida con OpenTelemetry y Jaeger.
 
 ## Rangos reservados para flujos paralelos
 

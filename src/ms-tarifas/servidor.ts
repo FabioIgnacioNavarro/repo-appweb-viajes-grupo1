@@ -1,5 +1,9 @@
 import "dotenv/config";
 import express from "express";
+import { iniciarObservabilidad, middlewareObservabilidad } from "../compartido/observabilidad";
+
+iniciarObservabilidad("ms-tarifas");
+
 import { randomUUID } from "node:crypto";
 import { crearPoolTarifas, RepositorioEstimacionesPostgres, RepositorioReglasPostgres, RepositorioZonasPostgres } from "./postgres";
 import { CrearEstimacion } from "./dominio";
@@ -25,6 +29,7 @@ const crear = (pasajeroId: string, origen: { latitud: number; longitud: number }
   return new CrearEstimacion(crearCalculadorRuta(process.env, timeoutProveedor), clima, new FuenteFlotaHttp(urlFlota, token, timeoutServicio, fetch, reintentos), new FuenteDemandaHttp(urlViajes, token, timeoutServicio, fetch, reintentos), new RepositorioZonasPostgres(pool), new RepositorioReglasPostgres(pool), estimaciones, { generar: randomUUID }).ejecutar(pasajeroId, origen, destino);
 };
 const app = express();
+app.use(middlewareObservabilidad("ms-tarifas"));
 app.use(crearRouterTarifas({ estimar: crear, estimaciones, validador, comprobarBase: async () => { await pool.query("SELECT 1"); } }));
 app.listen(puerto, () => console.log(`ms-tarifas disponible en puerto ${puerto}`));
 function requerido(nombre: string): string { const valor = process.env[nombre]; if (!valor) throw new Error(`${nombre} es obligatoria.`); return valor; }

@@ -17,6 +17,11 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.300.0",
+    "@opentelemetry/resources": "^3.0.0",
+    "@opentelemetry/sdk-node": "^0.300.0",
+    "@opentelemetry/semantic-conventions": "^1.44.0",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
     "pg": "^8.23.1"

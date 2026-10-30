@@ -15,6 +15,20 @@ services:
       timeout: 5s
       retries: 10
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "${PUERTO_JAEGER_HOST:-16686}:16686"
+    expose:
+      - "4318"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:16686/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   ms-viajes:
     build: .
     command: ["node", "dist/ms-viajes/servidor.js"]
@@ -32,9 +46,12 @@ services:
       MS_TARIFAS_URL: http://ms-tarifas:3001
       MS_VIAJES_URL: http://ms-viajes:3000
       MS_FLOTA_URL: http://ms-flota:3002
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     expose: ["3000"]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -56,6 +73,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_started
       ms-viajes:
         condition: service_started
       ms-flota:
@@ -76,6 +95,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_started
       ms-viajes:
         condition: service_started
     expose: ["3002"]

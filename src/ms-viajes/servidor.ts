@@ -1,5 +1,9 @@
 import "dotenv/config";
 import express from "express";
+import { iniciarObservabilidad, middlewareObservabilidad } from "../compartido/observabilidad";
+
+iniciarObservabilidad("ms-viajes");
+
 import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
@@ -47,6 +51,7 @@ const dependencias = {
   consultarOcupacion: new ConsultarChoferesOcupados(viajes)
 };
 const aplicacion = express();
+aplicacion.use(middlewareObservabilidad("ms-viajes"));
 aplicacion.get("/health", (_pedido, respuesta) => respuesta.json({ estado: "activo", servicio: "ms-viajes" }));
 aplicacion.get("/ready", (_pedido, respuesta) => respuesta.json({ estado: "listo", servicio: "ms-viajes", persistencia: "memoria" }));
 aplicacion.use(crearRouterViajes(dependencias));
