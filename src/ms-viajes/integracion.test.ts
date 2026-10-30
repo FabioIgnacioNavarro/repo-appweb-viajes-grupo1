@@ -15,7 +15,7 @@ test("confirmación conserva exactamente precio e idempotencia, y crea ofertas s
   assert.equal(primero.id, segundo.id);
   assert.equal(segundo.precioEstimado, "8086");
   assert.equal(segundo.multiplicadorDemanda, 1.5);
-  assert.equal(ofertas.listarPorViaje(primero.id).length, 2);
+  assert.equal((await ofertas.listarPorViaje(primero.id)).length, 2);
 });
 
 test("si flota cae, la operación falla cerrado y un reintento idempotente puede completar la búsqueda", async () => {
@@ -23,11 +23,12 @@ test("si flota cae, la operación falla cerrado y un reintento idempotente puede
   let disponible = false;
   const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar() { if (!disponible) throw new ErrorDependenciaHttp("ms-flota", "buscar_candidatos"); return ["chofer-1"]; } }, new CrearOfertasParaCandidatos(ofertas, ids));
   await assert.rejects(() => caso.ejecutar(actor, estimacion, "clave-2", "jwt-pasajero"), ErrorDependenciaHttp);
-  assert.equal(viajes.listar().length, 1);
-  assert.equal(ofertas.listarPorViaje(viajes.listar()[0].id).length, 0);
+  assert.equal((await viajes.listar()).length, 1);
+  const viajesListados = await viajes.listar();
+  assert.equal((await ofertas.listarPorViaje(viajesListados[0].id)).length, 0);
   disponible = true;
   const viajeReintentado = await caso.ejecutar(actor, estimacion, "clave-2", "jwt-pasajero");
-  assert.equal(viajes.listar().length, 1);
+  assert.equal((await viajes.listar()).length, 1);
   assert.equal(viajeReintentado.precioEstimado, "8086");
-  assert.equal(ofertas.listarPorViaje(viajeReintentado.id).length, 1);
+  assert.equal((await ofertas.listarPorViaje(viajeReintentado.id)).length, 1);
 });
