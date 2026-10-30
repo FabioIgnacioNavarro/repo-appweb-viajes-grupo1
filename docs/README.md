@@ -14,6 +14,7 @@ Esta carpeta reúne el diseño y la evidencia del trabajo práctico. Se completa
 - [Backlog](backlog.md): tareas, prioridades y criterios de aceptación.
 - [Mediciones](mediciones.md): plan reproducible para la tarea pesada y la concurrencia.
 - [Ataque cruzado](ataque.md): plantilla para registrar intentos y hallazgos.
+- [Temas especiales de cátedra](temas-catedra.md): justificación de temas elegidos (18, 19, 20) y descartados (1 - Redis).
 - [ADRs](adr/): decisiones técnicas y alternativas descartadas.
 
 ## Estado de definición
