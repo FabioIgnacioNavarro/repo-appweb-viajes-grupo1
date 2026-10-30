@@ -1,6 +1,6 @@
 # ADR 0004: Mecanismo de asignación atómica de viaje y chofer
 
-- Estado: propuesto
+- Estado: reemplazado por ADR 0033
 - Fecha: 2026-09-23
 - Participantes: Echeverría Maximiliano Joel, Borchichi Valentino, Navarro Fabio
 
