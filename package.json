@@ -9,6 +9,8 @@
     "demo:web": "npm run build && node dist/servidor-web.js",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
     "test:e2e": "npm run build && node --test dist/e2e.test.js",
+    "test:pw": "playwright test",
+    "test:pw:ui": "playwright test --ui",
     "flota": "npm run build && node dist/ms-flota/servidor.js",
     "tarifas": "npm run build && node dist/ms-tarifas/servidor.js",
     "viajes": "npm run build && node dist/ms-viajes/servidor.js"
@@ -27,6 +29,7 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.23.1",
