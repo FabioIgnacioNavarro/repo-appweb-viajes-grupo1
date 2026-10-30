@@ -25,10 +25,13 @@ Cada solicitud válida se mide de extremo a extremo en el gateway. Los resultado
 | Lag máximo del event loop | ≤ 200 ms | Un pico mayor se registra como incumplimiento aunque el p99 pase. |
 | Memoria RSS de `ms-flota` | ≤ 512 MiB | Se registra luego del calentamiento y durante toda la fase medida. |
 | Crecimiento de RSS | ≤ 10 % entre el minuto 2 y el minuto 5 | Ayuda a detectar crecimiento sostenido; se compara el promedio de cada minuto, no dos muestras aisladas. |
-| Confirmación hasta primera oferta, p95 | ≤ 3 s | Solo aplica al escenario integrado, sin fallas inducidas y con aceptación automática del chofer excluida. |
-| Confirmación hasta primera oferta, p99 | ≤ 5 s | Mide respuesta del backend hasta que la primera oferta está disponible; no incluye el tiempo humano que tarda un chofer en aceptarla. |
+| `POST /viajes`, latencia p50 | ≤ 1 s | Solo aplica al escenario integrado bajo carga; mide la respuesta a la confirmación. |
+| `POST /viajes`, latencia p95 | ≤ 3 s | Se mide con dependencias sanas y sin fallas inducidas. |
+| `POST /viajes`, latencia p99 | ≤ 5 s | Detecta demoras extremas de la solicitud integrada. |
+| Solicitud hasta asignación, p95 | ≤ 5 s | Desde el inicio de `POST /viajes` hasta que un chofer de prueba acepta la oferta y el viaje queda asignado. |
+| Solicitud hasta asignación, p99 | ≤ 8 s | Se mide con aceptación automática inmediata; no incluye tiempo humano de espera. |
 
-Los objetivos de primera oferta pertenecen a la prueba integrada de los tres servicios, no al benchmark aislado de Flota. Si `ms-viajes` todavía no tiene persistencia lista, se informa ese resultado como bloqueado o no medible y no se atribuye a Flota.
+Las métricas de `/viajes` y del tiempo hasta asignación pertenecen a la prueba integrada de los tres servicios, no al benchmark aislado de Flota. Si `ms-viajes` todavía no tiene persistencia lista, se informa ese resultado como bloqueado o no medible y no se atribuye a Flota.
 
 ## Escenarios
 
@@ -38,7 +41,7 @@ Se comparan versiones con el mismo conjunto de datos y la misma carga:
 2. **Línea de base actual:** código de `ms-flota` de `main` registrado por su SHA antes de cambiar la estrategia. Para este inicio se registra `203451f`; en esta versión, PostgreSQL filtra por disponibilidad, antigüedad y cuadro geográfico, calcula Haversine en la consulta y limita los candidatos.
 3. **Referencia ingenua:** variante solo de benchmark que carga los choferes elegibles y calcula distancias en Node.js. No se publica como ruta de producción. Se implementa en el simulador para comparar la solución inicial con la final sin exponer una ruta deliberadamente costosa a clientes.
 4. **Versión final:** estrategia de búsqueda optimizada que el grupo elija después de comparar alternativas. Se registra el commit exacto y la estrategia; no se presupone que sea PostGIS, geohash ni memoria antes de contar con evidencia.
-5. **Flujo integrado:** estimación, confirmación y creación de ofertas a través de los servicios y el gateway. Se ejecuta por separado de la medición de Flota y se informa qué servicios y proveedores estuvieron activos.
+5. **Flujo integrado:** estimación, confirmación, creación de ofertas y aceptación automática de una oferta de prueba a través de los servicios y el gateway. Se ejecuta por separado de la medición de Flota y se informa qué servicios y proveedores estuvieron activos.
 
 La comparación principal será entre la línea de base actual y la versión final. La variante ingenua se informa aparte para mostrar el costo de la implementación sin prefiltrado. No se mezclan datos de escenarios distintos en una misma distribución.
 
@@ -72,7 +75,8 @@ El simulador y cualquier script de preparación deberán quedar versionados en `
 | Latencia p50, p95 y p99 | ms | Endpoint y escenario |
 | Solicitudes ofrecidas, completadas y fallidas | req/s y cantidad | Endpoint y repetición |
 | Porcentaje de errores y códigos HTTP | % y cantidad | Endpoint y repetición |
-| Tiempo hasta primera oferta | ms | Solo flujo integrado |
+| Latencia p50, p95 y p99 de `POST /viajes` | ms | Solo flujo integrado |
+| Tiempo desde la solicitud hasta la asignación aceptada | ms | Solo flujo integrado, con aceptación automática |
 | Lag p99 y máximo del event loop | ms | Proceso `ms-flota` |
 | Memoria RSS y crecimiento durante la prueba | MiB y % | Proceso `ms-flota` |
 | CPU, conexiones y consultas PostgreSQL | %, cantidad y duración | Host/base y repetición |
