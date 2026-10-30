@@ -6,7 +6,7 @@ import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConfirmarViaje,
   ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
-  RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
+  RepositorioViajesMemoria, type EstimacionVigente
 } from "./dominio";
 import { crearRouterViajes, ValidadorTokenFalso, type DependenciasViajes } from "./http";
 import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
@@ -71,7 +71,7 @@ test("la API crea un viaje autenticado y la confirmacion HTTP es idempotente", a
     assert.equal(primero.status, 201);
     assert.equal(cuerpo.precio_estimado, "8086");
     assert.equal(reintento.id_viaje, cuerpo.id_viaje);
-    assert.equal(contexto.deps.viajes.listar().length, 1);
+    assert.equal((await contexto.deps.viajes.listar()).length, 1);
   } finally { await cerrar(contexto.servidor); }
 });
 
@@ -95,7 +95,7 @@ test("la API acepta una oferta solo por su chofer y traduce una transicion inval
     const creado = await pedido(contexto.base, "/viajes", "pasajero", { method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "http-3" } });
     const viaje = await creado.json() as { id_viaje: string };
     const ids = new GeneradorIdMemoria();
-    const creada = new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, ids).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
+    const creada = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, ids).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
     const ajeno = await pedido(contexto.base, `/choferes/yo/ofertas/${creada.id}/aceptacion`, "otroChofer", { method: "POST", body: "{}" });
     assert.equal(ajeno.status, 403);
     const aceptada = await pedido(contexto.base, `/choferes/yo/ofertas/${creada.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
@@ -127,7 +127,7 @@ test("las rutas internas exponen demanda por zona y solo los choferes ocupados s
     const viaje = await creado.json() as { id_viaje: string };
     const demanda = await pedido(contexto.base, "/interno/demanda-por-zona?zona_id=resistencia", "pasajero");
     assert.deepEqual(await demanda.json(), { zona_id: "resistencia", solicitudes_activas: 1 });
-    const oferta = new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, new GeneradorIdMemoria()).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
+    const oferta = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, new GeneradorIdMemoria()).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
     await pedido(contexto.base, `/choferes/yo/ofertas/${oferta.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
     const ocupados = await pedido(contexto.base, "/interno/choferes/ocupados?ids_choferes=chofer-1,otro-chofer", "pasajero");
     assert.deepEqual(await ocupados.json(), { ids_choferes_ocupados: ["chofer-1"] });

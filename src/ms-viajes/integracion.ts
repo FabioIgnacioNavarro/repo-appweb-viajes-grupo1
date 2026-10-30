@@ -5,10 +5,10 @@ import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
 export class ConfirmarViajeYBuscarChoferes {
   constructor(private readonly confirmar: ConfirmarViaje, private readonly candidatos: FuenteCandidatos, private readonly crearOfertas: CrearOfertasParaCandidatos) {}
   async ejecutar(actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, jwt: string): Promise<Viaje> {
-    const viaje = this.confirmar.ejecutar(actor, estimacion, clave);
+    const viaje = await this.confirmar.ejecutar(actor, estimacion, clave);
     try {
       const choferes = await this.candidatos.buscar(viaje.origen, jwt);
-      this.crearOfertas.ejecutar(viaje, choferes);
+      await this.crearOfertas.ejecutar(viaje, choferes);
       return viaje;
     } catch (causa) {
       if (causa instanceof ErrorDependenciaHttp) throw new ErrorDependenciaHttp("ms-flota", "buscar_candidatos");
