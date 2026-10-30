@@ -1,4 +1,4 @@
-# ADR 0030: E2E reproducible con proveedores controlados
+# ADR 0032: E2E reproducible con proveedores controlados
 
 - Estado: aceptado
 - Fecha: 2026-10-16
