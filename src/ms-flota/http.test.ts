@@ -49,3 +49,23 @@ test("ms-flota excluye choferes ocupados y falla cerrado si viajes no responde",
     assert.equal(JSON.stringify(cuerpo).includes("falló"), false);
   } finally { await terminar(server); }
 });
+
+
+test("ms-flota aplica autorizacion por recurso al consultar chofer y ubicacion", async () => {
+  const ctx = datos();
+  const jwtAjeno = ctx.tokens.generar({ idUsuario: "pasajero-invalido", rol: "PASAJERO" });
+  const jwtChofer = ctx.tokens.generar({ idUsuario: "chofer-disponible", rol: "CHOFER" });
+  const { base, server } = await iniciar(ctx.deps);
+  try {
+    const denegado = await fetch(`${base}/choferes/chofer-disponible`, { headers: { Authorization: `Bearer ${jwtAjeno}` } });
+    assert.equal(denegado.status, 403);
+    const cuerpoDenegado = await denegado.json() as { error: { codigo: string } };
+    assert.equal(cuerpoDenegado.error.codigo, "UBICACION_NO_AUTORIZADA");
+
+    const permitido = await fetch(`${base}/choferes/chofer-disponible`, { headers: { Authorization: `Bearer ${jwtChofer}` } });
+    assert.equal(permitido.status, 200);
+    const cuerpoPermitido = await permitido.json() as { chofer: { usuario_id: string }; ubicacion: { latitud: number } };
+    assert.equal(cuerpoPermitido.chofer.usuario_id, "chofer-disponible");
+    assert.equal(cuerpoPermitido.ubicacion.latitud, -27.45);
+  } finally { await terminar(server); }
+});
