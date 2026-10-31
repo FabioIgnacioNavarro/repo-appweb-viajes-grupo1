@@ -25,8 +25,8 @@ export interface DependenciasViajes {
   validadorToken: ValidadorToken;
   obtenerEstimacion: (actor: ActorAutenticado, idEstimacion: string, token: string) => Promise<EstimacionVigente | undefined>;
   confirmarConOfertas?: (actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, token: string) => Promise<Viaje>;
-  consultarDemanda?: ConsultarDemandaPorZona;
-  consultarOcupacion?: ConsultarChoferesOcupados;
+  consultarDemanda?: { ejecutar(zonaId: string): Promise<number> | number };
+  consultarOcupacion?: { ejecutar(idsChoferes: string[]): Promise<string[]> | string[] };
 }
 
 declare global {
@@ -61,7 +61,7 @@ function errorHttp(error: unknown, respuesta: Response): void {
   respuesta.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "Ocurrió un error interno.", detalles: {} } });
 }
 
-function fecha(valor: Date | undefined): string | undefined { return valor?.toISOString(); }
+function fecha(valor: Date | string | undefined): string | undefined { if (!valor) return undefined; return valor instanceof Date ? valor.toISOString() : new Date(valor).toISOString(); }
 
 function viajeDto(viaje: Viaje | undefined): Record<string, unknown> {
   if (!viaje) return {};
@@ -70,7 +70,7 @@ function viajeDto(viaje: Viaje | undefined): Record<string, unknown> {
     origen: viaje.origen, destino: viaje.destino, id_estimacion: viaje.estimacionId,
     precio_estimado: viaje.precioEstimado, precio_final: viaje.precioFinal ?? null, moneda: viaje.moneda,
     multiplicador_demanda: viaje.multiplicadorDemanda, factores_precio: viaje.factoresPrecio,
-    estado: viaje.estado.toLowerCase(), creado_en: viaje.creadoEn.toISOString(),
+    estado: viaje.estado.toLowerCase(), creado_en: viaje.creadoEn instanceof Date ? viaje.creadoEn.toISOString() : new Date(viaje.creadoEn).toISOString(),
     iniciado_en: fecha(viaje.iniciadoEm), finalizado_en: fecha(viaje.finalizadoEm),
     cancelado_en: fecha(viaje.canceladoEm), motivo_cancelacion: viaje.motivoCancelacion ?? null
   };
