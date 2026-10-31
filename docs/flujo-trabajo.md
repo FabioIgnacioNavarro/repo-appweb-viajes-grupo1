@@ -62,3 +62,15 @@ Una tarea está terminada cuando:
 ## Convención de commits
 
 Usar mensajes breves y descriptivos, por ejemplo: `docs: define estados iniciales de viaje`, `test: cover concurrent trip acceptance` o `feat: add driver offer expiration`. El mensaje debe explicar el cambio, no solo nombrar el archivo.
+
+
+## Automatización con Antigravity Skill
+
+Para asistir al equipo y a los agentes de desarrollo en el cumplimiento estricto de este flujo, el repositorio cuenta con una skill configurada en `.agents/skills/flujo-git-github/SKILL.md`.
+
+Esta skill automatiza:
+1. **Sincronización con GitHub Issues y Projects:** Creación de tickets con criterios de aceptación y actualización del tablero Kanban (`Backlog` -> `In progress` -> `In review` -> `Done`).
+2. **Aislamiento de ramas:** Creación automática de ramas (`feat/<slug>`, `fix/<slug>`) naciendo de `main` actualizado.
+3. **Control de Definition of Done:** Verificación de pruebas verdes (`npm.cmd test`) y desacoplamiento de arquitectura hexagonal antes de cada commit.
+4. **Commits semánticos explicados:** Registro atómico y didáctico de cada avance.
+5. **Apertura de Pull Requests:** Redacción del cuerpo del PR con contexto, comandos de prueba, checklist y vinculación automática de cierre (`Closes #<Issue>`).
