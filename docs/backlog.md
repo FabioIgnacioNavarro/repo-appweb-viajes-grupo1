@@ -26,7 +26,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | ARC-004 | Elegir geolocalización | Alta | pendiente | Flujo B | Se comparan al menos dos opciones y se define política de retención. |
 | ARC-005 | Elegir canal de tiempo real | Media | pendiente | Flujo B | El canal y la recuperación tras reconexión están documentados. |
 | API-001 | Consolidar contrato HTTP | Alta | pendiente | Flujo C | Endpoints, códigos, errores, autenticación e idempotencia están definidos. |
-| SEC-001 | Diseñar autorización por recurso | Alta | pendiente | Flujo C | Hay pruebas de acceso permitido y denegado para viajes y ubicaciones. |
+| SEC-001 | Diseñar autorización por recurso | Alta | en revisión | Flujo C | Hay pruebas de acceso permitido y denegado para viajes y ubicaciones. |
 | CON-001 | Definir caso de cancelación simultánea | Alta | terminado | Flujo A | Especificado en ADR 0033 y testeado de forma determinista en postgres.test.ts y dominio.test.ts. |
 | MED-001 | Diseñar simulador de 500 choferes | Media | pendiente | Flujo B | Se puede ejecutar carga sostenida y medir p50, p95, p99, lag y memoria. |
 | OPS-001 | Definir arranque, readiness y apagado | Alta | pendiente | Flujo C | La secuencia de clon limpio queda documentada y verificable. |
