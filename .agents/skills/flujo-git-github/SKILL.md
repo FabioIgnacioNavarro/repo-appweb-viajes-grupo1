@@ -2,10 +2,11 @@
 name: flujo-git-github
 description: >-
   Automatiza el ciclo de vida de desarrollo del proyecto según docs/flujo-trabajo.md y AGENTS.md:
-  gestión de tareas en docs/backlog.md, sincronización con GitHub Issues, creación de ramas aisladas
-  (feat/ o fix/), verificación de Definition of Done (npm.cmd test y reglas hexagonales), commits
-  semánticos atómicos y apertura automática de Pull Requests vinculados a los issues listos para
-  revisión humana. Usar al iniciar una tarea del backlog, al commitear cambios o al preparar el PR.
+  gestión de tareas en docs/backlog.md, sincronización con GitHub Issues con especificación técnica
+  detallada, creación de ramas aisladas (feat/ o fix/), verificación de Definition of Done
+  (npm.cmd test y reglas hexagonales), commits semánticos atómicos y apertura automática de Pull
+  Requests vinculados a los issues listos para revisión humana. Usar al iniciar una tarea del
+  backlog, al crear/actualizar issues, al commitear cambios o al preparar el PR.
 ---
 
 # Flujo de Trabajo Git, Backlog e Issues
@@ -15,14 +16,14 @@ Esta skill estandariza el ciclo de vida completo de cada tarea o funcionalidad e
 ```mermaid
 flowchart TD
     subgraph Fase 1: Inicio de Tarea
-        A["Leer tarea en docs/backlog.md"] --> B["Verificar o crear GitHub Issue"]
+        A["Leer tarea en docs/backlog.md"] --> B["Verificar o crear GitHub Issue detallado"]
         B --> C["Actualizar docs/backlog.md a 'en progreso'"]
         C --> D["Crear rama aislada desde main al día"]
     end
 
     subgraph Fase 2: Implementación y Commits
         D --> E["Desarrollar respetando arquitectura hexagonal"]
-        E --> F["Verificar tests: npm test"]
+        E --> F["Verificar tests: npm.cmd test"]
         F --> G["Crear commits semánticos descriptivos"]
     end
 
@@ -40,18 +41,47 @@ flowchart TD
 
 ---
 
+## Estándar de Redacción de Issues en GitHub
+
+Todo Issue creado o actualizado en GitHub **debe seguir un formato de especificación técnica completa** (nunca una sola línea resumida), para que cualquier integrante del equipo o agente entienda el problema, los archivos afectados y cómo verificarlo sin ambigüedades:
+
+```markdown
+## 📌 Contexto y Problema
+<Explicación clara del requerimiento de negocio o técnico, por qué es necesario y qué problema resuelve dentro de la plataforma de viajes.>
+
+## 🏗️ Alcance Técnico
+- **Servicios / Módulos involucrados:** <ej. `ms-viajes`, `ms-tarifas`, `ms-flota`, `src/compartido/`>
+- **Archivos clave:** <rutas a archivos de dominio, puertos, adaptadores o esquemas SQL>
+- **Documentación / ADRs relacionados:** <ej. `docs/modelo.md`, `docs/contratos.md`, `docs/adr/XXXX-...`>
+- **Prioridad:** <Alta | Media | Baja> | **Flujo:** <Flujo A | Flujo B | Flujo C | Común>
+
+## ✅ Criterios de Aceptación
+- [ ] <Criterio verificable 1>
+- [ ] <Criterio verificable 2>
+- [ ] <Criterio verificable 3>
+
+## 🧪 Plan de Verificación y Pruebas
+- [ ] <Prueba unitaria / integración / concurrencia específica a cubrir>
+- [ ] Suite completa pasando con `npm.cmd test`.
+
+## ⚠️ Invariantes y Reglas a Respetar
+- <Invariantes de negocio o arquitectura hexagonal aplicables según AGENTS.md>
+```
+
+---
+
 ## Fase 0: Creación de Issues y Tareas bajo demanda
 
 Si el usuario pide registrar una nueva tarea, bug o mejora sin comenzar a programar de inmediato (por ejemplo: *"Creá un issue para agregar métricas de latencia"* o *"Registrá una tarea para probar WebSockets bajo desconexión"*):
 
-1. **Definir título y criterio de aceptación:** Redactar de forma clara el objetivo y qué define que esté terminado.
+1. **Investigar contexto:** Revisar brevemente qué módulos, contratos y ADRs del repositorio se ven afectados.
 2. **Registrar en `docs/backlog.md`:** Agregar la fila en la tabla con un ID representativo en estado `pendiente`.
-3. **Crear el Issue en GitHub:**
+3. **Crear el Issue en GitHub usando el Estándar de Redacción:**
    ```powershell
-   gh issue create --title "[<ID>] <Título descriptivo>" --body "### Criterio de aceptación`n<Criterio>`n`nFuente: docs/backlog.md"
+   gh issue create --title "[<ID>] <Título descriptivo>" --body-file <archivo_temporal_cuerpo.md>
    ```
    *Nota: Gracias al workflow 'Auto-add to project', la tarjeta aparecerá automáticamente en la columna 'Backlog' del tablero sin necesidad de tocar la web.*
-4. **Confirmar al usuario:** Informar el número de Issue creado y que ya está visible en el tablero.
+4. **Confirmar al usuario:** Informar el número de Issue creado y su enlace.
 
 ---
 
@@ -61,9 +91,7 @@ Cuando el usuario pida iniciar una tarea (por ejemplo: `DOM-005` o "resolver la 
 
 ### 1. Localizar la tarea en `docs/backlog.md`
 - Buscar el ID (`VIA-xxx`, `DOM-xxx`, `FLOT-xxx`, etc.).
-- Identificar:
-  - **Título/Trabajo**.
-  - **Criterio de aceptación**.
+- Identificar título, criterio de aceptación e inspeccionar los archivos técnicos relacionados.
 
 ### 2. Sincronizar o crear el GitHub Issue
 - Si `gh` está disponible:
@@ -71,11 +99,8 @@ Cuando el usuario pida iniciar una tarea (por ejemplo: `DOM-005` o "resolver la 
   # Verificar si ya existe
   gh issue list --search "<ID_TAREA>" --state open
   ```
-  Si no existe, crearlo con título y criterio:
-  ```powershell
-  gh issue create --title "[<ID>] <Título de la tarea>" --body "### Criterio de aceptación`n<Criterio de docs/backlog.md>`n`nFuente: docs/backlog.md"
-  ```
-  Anotar el número de issue asignado (ejemplo: `#15`).
+  Si no existe, crearlo redactando el cuerpo completo según el **Estándar de Redacción de Issues** de esta skill. Si ya existe pero tiene una descripción corta, enriquecerlo con `gh issue edit <N> --body-file ...`.
+  Anotar el número de issue asignado (ejemplo: `#14`).
 
 ### 3. Actualizar `docs/backlog.md`
 - Cambiar el estado de la tarea de `pendiente` a `en progreso`.
@@ -112,6 +137,7 @@ Durante el desarrollo de la solución:
 - Si alguna prueba falla, corregir antes de registrar el commit.
 
 ### 3. Commits semánticos y didácticos
+- Agregar únicamente los archivos específicos de la tarea (`git add <archivos>`), evitando `git add .` indiscriminado.
 - Crear commits frecuentes usando Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`).
 - El mensaje debe explicar el *qué* y el *por qué* de manera clara:
   ```powershell
@@ -131,7 +157,7 @@ Al completar la funcionalidad:
 ### 1. Validar Definition of Done
 Verificar que:
 - El criterio de aceptación del backlog esté completamente cumplido.
-- `npm test` pasa al 100%.
+- `npm.cmd test` pasa al 100%.
 - Se actualizaron contratos (`docs/contratos.md`), modelo o ADR si la decisión lo requería.
 
 ### 2. Actualizar `docs/backlog.md`
@@ -163,7 +189,7 @@ $prBody = @"
 
 ## 🧪 Cómo probar este PR
 ```powershell
-npm test
+npm.cmd test
 ```
 
 ## ✅ Checklist de Definition of Done
