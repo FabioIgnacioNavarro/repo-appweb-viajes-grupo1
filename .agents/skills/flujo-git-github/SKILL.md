@@ -251,7 +251,7 @@ git push -u origin <nombre-de-rama>
 $prBody = @"
 ## 🎯 Tarea y Contexto
 - **Backlog ID:** <ID>
-- **Closes #<NumeroIssue>**
+Closes #<NumeroIssue>
 - **Criterio de aceptación:** <Criterio de docs/backlog.md>
 - **ADR asociado:** <ADR si corresponde, ej. ADR 0033>
 
@@ -320,5 +320,9 @@ git push origin main
 
 ### 5. Verificar cierre del Issue y estado `Done` en el Tablero Kanban
 - El Issue vinculado en el PR se cierra automáticamente gracias a la palabra clave `Closes #<Issue>`.
-- La tarjeta en el Tablero Kanban se mueve automáticamente a **Done** (o se arrastra manualmente a **Done** si no hay workflow configurado).
+- **Verificación obligatoria del Issue:** Ejecutar `gh issue view <NumeroIssue> --json state`. Si por particularidades de formato o de la estrategia de merge de GitHub el Issue sigue figurando como `OPEN`, cerrarlo inmediatamente con:
+  ```powershell
+  gh issue close <NumeroIssue> --comment "Cerrado tras el merge de PR #<NumeroPR>."
+  ```
+- Confirmar que la tarjeta en el Tablero Kanban figure en **Done** (o moverla si no hay automatización).
 - El ciclo de la tarea queda formalmente concluido y el equipo puede iniciar la siguiente tarea desde Fase 1.
