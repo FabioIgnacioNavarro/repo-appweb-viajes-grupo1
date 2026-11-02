@@ -13,11 +13,13 @@ import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-servicios";
 import { RepositorioViajesActivosHttp } from "./viajes-http";
+import { iniciarMedicionProcesoFlota } from "./mediciones";
 
 const puerto = Number(process.env.PUERTO_MS_FLOTA ?? 3002);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_FLOTA debe ser un entero entre 1 y 65535.");
 
 const pool = process.env.DATABASE_URL ? crearPoolPostgres() : undefined;
+const detenerMedicionProceso = iniciarMedicionProcesoFlota();
 const posiciones = new Map();
 const choferes = pool ? new RepositorioChoferesPostgres(pool) : new RepositorioChoferesMemoria(posiciones);
 const ubicaciones = pool ? new RepositorioUbicacionesPostgres(pool, randomUUID) : new RepositorioUbicacionesMemoria(posiciones);
@@ -36,7 +38,7 @@ const clienteInterno = new ClienteServiciosHttp({ timeoutMs: Number(process.env.
 aplicacion.use(crearRouterFlota({ choferes, ubicaciones, viajes: new RepositorioViajesActivosMemoria(), crearRepositorioViajes: (jwt) => new RepositorioViajesActivosHttp(urlViajes, jwt, clienteInterno), validadorToken: validador, autorizador: new AutorizadorUbicacionBasico() }));
 
 const servidor = aplicacion.listen(puerto, () => console.log(`ms-flota disponible en http://localhost:${puerto}`));
-async function cerrar(): Promise<void> { servidor.close(); await pool?.end(); }
+async function cerrar(): Promise<void> { detenerMedicionProceso(); servidor.close(); await pool?.end(); }
 process.once("SIGTERM", () => { void cerrar(); });
 process.once("SIGINT", () => { void cerrar(); });
 

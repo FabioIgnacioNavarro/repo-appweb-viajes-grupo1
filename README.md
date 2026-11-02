@@ -76,6 +76,30 @@ El token tiene la forma
 `falso.<payload-base64url>`. Acepta `PASAJERO`, `CHOFER`, `SOPORTE` y `ADMINISTRADOR`; no firma tokens y
 se rechaza explícitamente cuando `NODE_ENV=production`.
 
+## Simulador local de carga de Flota (MED-001)
+
+El simulador no se inicia junto con la aplicación: corre solo cuando se lo ejecuta a mano. Requiere
+Docker Compose, Node.js 22 y servicios locales. Desde la raíz del repositorio, iniciá el entorno con
+la instrumentación temporal de `ms-flota`:
+
+```powershell
+docker compose -f docker-compose.yml -f carga/docker-compose.mediciones.yml up --build -d
+npm.cmd run carga:flota -- --modo prueba
+```
+
+Para la carga definida en `docs/mediciones.md`, ejecutá:
+
+```powershell
+npm.cmd run carga:flota -- --modo completa --escenario carga --repeticion 1 --semilla 42
+```
+
+El modo completo dura aproximadamente siete minutos: calentamiento, cinco minutos de medición y
+recuperación. Repetilo con `--repeticion 2` y `--repeticion 3`. El escenario `reposo` no manda
+actualizaciones de ubicación. Los perfiles sintéticos y sus ubicaciones se eliminan al finalizar;
+el destino HTTP y el contexto de Docker deben ser locales. Los informes se guardan en
+`carga/resultados/`, excluida de Git. La prueba corta valida que el simulador funcione, pero no
+reemplaza las tres ejecuciones de aceptación.
+
 ## `ms-viajes`
 
 Para compilar y ejecutar el servicio HTTP de viajes:

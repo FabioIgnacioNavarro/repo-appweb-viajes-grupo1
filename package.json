@@ -8,6 +8,8 @@
     "demo": "npm run build && node dist/terminal.js",
     "demo:web": "npm run build && node dist/servidor-web.js",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "test:carga": "node --test carga/*.test.mjs",
+    "carga:flota": "node carga/simulador.mjs",
     "test:e2e": "npm run build && node --test dist/e2e.test.js",
     "test:pw": "playwright test",
     "test:pw:ui": "playwright test --ui",

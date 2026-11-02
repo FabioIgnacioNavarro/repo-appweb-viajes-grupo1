@@ -39,7 +39,7 @@ Se comparan versiones con el mismo conjunto de datos y la misma carga:
 
 1. **Reposo:** servicios iniciados, sin actualizaciones, una búsqueda por segundo y sondas de salud. Sirve como referencia de latencia sin competencia de escrituras.
 2. **Línea de base actual:** código de `ms-flota` de `main` registrado por su SHA antes de cambiar la estrategia. Para este inicio se registra `203451f`; en esta versión, PostgreSQL filtra por disponibilidad, antigüedad y cuadro geográfico, calcula Haversine en la consulta y limita los candidatos.
-3. **Referencia ingenua:** variante solo de benchmark que carga los choferes elegibles y calcula distancias en Node.js. No se publica como ruta de producción. Se implementa en el simulador para comparar la solución inicial con la final sin exponer una ruta deliberadamente costosa a clientes.
+3. **Referencia ingenua:** queda como comparación experimental separada. No se publicará como ruta de producción ni se comparará el CPU del generador con el CPU del servicio. El simulador MED-001 mide el recorrido HTTP real; la comparación ingenua se agregará cuando se defina la estrategia geográfica y exista un adaptador de benchmark con límites equivalentes.
 4. **Versión final:** estrategia de búsqueda optimizada que el grupo elija después de comparar alternativas. Se registra el commit exacto y la estrategia; no se presupone que sea PostGIS, geohash ni memoria antes de contar con evidencia.
 5. **Flujo integrado:** estimación, confirmación, creación de ofertas y aceptación automática de una oferta de prueba a través de los servicios y el gateway. Se ejecuta por separado de la medición de Flota y se informa qué servicios y proveedores estuvieron activos.
 
@@ -59,14 +59,39 @@ La comparación principal será entre la línea de base actual y la versión fin
 
 1. Registrar el commit de cada variante, sistema operativo, CPU, RAM, versiones de Node.js, Docker y PostgreSQL, configuración de Compose, `DATABASE_POOL_MAX` y cualquier límite de recursos activo.
 2. Preparar un entorno local aislado y un `.env` local no versionado con `NODE_ENV=development` y `JWT_MODO=falso`. La prueba no debe conectarse a producción ni utilizar tokens reales.
-3. Levantar PostgreSQL y los servicios con Docker Compose (`docker compose up --build -d`). Esperar a que los healthchecks estén sanos y confirmar `GET /health`, `GET /ready/flota` y la prueba E2E (`$env:E2E_BASE_URL = "http://localhost:8080"; npm.cmd run test:e2e`) antes de medir. Si la E2E falla, detener la medición y corregir primero el entorno.
-4. Reiniciar la base de prueba hasta un estado conocido y cargar las 500 identidades de forma idempotente. El mecanismo de preparación y limpieza del simulador debe afectar solo los IDs de prueba; no usar `docker compose down -v` como limpieza general porque elimina el volumen de PostgreSQL.
-5. Ejecutar el escenario de reposo y luego los escenarios de carga definidos arriba. Guardar el registro bruto de cada ejecución junto con el SHA, la semilla y la configuración; no conservar tokens ni coordenadas exactas en logs compartidos.
+3. Levantar PostgreSQL y los servicios con la configuración de mediciones, que habilita el registro de event loop solo para `ms-flota`:
+
+   ```powershell
+   docker compose -f docker-compose.yml -f carga/docker-compose.mediciones.yml up --build -d
+   ```
+
+   Esperar a que los healthchecks estén sanos y confirmar `GET /health`, `GET /ready/flota` y la prueba E2E (`$env:E2E_BASE_URL = "http://localhost:8080"; npm.cmd run test:e2e`) antes de medir. Si la E2E falla, detener la medición y corregir primero el entorno.
+4. Ejecutar `npm.cmd run carga:flota -- --modo prueba` para verificar el entorno. En modo completo, el simulador crea perfiles sintéticos con UUID aleatorios y ubicaciones iniciales; limpia únicamente esos perfiles y ubicaciones al terminar. No se requiere borrar el volumen de PostgreSQL ni ejecutar `docker compose down -v`.
+5. Ejecutar el escenario de reposo y luego los escenarios de carga definidos arriba. Cada ejecución genera un informe JSON local con SHA, semilla, configuración, métricas por endpoint, CPU/memoria y ventanas de event loop. El informe queda en `carga/resultados/`, que está excluida de Git; no contiene tokens ni coordenadas.
 6. Repetir tres veces cada escenario. Si una ejecución se interrumpe, conservarla marcada como inválida con el motivo y volver a ejecutarla; no reemplazarla en silencio.
 7. Comparar p50, p95 y p99 por tipo de solicitud, throughput ofrecido y completado, tasa de error, lag del event loop, RSS, uso de CPU, conexiones activas de PostgreSQL y tiempo de primera oferta cuando corresponda. Reportar cada repetición y la mediana de las tres; no mostrar solo el promedio.
 8. Aceptar una variante únicamente si las tres repeticiones alcanzan el throughput ofrecido y cumplen los umbrales de latencia, errores, salud, lag y memoria. Si no los cumple, registrar el incumplimiento y la siguiente hipótesis de mejora antes de volver a medir.
 
-El simulador y cualquier script de preparación deberán quedar versionados en `carga/`. Todavía no hay un comando de benchmark porque el simulador no está implementado; ese comando exacto se agregará junto con MED-001. La carga se ejecutará contra el gateway para reflejar el camino público. Si se agrega una medición directa a `ms-flota`, se informará por separado y no se comparará con mediciones tomadas a través de Nginx.
+El simulador y cualquier script de preparación están versionados en `carga/`. La carga se ejecuta contra el gateway para reflejar el camino público. Si se agrega una medición directa a `ms-flota`, se informará por separado y no se comparará con mediciones tomadas a través de Nginx.
+
+### Comandos del simulador
+
+Desde la raíz del repositorio y con Docker Compose levantado usando el archivo adicional de mediciones:
+
+```powershell
+# Prueba corta: 5 choferes, 2 s de calentamiento, 12 s medidos y 1 s de recuperación.
+npm.cmd run carga:flota -- --modo prueba
+
+# Reposo con valores completos.
+npm.cmd run carga:flota -- --modo completa --escenario reposo --repeticion 1
+
+# Carga completa: 500 choferes, 60 s de calentamiento, 300 s medidos y 60 s de recuperación.
+npm.cmd run carga:flota -- --modo completa --escenario carga --repeticion 1 --semilla 42
+```
+
+Repetir la última orden con `--repeticion 2` y `--repeticion 3`, manteniendo la misma semilla. Para una variante distinta, conservar el mismo número de repetición y semilla. El simulador rechaza destinos HTTP que no sean locales, verifica que Docker use un contexto local, comprueba `/health` y `/ready/flota`, y no usa proveedores externos.
+
+La latencia HTTP se mide desde que empieza la solicitud hasta que se consume la respuesta. La espera de la cola se registra aparte para detectar un generador atrasado. El lag del event loop y el RSS pertenecen al proceso `ms-flota`; CPU y memoria de `docker stats` pertenecen al contenedor completo y no se deben confundir con RSS.
 
 ## Métricas a conservar
 
@@ -84,4 +109,4 @@ El simulador y cualquier script de preparación deberán quedar versionados en `
 
 ## Registro de resultados
 
-Todavía no hay resultados medidos. Por cada variante se anotarán: commit, fechas, entorno, escenario, semilla, configuración, tres resultados individuales, mediana, cumplimiento de cada umbral, problemas observados y decisión tomada. Los umbrales anteriores se mantienen como referencia; si el grupo decide cambiarlos, debe justificarlo antes de una nueva serie y conservar los valores anteriores para que la comparación siga siendo honesta.
+Todavía no hay resultados de aceptación de cinco minutos por variante. La prueba corta verifica el funcionamiento del simulador, pero no demuestra los umbrales de carga. Por cada variante se anotarán: commit, fechas, entorno, escenario, semilla, configuración, tres resultados individuales, mediana, cumplimiento de cada umbral, problemas observados y decisión tomada. Los umbrales anteriores se mantienen como referencia; si el grupo decide cambiarlos, debe justificarlo antes de una nueva serie y conservar los valores anteriores para que la comparación siga siendo honesta.

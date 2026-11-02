@@ -53,6 +53,7 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
   - 33. Asignación concurrente con bloqueo ordenado e índice único parcial.
   - 34. Persistencia de ms-viajes con SQL directo y puertos asíncronos.
 - **Flujo B (Flota, Tarea Pesada, Búsqueda Geo y Tiempo Real):** ADR 0040 a 0049.
+  - 40. Simulador local y repetible de carga de Flota.
 - **Flujo C (Seguridad, Observabilidad, Google Maps y Operación):** ADR 0050 a 0059.
   - 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
   - 51. Geocodificación y cálculo de rutas con Google Maps Platform.
