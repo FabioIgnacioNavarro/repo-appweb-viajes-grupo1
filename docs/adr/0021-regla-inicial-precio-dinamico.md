@@ -1,6 +1,6 @@
 # ADR 0021: Regla inicial configurable para el precio dinámico
 
-- Estado: aceptado para el prototipo académico
+- Estado: Aceptado
 - Fecha: 2026-10-15
 - Participantes: Joel Echeverría (implementación inicial)
 

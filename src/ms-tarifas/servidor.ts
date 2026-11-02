@@ -42,7 +42,10 @@ const crear = (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicaci
 const app = express();
 app.use(middlewareObservabilidad("ms-tarifas"));
 app.use(crearRouterTarifas({ estimar: crear, estimaciones, validador, comprobarBase: async () => { await pool.query("SELECT 1"); } }));
-app.listen(puerto, () => console.log(`ms-tarifas disponible en puerto ${puerto}`));
+const servidor = app.listen(puerto, () => console.log(`ms-tarifas disponible en puerto ${puerto}`));
+async function cerrar(): Promise<void> { servidor.close(); await pool.end(); }
+process.once("SIGTERM", () => { void cerrar(); });
+process.once("SIGINT", () => { void cerrar(); });
 function requerido(nombre: string): string { const valor = process.env[nombre]; if (!valor) throw new Error(`${nombre} es obligatoria.`); return valor; }
 function crearValidador() {
   if (process.env.JWT_MODO === "falso") {

@@ -22,15 +22,26 @@ function puntoUbicacion(valor: unknown): PuntoUbicacion | undefined {
 }
 function error(res: Response, causa: unknown): void {
   if (causa instanceof ErrorTarifas) {
+    const esFallaDependencia =
+      causa.codigo.startsWith("DEPENDENCIA") ||
+      causa.codigo.includes("DESACTUALIZADO") ||
+      causa.codigo.includes("RESPUESTA") ||
+      causa.codigo === "PROVEEDOR_RUTA_RECHAZO";
+    if (esFallaDependencia) {
+      res.status(503).json({
+        error: {
+          codigo: "DEPENDENCIA_NO_DISPONIBLE",
+          mensaje: causa.message,
+          detalles: causa.codigo === "DEPENDENCIA_NO_DISPONIBLE" ? {} : { motivo: causa.codigo }
+        }
+      });
+      return;
+    }
     const status = causa.codigo === "COORDENADAS_INVALIDAS" || causa.codigo === "DIRECCION_INVALIDA"
       ? 400
       : causa.codigo === "DIRECCION_NO_ENCONTRADA"
         ? 404
-        : causa.codigo === "ZONA_NO_ENCONTRADA"
-          ? 422
-          : causa.codigo.startsWith("DEPENDENCIA") || causa.codigo.includes("DESACTUALIZADO") || causa.codigo.includes("RESPUESTA")
-            ? 503
-            : 422;
+        : 422;
     res.status(status).json({ error: { codigo: causa.codigo, mensaje: causa.message, detalles: {} } }); return;
   }
   res.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "Ocurrió un error interno.", detalles: {} } });
@@ -53,17 +64,20 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
     try { req.actor = await deps.validador.validar(token); next(); } catch { res.status(401).json({ error: { codigo: "TOKEN_INVALIDO", mensaje: "El token no es válido.", detalles: {} } }); }
   });
   router.post("/viajes/estimacion", async (req, res) => {
-    if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio." } }); return; }
+    if (req.actor?.rol !== "PASAJERO") { res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un pasajero puede solicitar una estimación.", detalles: {} } }); return; }
+    if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio.", detalles: {} } }); return; }
     const origen = puntoUbicacion(req.body.origen); const destino = puntoUbicacion(req.body.destino);
-    if (!origen || !destino || !req.actor) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Origen y destino deben incluir coordenadas numéricas o una dirección válida." } }); return; }
+    if (!origen || !destino || !req.actor) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Origen y destino deben incluir coordenadas numéricas o una dirección válida.", detalles: {} } }); return; }
     try { res.status(201).json(dto(await deps.estimar(req.actor.idUsuario, origen, destino, req.header("Authorization")!.slice(7)))); } catch (causa) { error(res, causa); }
   });
   router.get("/estimaciones/:idEstimacion", async (req, res) => {
-    const e = await deps.estimaciones.obtener(req.params.idEstimacion);
-    if (!e) { res.status(404).json({ error: { codigo: "ESTIMACION_NO_ENCONTRADA", mensaje: "No existe la estimación.", detalles: {} } }); return; }
-    if (req.actor?.idUsuario !== e.pasajeroId && !["SOPORTE", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) { res.status(403).json({ error: { codigo: "ESTIMACION_NO_AUTORIZADA", mensaje: "No podés consultar esta estimación.", detalles: {} } }); return; }
-    if (e.vigenteHasta.getTime() <= Date.now()) { res.status(409).json({ error: { codigo: "ESTIMACION_VENCIDA", mensaje: "La estimación ya venció.", detalles: {} } }); return; }
-    res.json(dto(e));
+    try {
+      const e = await deps.estimaciones.obtener(req.params.idEstimacion);
+      if (!e) { res.status(404).json({ error: { codigo: "ESTIMACION_NO_ENCONTRADA", mensaje: "No existe la estimación.", detalles: {} } }); return; }
+      if (req.actor?.idUsuario !== e.pasajeroId && !["SOPORTE", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) { res.status(403).json({ error: { codigo: "ESTIMACION_NO_AUTORIZADA", mensaje: "No podés consultar esta estimación.", detalles: {} } }); return; }
+      if (e.vigenteHasta.getTime() <= Date.now()) { res.status(409).json({ error: { codigo: "ESTIMACION_VENCIDA", mensaje: "La estimación ya venció.", detalles: {} } }); return; }
+      res.json(dto(e));
+    } catch (causa) { error(res, causa); }
   });
   return router;
 }

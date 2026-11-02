@@ -6,7 +6,8 @@ import {
   type ObservacionClima, type ReglaTarifa, type RepositorioReglas, type RepositorioZonas,
   type RutaCalculada, type ZonaTarifaria
 } from "./dominio";
-import { FuenteDemandaHttp, FuenteFlotaHttp, RutaHaversine, RutaOsrm } from "./proveedores";
+import { FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, RutaHaversine, RutaOsrm } from "./proveedores";
+import { conSpan, iniciarObservabilidad } from "../compartido/observabilidad";
 
 const zona: ZonaTarifaria = { id: "resistencia", nombre: "Resistencia", centro: { latitud: -27.45, longitud: -58.98 }, radioMetros: 15_000, zonaHoraria: "America/Argentina/Buenos_Aires" };
 const regla: ReglaTarifa = {
@@ -81,16 +82,83 @@ test("OSRM usa geometría y distancia recibidas del servidor configurado", async
   assert.match(url, /route\/v1\/driving/);
 });
 
-test("ms-tarifas consulta candidatos de flota y demanda reenviando el JWT", async () => {
+test("ms-tarifas consulta candidatos de flota y demanda reenviando el JWT y propagando traceparent", async () => {
+  iniciarObservabilidad("ms-tarifas-test");
   const autorizaciones: string[] = [];
+  const traceparents: string[] = [];
   const obtener = async (url: string, opciones?: RequestInit) => {
-    autorizaciones.push(new Headers(opciones?.headers).get("Authorization") ?? "");
+    const headers = new Headers(opciones?.headers);
+    autorizaciones.push(headers.get("Authorization") ?? "");
+    traceparents.push(headers.get("traceparent") ?? "");
     if (url.includes("choferes/cercanos")) return Response.json({ candidatos: [{ id_chofer: "chofer-1" }, { id_chofer: "chofer-2" }] });
     return Response.json({ zona_id: "resistencia", solicitudes_activas: 7 });
   };
-  const flota = await new FuenteFlotaHttp("http://ms-flota:3002", "jwt-original", 1500, obtener).contarDisponibles(zona, zona.centro);
-  const demanda = await new FuenteDemandaHttp("http://ms-viajes:3000", "jwt-original", 1500, obtener).contarSolicitudesActivas(zona);
-  assert.equal(flota, 2);
-  assert.equal(demanda, 7);
+  await conSpan("estimacion-test", {}, async () => {
+    const flota = await new FuenteFlotaHttp("http://ms-flota:3002", "jwt-original", 1500, obtener).contarDisponibles(zona, zona.centro);
+    const demanda = await new FuenteDemandaHttp("http://ms-viajes:3000", "jwt-original", 1500, obtener).contarSolicitudesActivas(zona);
+    assert.equal(flota, 2);
+    assert.equal(demanda, 7);
+  });
   assert.deepEqual(autorizaciones, ["Bearer jwt-original", "Bearer jwt-original"]);
+  assert.equal(traceparents.length, 2);
+  for (const tp of traceparents) {
+    assert.match(tp, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+  }
+});
+
+test("limita el multiplicador mínimo configurado en la regla", async () => {
+  const reglaPiso = {
+    ...regla,
+    multiplicadorMinimoEscalado: 8500,
+    lluviaSinPrecipitacionEscalado: 5000,
+    disponibilidad: [{ hasta: Number.MAX_SAFE_INTEGER, multiplicadorEscalado: 5000 }],
+    demandaPorMil: [{ hasta: Number.MAX_SAFE_INTEGER, multiplicadorEscalado: 5000 }],
+    horario: { MADRUGADA: 5000, MANANA: 5000, SIESTA: 5000, TARDE: 5000, NOCHE: 5000 }
+  };
+  const resultado = await estimador({ lluvia: 0, reglaUsada: reglaPiso }).caso.ejecutar("pasajero-1", zona.centro, zona.centro, new Date("2026-10-15T23:00:00Z"));
+  assert.equal(resultado.multiplicadorDemandaEscalado, 8500);
+});
+
+test("rechaza observaciones de clima vencidas (mayores a 15 minutos) o en el futuro con CLIMA_DESACTUALIZADO", async () => {
+  const ahora = new Date("2026-10-15T12:30:00Z");
+  await assert.rejects(
+    () => estimador({ observadaEn: "2026-10-15T12:14:59Z" }).caso.ejecutar("pasajero-1", zona.centro, zona.centro, ahora),
+    (error: { codigo?: string }) => error.codigo === "CLIMA_DESACTUALIZADO"
+  );
+  await assert.rejects(
+    () => estimador({ observadaEn: "2026-10-15T12:31:00Z" }).caso.ejecutar("pasajero-1", zona.centro, zona.centro, ahora),
+    (error: { codigo?: string }) => error.codigo === "CLIMA_DESACTUALIZADO"
+  );
+});
+
+test("FuenteClimaOpenMeteo cachea por zona durante 15 minutos y consulta de nuevo al vencer", async () => {
+  let llamadas = 0;
+  let tiempoActual = Date.parse("2026-10-15T12:00:00Z");
+  const obtener = async () => {
+    llamadas += 1;
+    return Response.json({
+      current: {
+        time: "2026-10-15T12:00",
+        precipitation: llamadas === 1 ? 3.2 : 0
+      }
+    });
+  };
+  const fuente = new FuenteClimaOpenMeteo(1500, obtener, () => tiempoActual);
+
+  const primera = await fuente.consultar(zona);
+  assert.equal(primera.precipitacionMm, 3.2);
+  assert.equal(primera.fuente, "OPEN_METEO");
+  assert.equal(llamadas, 1);
+
+  // Dentro de los 15 minutos usa caché
+  tiempoActual += 10 * 60_000;
+  const segunda = await fuente.consultar(zona);
+  assert.equal(segunda.precipitacionMm, 3.2);
+  assert.equal(llamadas, 1);
+
+  // Pasados los 15 minutos vuelve a consultar al proveedor
+  tiempoActual += 6 * 60_000;
+  const tercera = await fuente.consultar(zona);
+  assert.equal(tercera.precipitacionMm, 0);
+  assert.equal(llamadas, 2);
 });

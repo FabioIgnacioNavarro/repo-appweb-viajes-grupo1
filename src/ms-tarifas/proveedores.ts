@@ -1,4 +1,5 @@
 import { distanceHaversineMetros } from "./utilidades";
+import { conSpan, inyectarContextoW3C, obtenerContextoTraza } from "../compartido/observabilidad";
 import {
   ErrorTarifas,
   construirNivelesCascada,
@@ -21,7 +22,8 @@ export type { Geocodificador, OpcionesGeocodificacion, CuadroDelimitador };
 
 type Obtener = (url: string, opciones?: RequestInit) => Promise<Response>;
 function registrarFalla(servicio: string, operacion: string, resultado: string): void {
-  console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado }));
+  const traza = obtenerContextoTraza();
+  console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado, ...traza }));
 }
 
 async function obtenerJsonConReintento<T>(
@@ -33,31 +35,36 @@ async function obtenerJsonConReintento<T>(
   servicio = "proveedor_externo",
   operacion = "consulta"
 ): Promise<T> {
-  const reintentos = typeof reintentar === "boolean" ? (reintentar ? 1 : 0) : reintentar;
-  const intentos = reintentos + 1;
-  for (let intento = 0; intento < intentos; intento += 1) {
-    let respuesta: Response;
-    try {
-      respuesta = await obtener(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        signal: AbortSignal.timeout(timeoutMs)
-      });
-    } catch {
-      if (intento + 1 < intentos) { await new Promise((resolver) => setTimeout(resolver, 100)); continue; }
-      console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado: "timeout_o_red" }));
-      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Una dependencia necesaria no respondió a tiempo.");
+  return conSpan(`dependencia.${servicio}.${operacion}`, { "servicio.destino": servicio, operacion }, async () => {
+    const reintentos = typeof reintentar === "boolean" ? (reintentar ? 1 : 0) : reintentar;
+    const intentos = reintentos + 1;
+    for (let intento = 0; intento < intentos; intento += 1) {
+      let respuesta: Response;
+      try {
+        const encabezados: Record<string, string> = {};
+        if (token) encabezados.Authorization = `Bearer ${token}`;
+        inyectarContextoW3C(encabezados);
+        respuesta = await obtener(url, {
+          headers: Object.keys(encabezados).length > 0 ? encabezados : undefined,
+          signal: AbortSignal.timeout(timeoutMs)
+        });
+      } catch {
+        if (intento + 1 < intentos) { await new Promise((resolver) => setTimeout(resolver, 100)); continue; }
+        registrarFalla(servicio, operacion, "timeout_o_red");
+        throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Una dependencia necesaria no respondió a tiempo.");
+      }
+      if (respuesta.ok) {
+        try { return await respuesta.json() as T; }
+        catch { registrarFalla(servicio, operacion, "json_invalido"); throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Una dependencia respondió con datos inválidos."); }
+      }
+      const puedeReintentar = [429, 502, 503, 504].includes(respuesta.status);
+      if (puedeReintentar && intento + 1 < intentos) { await new Promise((resolver) => setTimeout(resolver, 100)); continue; }
+      if (puedeReintentar || respuesta.status >= 500) { registrarFalla(servicio, operacion, `http_${respuesta.status}`); throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Una dependencia necesaria no está disponible."); }
+      registrarFalla(servicio, operacion, `rechazo_${respuesta.status}`);
+      throw new ErrorTarifas("DEPENDENCIA_RECHAZO_PEDIDO", "Una dependencia rechazó la consulta.");
     }
-    if (respuesta.ok) {
-      try { return await respuesta.json() as T; }
-      catch { registrarFalla(servicio, operacion, "json_invalido"); throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Una dependencia respondió con datos inválidos."); }
-    }
-    const puedeReintentar = [429, 502, 503, 504].includes(respuesta.status);
-    if (puedeReintentar && intento + 1 < intentos) { await new Promise((resolver) => setTimeout(resolver, 100)); continue; }
-    if (puedeReintentar || respuesta.status >= 500) { console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado: `http_${respuesta.status}` })); throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Una dependencia necesaria no está disponible."); }
-    console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado: `rechazo_${respuesta.status}` }));
-    throw new ErrorTarifas("DEPENDENCIA_RECHAZO_PEDIDO", "Una dependencia rechazó la consulta.");
-  }
-  throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Una dependencia necesaria no está disponible.");
+    throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Una dependencia necesaria no está disponible.");
+  });
 }
 
 export class RutaOsrm implements CalculadorRuta {
