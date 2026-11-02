@@ -104,6 +104,7 @@ La latencia HTTP se mide desde que empieza la solicitud hasta que se consume la 
 | Tiempo desde la solicitud hasta la asignación aceptada | ms | Solo flujo integrado, con aceptación automática |
 | Lag p99 y máximo del event loop | ms | Proceso `ms-flota` |
 | Memoria RSS y crecimiento durante la prueba | MiB y % | Proceso `ms-flota` |
+| Heap usado, memoria externa y `ArrayBuffer` | MiB | Diagnóstico del proceso `ms-flota`; `arrayBuffers` es subconjunto de `external` y no se suma a ella |
 | CPU, conexiones y consultas PostgreSQL | %, cantidad y duración | Host/base y repetición |
 | Estado y latencia de `/health` y `/ready/flota` | código HTTP y ms | Cada sonda |
 
@@ -148,3 +149,7 @@ La línea de base del escenario de carga quedó medida en tres repeticiones. Una
 Las tres repeticiones completaron 300/300 búsquedas y 300/300 sondas por endpoint; todas respondieron HTTP 200 y no hubo solicitudes perdidas por cola. Las latencias p95/p99, CPU, event loop y RSS quedaron dentro de los umbrales. La corrida 1 redujo el RSS entre los minutos 2 y 5; las corridas 2 y 3 se mantuvieron prácticamente estables.
 
 La línea de base tiene ahora tres repeticiones válidas por escenario (reposo y carga). MED-001 sigue abierto: una repetición del escenario de carga superó el límite de crecimiento RSS y aún no se midió una variante final/optimizada en tres repeticiones equivalentes.
+
+### Diagnóstico de memoria del proceso
+
+Las corridas anteriores registran RSS, pero no separan memoria del heap de Node y memoria externa. La siguiente corrida diagnóstica añade `heapUsed`, `external` y `arrayBuffers` a cada muestra de `ms-flota` y a los resúmenes p95/máximo del JSON. `arrayBuffers` forma parte de `external`; se informa aparte para identificar buffers, pero no debe sumarse de nuevo al total. Los informes previos no tienen estas columnas y no se deben comparar como si las hubieran medido.

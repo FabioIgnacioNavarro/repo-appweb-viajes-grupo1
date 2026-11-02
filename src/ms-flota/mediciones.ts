@@ -3,7 +3,7 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 export interface OpcionesMedicionProceso {
   entorno?: NodeJS.ProcessEnv;
   registrar?: (registro: string) => void;
-  leerMemoriaRss?: () => number;
+  leerMemoriaProceso?: () => NodeJS.MemoryUsage;
 }
 
 /** Instrumentación local y optativa. En ejecución normal queda desactivada. */
@@ -22,7 +22,7 @@ export function iniciarMedicionProcesoFlota(opciones: OpcionesMedicionProceso = 
 
   const histograma = monitorEventLoopDelay({ resolution: 20 });
   const registrar = opciones.registrar ?? ((registro: string) => console.log(registro));
-  const leerMemoriaRss = opciones.leerMemoriaRss ?? (() => process.memoryUsage().rss);
+  const leerMemoriaProceso = opciones.leerMemoriaProceso ?? (() => process.memoryUsage());
   histograma.enable();
 
   const temporizador = setInterval(() => {
@@ -31,7 +31,7 @@ export function iniciarMedicionProcesoFlota(opciones: OpcionesMedicionProceso = 
       registrado_en: new Date().toISOString(),
       lag_event_loop_p99_ms: redondear(histograma.percentile(99) / 1_000_000),
       lag_event_loop_max_ms: redondear(histograma.max / 1_000_000),
-      memoria_rss_mib: redondear(leerMemoriaRss() / (1024 * 1024))
+      ...convertirMemoriaProcesoMiB(leerMemoriaProceso())
     }));
     histograma.reset();
   }, intervaloMs);
@@ -40,6 +40,21 @@ export function iniciarMedicionProcesoFlota(opciones: OpcionesMedicionProceso = 
   return () => {
     clearInterval(temporizador);
     histograma.disable();
+  };
+}
+
+export function convertirMemoriaProcesoMiB(uso: NodeJS.MemoryUsage): {
+  memoria_rss_mib: number;
+  memoria_heap_usado_mib: number;
+  memoria_externa_mib: number;
+  memoria_array_buffers_mib: number;
+} {
+  const mebibytes = 1024 * 1024;
+  return {
+    memoria_rss_mib: redondear(uso.rss / mebibytes),
+    memoria_heap_usado_mib: redondear(uso.heapUsed / mebibytes),
+    memoria_externa_mib: redondear(uso.external / mebibytes),
+    memoria_array_buffers_mib: redondear(uso.arrayBuffers / mebibytes)
   };
 }
 

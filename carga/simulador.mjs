@@ -422,7 +422,7 @@ async function limpiarChoferes(identificadores) {
 }
 
 async function leerMedicionesProcesoFlota(inicio, fin) {
-  if (!inicio || !fin) return { cantidad_ventanas: 0, p99_event_loop_ms: null, max_event_loop_ms: null, rss_p95_mib: null, rss_maximo_mib: null, ventanas: [] };
+  if (!inicio || !fin) return { cantidad_ventanas: 0, p99_event_loop_ms: null, max_event_loop_ms: null, rss_p95_mib: null, rss_maximo_mib: null, ...resumirMemoriaProcesoFlota([]), ventanas: [] };
   const salida = obtenerDocker([...ARGUMENTOS_COMPOSE, "logs", "--no-color", "--since", "15m", "ms-flota"]);
   const ventanas = [];
   for (const linea of salida.split(/\r?\n/)) {
@@ -442,8 +442,21 @@ async function leerMedicionesProcesoFlota(inicio, fin) {
     max_event_loop_ms: ventanas.length ? redondear(Math.max(...ventanas.map((m) => m.lag_event_loop_max_ms))) : null,
     rss_p95_mib: calcularPercentil(ventanas.map((m) => m.memoria_rss_mib), 95),
     rss_maximo_mib: ventanas.length ? redondear(Math.max(...ventanas.map((m) => m.memoria_rss_mib))) : null,
+    ...resumirMemoriaProcesoFlota(ventanas),
     ventanas
   };
+}
+
+export function resumirMemoriaProcesoFlota(ventanas) {
+  const campos = [
+    ["memoria_heap_usado_mib", "memoria_heap_usado"],
+    ["memoria_externa_mib", "memoria_externa"],
+    ["memoria_array_buffers_mib", "memoria_array_buffers"]
+  ];
+  return Object.fromEntries(campos.flatMap(([campo, prefijo]) => {
+    const valores = ventanas.map((ventana) => ventana[campo]).filter(Number.isFinite);
+    return [[`${prefijo}_p95_mib`, calcularPercentil(valores, 95)], [`${prefijo}_maximo_mib`, valores.length ? redondear(Math.max(...valores)) : null]];
+  }));
 }
 
 function resumirInforme(informe) {

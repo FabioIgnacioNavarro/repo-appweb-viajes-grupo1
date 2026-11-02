@@ -7,7 +7,8 @@ import {
   crearGeneradorDeterminista,
   crearTokenFalso,
   crearUbicacionInicial,
-  parsearPorcentaje
+  parsearPorcentaje,
+  resumirMemoriaProcesoFlota
 } from "./simulador.mjs";
 
 test("el modo prueba usa valores cortos y seguros por defecto", () => {
@@ -60,6 +61,21 @@ test("parsea CPU de Docker con punto o coma decimal e ignora valores vacíos", (
   assert.equal(parsearPorcentaje("0,75%"), 0.75);
   assert.equal(parsearPorcentaje("N/A"), null);
   assert.equal(parsearPorcentaje(""), null);
+});
+
+test("resume heap, memoria externa y ArrayBuffer sin sumarlos entre sí", () => {
+  assert.deepEqual(resumirMemoriaProcesoFlota([
+    { memoria_heap_usado_mib: 20, memoria_externa_mib: 8, memoria_array_buffers_mib: 3 },
+    { memoria_heap_usado_mib: 30, memoria_externa_mib: 10, memoria_array_buffers_mib: 4 },
+    { memoria_heap_usado_mib: 25, memoria_externa_mib: 9, memoria_array_buffers_mib: 3.5 }
+  ]), {
+    memoria_heap_usado_p95_mib: 30,
+    memoria_heap_usado_maximo_mib: 30,
+    memoria_externa_p95_mib: 10,
+    memoria_externa_maximo_mib: 10,
+    memoria_array_buffers_p95_mib: 4,
+    memoria_array_buffers_maximo_mib: 4
+  });
 });
 
 test("genera un JWT falso compatible para cada actor de prueba", () => {
