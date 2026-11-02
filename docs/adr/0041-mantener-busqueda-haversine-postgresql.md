@@ -34,7 +34,9 @@ La línea de base se ejecutó tres veces con 500 choferes, 250 actualizaciones/s
 
 Mantener la alternativa A para el objetivo actual de 500 choferes. Su latencia de búsqueda cumple los umbrales en las tres repeticiones y evita introducir infraestructura espacial sin una necesidad medida. No se agregará PostGIS ni geohash en esta decisión.
 
-La selección del algoritmo queda resuelta para la escala académica actual; esto **no cierra MED-001**. La serie de carga registró un incumplimiento del crecimiento RSS (12,77 % en la repetición 3, por encima del 10 %) y una repetición ofreció una actualización menos que las 75.000 previstas. El escenario de reposo se midió posteriormente en tres repeticiones y se registra en `docs/mediciones.md`; todavía falta medir una variante final/optimizada.
+La selección del algoritmo queda resuelta para la escala académica actual. Una corrida de la línea de base superó el umbral de crecimiento RSS (12,77 %) y quedó registrada sin reemplazarla. La serie diagnóstica posterior agregó heap, memoria externa y `ArrayBuffer`, completó tres repeticiones de carga y quedó por debajo del umbral RSS en las tres; el heap y la memoria externa permanecieron casi estables y el RSS volvió a bajar al cesar el tráfico. La comparación detallada con la línea de base está en `docs/mediciones.md`.
+
+No se implementó un algoritmo espacial distinto: las latencias de búsqueda cumplieron los objetivos y las mediciones no demostraron un cuello de botella que justifique PostGIS o geohash. La versión final conserva PostgreSQL con prefiltrado y Haversine; el desglose de memoria es instrumentación de diagnóstico y no cambia la consulta ni las reglas de Flota.
 
 ## Consecuencias
 
