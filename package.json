@@ -13,7 +13,8 @@
     "test:pw:ui": "playwright test --ui",
     "flota": "npm run build && node dist/ms-flota/servidor.js",
     "tarifas": "npm run build && node dist/ms-tarifas/servidor.js",
-    "viajes": "npm run build && node dist/ms-viajes/servidor.js"
+    "viajes": "npm run build && node dist/ms-viajes/servidor.js",
+    "auth:emulator": "npm run build && node dist/emulador-auth/servidor.js"
   },
   "engines": {
     "node": ">=22"

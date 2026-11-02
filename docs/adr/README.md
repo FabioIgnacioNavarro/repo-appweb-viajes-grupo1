@@ -43,6 +43,7 @@ Decisiones adicionales registradas:
 51. Geocodificación y cálculo de rutas con Google Maps Platform.
 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
 53. Geocodificación en cascada por cercanía y geocodificación inversa.
+54. Emulador de identidad externa OIDC / JWKS y control de acceso RBAC por recurso.
 
 ## Rangos reservados para flujos paralelos
 
@@ -57,3 +58,4 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
   - 51. Geocodificación y cálculo de rutas con Google Maps Platform.
   - 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
   - 53. Geocodificación en cascada por cercanía y geocodificación inversa.
+  - 54. Emulador de identidad externa OIDC / JWKS y control de acceso RBAC por recurso.
