@@ -90,8 +90,11 @@ export function crearAplicacionEmulador() {
 
 if (typeof require !== "undefined" && require.main === module) {
   const app = crearAplicacionEmulador();
-  app.listen(puerto, () => {
+  const servidor = app.listen(puerto, () => {
     console.log(`[auth-emulator] Servidor de identidad y JWKS disponible en puerto ${puerto}`);
     console.log(`[auth-emulator] Endpoint JWKS: http://localhost:${puerto}/.well-known/jwks.json`);
   });
+  const cerrar = () => { servidor.close(() => process.exit(0)); };
+  process.once("SIGTERM", cerrar);
+  process.once("SIGINT", cerrar);
 }

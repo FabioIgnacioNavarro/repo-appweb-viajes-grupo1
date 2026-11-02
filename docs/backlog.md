@@ -29,7 +29,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | SEC-001 | Diseñar autorización por recurso | Alta | terminado | Flujo C | Hay pruebas de acceso permitido y denegado para viajes y ubicaciones. |
 | CON-001 | Definir caso de cancelación simultánea | Alta | terminado | Flujo A | Especificado en ADR 0033 y testeado de forma determinista en postgres.test.ts y dominio.test.ts. |
 | MED-001 | Diseñar simulador de 500 choferes | Media | pendiente | Flujo B | Se puede ejecutar carga sostenida y medir p50, p95, p99, lag y memoria. |
-| OPS-001 | Definir arranque, readiness y apagado | Alta | pendiente | Flujo C | La secuencia de clon limpio queda documentada y verificable. |
+| OPS-001 | Definir arranque, readiness y apagado | Alta | en revisión | Flujo C | Closes #22. Documentada secuencia de clon limpio en README.md, inicialización automática de esquemas DDL en Compose, readiness con SELECT 1 y graceful shutdown (SIGINT/SIGTERM) en todos los servicios. |
 | ARC-006 | Definir limites de microservicios y autenticacion externa | Alta | en progreso | Común | ADR 0016 y contratos compartidos documentan servicios, actor JWT y dependencias. |
 | VIA-001 | Implementar dominio inicial de ms-viajes | Alta | terminado | Flujo A | Puertos y casos de uso asíncronos con cobertura completa en dominio.test.ts. |
 | MVP-002 | Implementar demo de viaje por terminal | Alta | terminado | Común | Un pasajero o chofer elige rol, informa destino, confirma tarifa, inicia y finaliza un viaje con datos persistidos en memoria y precio final visible. Implementado en `src/viaje.ts` y `src/terminal.ts`, con tests en `src/viaje.test.ts`. |
