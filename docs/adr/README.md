@@ -41,6 +41,7 @@ Decisiones adicionales registradas:
 32. E2E reproducible con proveedores controlados.
 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
 51. Geocodificación y cálculo de rutas con Google Maps Platform.
+52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
 
 ## Rangos reservados para flujos paralelos
 
@@ -53,3 +54,4 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
 - **Flujo C (Seguridad, Observabilidad, Google Maps y Operación):** ADR 0050 a 0059.
   - 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
   - 51. Geocodificación y cálculo de rutas con Google Maps Platform.
+  - 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
