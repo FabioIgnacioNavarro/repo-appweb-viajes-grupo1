@@ -21,6 +21,26 @@ cd repo-appweb-viajes-grupo1
 Copy-Item .env.example .env
 ```
 
+El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL
+los ejecuta al crear un volumen de datos vacío. Si el volumen ya existía cuando se agregó un esquema,
+el script nuevo no se ejecuta automáticamente. En ese caso, aplicalo explícitamente; por ejemplo, para
+`ms-viajes` en PowerShell:
+
+```powershell
+Get-Content src/ms-viajes/schema.sql | docker compose exec -T postgres psql -U viajes -d viajes
+```
+
+La conexión desde el host usa el puerto `5434`; dentro del contenedor PostgreSQL sigue usando `5432`.
+En PowerShell, si la redirección `<` no está habilitada por la versión instalada, puede aplicarse el
+esquema desde Git Bash o ejecutarse el comando equivalente con `Get-Content src/ms-flota/schema.sql |
+docker compose exec -T postgres psql -U viajes -d viajes`.
+El readiness consulta efectivamente PostgreSQL mediante `SELECT 1`.
+
+Para probar endpoints protegidos sin Firebase, usar un entorno que no sea producción y activar el proveedor
+falso con `JWT_MODO=falso`. En PowerShell:
+
+```text
+$env:JWT_MODO='falso'; $env:NODE_ENV='development'; npm.cmd run flota
 ### 2. Instalar dependencias y compilar TypeScript
 ```powershell
 npm.cmd install
@@ -32,6 +52,41 @@ npm.cmd run build
 docker compose config
 docker compose up --build -d
 ```
+
+El token tiene la forma
+`falso.<payload-base64url>`. Acepta `PASAJERO`, `CHOFER`, `SOPORTE` y `ADMINISTRADOR`; no firma tokens y
+se rechaza explícitamente cuando `NODE_ENV=production`.
+
+## Simulador local de carga de Flota (MED-001)
+
+El simulador no se inicia junto con la aplicación: corre solo cuando se lo ejecuta a mano. Requiere
+Docker Compose, Node.js 22 y servicios locales. Desde la raíz del repositorio, iniciá el entorno con
+la instrumentación temporal de `ms-flota`:
+
+```powershell
+docker compose -f docker-compose.yml -f carga/docker-compose.mediciones.yml up --build -d
+npm.cmd run carga:flota -- --modo prueba
+```
+
+Para la carga definida en `docs/mediciones.md`, ejecutá:
+
+```powershell
+npm.cmd run carga:flota -- --modo completa --escenario carga --repeticion 1 --semilla 42
+```
+
+El modo completo dura aproximadamente siete minutos: calentamiento, cinco minutos de medición y
+recuperación. Repetilo con `--repeticion 2` y `--repeticion 3`. El escenario `reposo` no manda
+actualizaciones de ubicación. Los perfiles sintéticos y sus ubicaciones se eliminan al finalizar;
+el destino HTTP y el contexto de Docker deben ser locales. Los informes se guardan en
+`carga/resultados/`, excluida de Git. La prueba corta valida que el simulador funcione, pero no
+reemplaza las tres ejecuciones de aceptación.
+
+## `ms-viajes`
+
+Para compilar y ejecutar el servicio HTTP de viajes:
+
+```text
+npm run viajes
 Docker Compose inicializa automáticamente:
 1. **`postgres`:** Aplica los esquemas DDL de los tres servicios (`src/ms-flota/schema.sql`, `src/ms-tarifas/schema.sql`, `src/ms-viajes/schema.sql`).
 2. **`jaeger`:** Levanta el recolector OTLP y la interfaz gráfica de trazas.

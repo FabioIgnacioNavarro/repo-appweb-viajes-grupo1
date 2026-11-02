@@ -1,0 +1,5 @@
+services:
+  ms-flota:
+    environment:
+      MEDICIONES_HABILITADAS: "true"
+      MEDICIONES_INTERVALO_MS: "1000"
