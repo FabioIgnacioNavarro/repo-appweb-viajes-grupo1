@@ -25,7 +25,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | ARC-003 | Elegir mecanismo de asignación concurrente | Alta | terminado | Flujo A | ADR 0033, índice parcial ux_viaje_chofer_activo y test de 50 aceptaciones concurrentes en ms-viajes/postgres.test.ts. |
 | ARC-004 | Elegir geolocalización | Alta | pendiente | Flujo B | Se comparan al menos dos opciones y se define política de retención. |
 | ARC-005 | Elegir canal de tiempo real | Media | pendiente | Flujo B | El canal y la recuperación tras reconexión están documentados. |
-| API-001 | Consolidar contrato HTTP | Alta | en revisión | Flujo C | Closes #20. Contrato consolidado en docs/api.md y docs/contratos.md, sobre uniforme de error, códigos de estado alineados, bloqueo de rutas internas en Nginx y prueba en src/e2e.test.ts. |
+| API-001 | Consolidar contrato HTTP | Alta | terminado | Flujo C | Closes #20. Contrato consolidado en docs/api.md y docs/contratos.md, sobre uniforme de error, códigos de estado alineados, bloqueo de rutas internas en Nginx y prueba en src/e2e.test.ts. |
 | SEC-001 | Diseñar autorización por recurso | Alta | terminado | Flujo C | Hay pruebas de acceso permitido y denegado para viajes y ubicaciones. |
 | CON-001 | Definir caso de cancelación simultánea | Alta | terminado | Flujo A | Especificado en ADR 0033 y testeado de forma determinista en postgres.test.ts y dominio.test.ts. |
 | MED-001 | Diseñar simulador de 500 choferes | Media | pendiente | Flujo B | Se puede ejecutar carga sostenida y medir p50, p95, p99, lag y memoria. |
