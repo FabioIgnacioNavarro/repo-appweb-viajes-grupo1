@@ -406,3 +406,25 @@ test("GeocodificadorFalso prioriza en cascada según ubicación del usuario y re
   const nombreInverso = await geocodificador.geocodificarInversa({ latitud: -27.4512, longitud: -58.9861 });
   assert.equal(nombreInverso, "Plaza 25 de Mayo, Resistencia");
 });
+
+test("GeocodificadorNominatim elige el resultado más cercano al usuario dentro de un mismo nivel (caso Mostaza)", async () => {
+  let urlCapturada = "";
+  const obtenerMock = async (url: string) => {
+    urlCapturada = url;
+    // Nominatim rankea primero la sucursal de Corrientes (~19 km), luego la de Resistencia.
+    return new Response(
+      JSON.stringify([
+        { lat: "-27.4719659", lon: "-58.8076822" },
+        { lat: "-27.4513295", lon: "-58.9882967" }
+      ]),
+      { status: 200 }
+    );
+  };
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch, 25, 250);
+  const coord = await geocodificador.geocodificar("Mostaza", { centro: { latitud: -27.451, longitud: -58.986 } });
+
+  assert.equal(coord.latitud, -27.4513295);
+  assert.equal(coord.longitud, -58.9882967);
+  assert.match(urlCapturada, /limit=10/);
+});

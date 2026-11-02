@@ -192,15 +192,19 @@ export class GeocodificadorGoogle implements Geocodificador {
           registrarFalla("google_geocoding", "geocodificar", cuerpo.status);
           throw new ErrorTarifas("PROVEEDOR_GEO_RECHAZO", `Google Geocoding rechazó la consulta: ${cuerpo.status}.`);
         }
+        const validos: Coordenada[] = [];
         for (const item of cuerpo.results) {
           const ubicacion = item.geometry?.location;
           if (typeof ubicacion?.lat === "number" && typeof ubicacion?.lng === "number" && Number.isFinite(ubicacion.lat) && Number.isFinite(ubicacion.lng)) {
             const coord: Coordenada = { latitud: ubicacion.lat, longitud: ubicacion.lng };
-            if (!nivel.restringirCuadro || !nivel.cuadro || estaDentroDeCuadro(coord, nivel.cuadro)) {
-              this.cacheDirecta.set(claveCache, coord);
-              return structuredClone(coord);
-            }
+            if (!nivel.restringirCuadro || !nivel.cuadro || estaDentroDeCuadro(coord, nivel.cuadro)) validos.push(coord);
           }
+        }
+        if (validos.length > 0) {
+          const centro = opciones.centro;
+          validos.sort((a, b) => distanceHaversineMetros(centro, a) - distanceHaversineMetros(centro, b));
+          this.cacheDirecta.set(claveCache, validos[0]);
+          return structuredClone(validos[0]);
         }
       }
       throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
@@ -291,7 +295,7 @@ export class GeocodificadorNominatim implements Geocodificador {
     private readonly radioNivel2Km = 250
   ) {}
 
-  private async consultarBusqueda(parametros: URLSearchParams): Promise<Coordenada | undefined> {
+  private async consultarBusqueda(parametros: URLSearchParams, referencia?: Coordenada): Promise<Coordenada | undefined> {
     const url = `https://nominatim.openstreetmap.org/search?${parametros}`;
     let respuesta: Response;
     try {
@@ -324,13 +328,22 @@ export class GeocodificadorNominatim implements Geocodificador {
       return undefined;
     }
 
-    const latitud = Number(resultados[0]?.lat);
-    const longitud = Number(resultados[0]?.lon);
-    if (!Number.isFinite(latitud) || !Number.isFinite(longitud) || latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
+    const validos: Coordenada[] = [];
+    for (const item of resultados) {
+      const latitud = Number(item?.lat);
+      const longitud = Number(item?.lon);
+      if (Number.isFinite(latitud) && Number.isFinite(longitud) && latitud >= -90 && latitud <= 90 && longitud >= -180 && longitud <= 180) {
+        validos.push({ latitud, longitud });
+      }
+    }
+    if (validos.length === 0) {
       throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "El servicio de geocodificación devolvió coordenadas fuera de rango.");
     }
-
-    return { latitud, longitud };
+    // Dentro de un mismo nivel se elige el candidato más cercano a la referencia, no el primero del ranking.
+    if (referencia) {
+      validos.sort((a, b) => distanceHaversineMetros(referencia, a) - distanceHaversineMetros(referencia, b));
+    }
+    return validos[0];
   }
 
   async geocodificar(direccion: string, opciones?: OpcionesGeocodificacion): Promise<Coordenada> {
@@ -364,7 +377,7 @@ export class GeocodificadorNominatim implements Geocodificador {
         const parametros = new URLSearchParams({
           q: texto,
           format: "json",
-          limit: "1",
+          limit: "10",
           countrycodes: nivel.codigoPais
         });
         if (nivel.cuadro) {
@@ -376,7 +389,7 @@ export class GeocodificadorNominatim implements Geocodificador {
         if (nivel.restringirCuadro) {
           parametros.set("bounded", "1");
         }
-        const encontrado = await this.consultarBusqueda(parametros);
+        const encontrado = await this.consultarBusqueda(parametros, opciones.centro);
         if (encontrado) {
           this.cacheDirecta.set(claveCache, encontrado);
           return structuredClone(encontrado);
