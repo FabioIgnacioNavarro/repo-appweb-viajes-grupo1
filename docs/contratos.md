@@ -97,8 +97,8 @@ publican sus puertos fuera de la red privada de Compose.
 Tras confirmar un viaje, `ms-viajes` consume `GET /choferes/cercanos` de `ms-flota` con el mismo JWT
 y crea una oferta de 60 segundos para hasta veinte IDs únicos. La creación de ofertas es idempotente
 por viaje y chofer, por lo que la misma `Clave-Idempotencia` puede reanudar el matching después de
-una caída. La aceptación mantiene la comprobación de exclusión del dominio; la versión actual usa
-un asignador en memoria y no ofrece garantía entre procesos hasta integrar la transacción PostgreSQL.
+una caída. La aceptación mantiene la comprobación de exclusión del dominio mediante asignación
+atómica en PostgreSQL (`AsignadorAtomicoPostgres`) con control de concurrencia e índice condicional único.
 
 Para excluir ocupados, `ms-flota` usa un adaptador HTTP de request que llama
 `GET /interno/choferes/ocupados` en `ms-viajes`, reenviando el bearer. `ms-viajes` solo responde los
@@ -108,11 +108,11 @@ tarifas consulta `GET /interno/demanda-por-zona`; los viajes `SOLICITADO` se agr
 
 Todos los clientes internos limitan la espera a `TIMEOUT_SERVICIO_MS` (1500 ms predeterminado) y
 permiten cero o un reintento (`REINTENTOS_SERVICIO`, máximo 1), tras 100 ms y solo para GET ante
-timeout, 429, 502, 503 o 504. Las fallas, JWT rechazados y respuestas no válidas producen un `503`
-seguro; flota no devuelve candidatos si no pudo validar ocupación. Los logs registran nombre de
-servicio, operación y clase de resultado, sin URL, token, coordenadas ni respuesta remota.
+timeout, 429, 502, 503 o 504. Propagan contexto de traza OpenTelemetry mediante el encabezado W3C
+`traceparent`. Las fallas, JWT rechazados y respuestas no válidas producen un `503` seguro; flota no
+devuelve candidatos si no pudo validar ocupación. Los logs registran nombre de servicio, operación
+y clase de resultado, sin URL, token, coordenadas ni respuesta remota.
 
 Las rutas `/interno/` y `/estimaciones/:idEstimacion` solo se usan dentro de la red Compose; Nginx
-las rechaza. Las rutas públicas ya listadas no cambian. La confirmación y sus repositorios de
-`ms-viajes` siguen en memoria en este corte, por lo que el estado y la asignación deben migrarse a
-PostgreSQL antes de tratar el flujo como durable o seguro entre réplicas.
+las rechaza desde el exterior respondiendo `404 RUTA_NO_ENCONTRADA` con el sobre de error uniforme.
+Las rutas públicas respetan estrictamente el contrato consolidado en `docs/api.md`.

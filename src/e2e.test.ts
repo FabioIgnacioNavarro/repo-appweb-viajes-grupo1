@@ -53,3 +53,17 @@ test("E2E rechaza token ausente y viaje ajeno", { skip: !base }, async () => {
   const ajeno = await pedir("/viajes", "falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMzMzMzMzMzMtMzMzMy00MzMzLTgzMzMtMzMzMzMzMzMzMzMzIiwicm9sIjoiUEFTQUpFUk8ifQ");
   assert.equal(ajeno.status, 200);
 });
+
+test("E2E el gateway bloquea rutas internas y devuelve sobre de error uniforme", { skip: !base }, async () => {
+  const rutaInterna = await pedir("/interno/demanda-por-zona?zona_id=resistencia", pasajero);
+  assert.equal(rutaInterna.status, 404);
+  assert.equal(rutaInterna.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
+
+  const estimacionInterna = await pedir("/estimaciones/est-123", pasajero);
+  assert.equal(estimacionInterna.status, 404);
+  assert.equal(estimacionInterna.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
+
+  const rutaDesconocida = await pedir("/ruta-completamente-inexistente", pasajero);
+  assert.equal(rutaDesconocida.status, 404);
+  assert.equal(rutaDesconocida.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
+});
