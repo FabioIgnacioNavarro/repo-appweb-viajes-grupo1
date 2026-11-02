@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { crearCalculadorRuta } from "./rutas";
+import { crearCalculadorRuta, crearGeocodificador } from "./rutas";
 import { type Coordenada, type Estimacion, crearEstimacionConRuta } from "./viaje";
 
 function esObjeto(valor: unknown): valor is Record<string, unknown> {
@@ -28,6 +28,7 @@ if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) {
 const aplicacion = express();
 const carpetaWeb = path.resolve(process.cwd(), "web");
 const calculadorRuta = crearCalculadorRuta();
+const geocodificador = crearGeocodificador();
 const estimacionesVigentes = new Map<string, Estimacion>();
 
 aplicacion.use(express.json({ limit: "10kb" }));
@@ -43,15 +44,84 @@ aplicacion.get("/ready", (_pedido, respuesta) => {
   });
 });
 
+const CENTRO_PREDETERMINADO_DEMO: Coordenada = { latitud: -27.451, longitud: -58.986 };
+
+aplicacion.post("/demostracion/geocodificar", async (pedido, respuesta) => {
+  const cuerpo: unknown = pedido.body;
+  const direccion = esObjeto(cuerpo) && typeof cuerpo.direccion === "string" ? cuerpo.direccion.trim() : undefined;
+  if (!direccion) {
+    respuesta.status(400).json({
+      error: {
+        codigo: "DIRECCION_INVALIDA",
+        mensaje: "Ingresá una dirección o nombre de lugar a buscar."
+      }
+    });
+    return;
+  }
+  const proximidad = (esObjeto(cuerpo) ? leerCoordenada(cuerpo.proximidad) : undefined) ?? CENTRO_PREDETERMINADO_DEMO;
+  try {
+    const coordenada = await geocodificador.geocodificar(direccion, { centro: proximidad });
+    respuesta.status(200).json({ direccion, coordenada });
+  } catch (error) {
+    const mensaje = error instanceof Error ? error.message : "No se pudo geocodificar la dirección.";
+    respuesta.status(404).json({
+      error: {
+        codigo: "DIRECCION_NO_ENCONTRADA",
+        mensaje
+      }
+    });
+  }
+});
+
+aplicacion.post("/demostracion/geocodificar-inversa", async (pedido, respuesta) => {
+  const coordenada = leerCoordenada(pedido.body);
+  if (!coordenada) {
+    respuesta.status(400).json({
+      error: {
+        codigo: "COORDENADAS_INVALIDAS",
+        mensaje: "Indicá una latitud y longitud válidas para resolver la dirección."
+      }
+    });
+    return;
+  }
+  try {
+    const direccion = geocodificador.geocodificarInversa
+      ? await geocodificador.geocodificarInversa(coordenada)
+      : `Ubicación (${coordenada.latitud.toFixed(4)}, ${coordenada.longitud.toFixed(4)})`;
+    respuesta.status(200).json({ direccion, coordenada });
+  } catch (error) {
+    const mensaje = error instanceof Error ? error.message : "No se pudo determinar la dirección del punto.";
+    respuesta.status(404).json({
+      error: {
+        codigo: "DIRECCION_NO_ENCONTRADA",
+        mensaje
+      }
+    });
+  }
+});
+
+async function resolverPuntoDemo(valor: unknown, centroProximidad = CENTRO_PREDETERMINADO_DEMO): Promise<Coordenada | undefined> {
+  const coord = leerCoordenada(valor);
+  if (coord) return coord;
+  if (esObjeto(valor) && typeof valor.direccion === "string" && valor.direccion.trim()) {
+    try {
+      return await geocodificador.geocodificar(valor.direccion.trim(), { centro: centroProximidad });
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 async function manejarEstimacion(pedido: express.Request, respuesta: express.Response): Promise<void> {
   const cuerpo: unknown = pedido.body;
-  const origen = esObjeto(cuerpo) ? leerCoordenada(cuerpo.origen) : undefined;
-  const destino = esObjeto(cuerpo) ? leerCoordenada(cuerpo.destino) : undefined;
+  const origen = await resolverPuntoDemo(esObjeto(cuerpo) ? cuerpo.origen : undefined, CENTRO_PREDETERMINADO_DEMO);
+  const destino = await resolverPuntoDemo(esObjeto(cuerpo) ? cuerpo.destino : undefined, origen ?? CENTRO_PREDETERMINADO_DEMO);
   if (!origen || !destino) {
     respuesta.status(400).json({
       error: {
         codigo: "COORDENADAS_INVALIDAS",
-        mensaje: "Indicá origen y destino con latitud y longitud válidas."
+        mensaje: "Indicá origen y destino con latitud y longitud válidas o una dirección reconocida."
       }
     });
     return;
@@ -76,7 +146,9 @@ async function manejarEstimacion(pedido: express.Request, respuesta: express.Res
       proveedor_ruta: estimacion.proveedorRuta,
       polilinea: estimacion.polilinea ?? null,
       creada_en: estimacion.creadaEn,
-      vigente_hasta: estimacion.vigenteHasta
+      vigente_hasta: estimacion.vigenteHasta,
+      origen,
+      destino
     });
   } catch {
     respuesta.status(502).json({

@@ -1,22 +1,36 @@
 import express, { type NextFunction, type Request, type Response } from "express";
-import { CrearEstimacion, ErrorTarifas, type Coordenada, type RepositorioEstimaciones } from "./dominio";
+import { CrearEstimacion, ErrorTarifas, type PuntoUbicacion, type RepositorioEstimaciones } from "./dominio";
 import type { ActorJWT, ValidadorJwtJwks } from "../compartido/jwt";
 
 export interface DependenciasTarifas {
-  estimar: (pasajeroId: string, origen: Coordenada, destino: Coordenada, token: string) => ReturnType<CrearEstimacion["ejecutar"]>;
+  estimar: (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => ReturnType<CrearEstimacion["ejecutar"]>;
   estimaciones: RepositorioEstimaciones;
   validador: Pick<ValidadorJwtJwks, "validar">;
   comprobarBase: () => Promise<void>;
 }
 declare global { namespace Express { interface Request { actor?: ActorJWT } } }
 const objeto = (valor: unknown): valor is Record<string, unknown> => typeof valor === "object" && valor !== null && !Array.isArray(valor);
-function coord(valor: unknown): Coordenada | undefined {
-  if (!objeto(valor) || typeof valor.latitud !== "number" || typeof valor.longitud !== "number") return undefined;
-  return { latitud: valor.latitud, longitud: valor.longitud };
+function puntoUbicacion(valor: unknown): PuntoUbicacion | undefined {
+  if (!objeto(valor)) return undefined;
+  if (typeof valor.latitud === "number" && typeof valor.longitud === "number") {
+    return { latitud: valor.latitud, longitud: valor.longitud };
+  }
+  if (typeof valor.direccion === "string" && valor.direccion.trim().length > 0) {
+    return { direccion: valor.direccion.trim() };
+  }
+  return undefined;
 }
 function error(res: Response, causa: unknown): void {
   if (causa instanceof ErrorTarifas) {
-    const status = causa.codigo === "COORDENADAS_INVALIDAS" ? 400 : causa.codigo === "ZONA_NO_ENCONTRADA" ? 422 : causa.codigo.startsWith("DEPENDENCIA") || causa.codigo.includes("DESACTUALIZADO") || causa.codigo.includes("RESPUESTA") ? 503 : 422;
+    const status = causa.codigo === "COORDENADAS_INVALIDAS" || causa.codigo === "DIRECCION_INVALIDA"
+      ? 400
+      : causa.codigo === "DIRECCION_NO_ENCONTRADA"
+        ? 404
+        : causa.codigo === "ZONA_NO_ENCONTRADA"
+          ? 422
+          : causa.codigo.startsWith("DEPENDENCIA") || causa.codigo.includes("DESACTUALIZADO") || causa.codigo.includes("RESPUESTA")
+            ? 503
+            : 422;
     res.status(status).json({ error: { codigo: causa.codigo, mensaje: causa.message, detalles: {} } }); return;
   }
   res.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "Ocurrió un error interno.", detalles: {} } });
@@ -40,8 +54,8 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
   });
   router.post("/viajes/estimacion", async (req, res) => {
     if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio." } }); return; }
-    const origen = coord(req.body.origen); const destino = coord(req.body.destino);
-    if (!origen || !destino || !req.actor) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Origen y destino deben incluir latitud y longitud numéricas." } }); return; }
+    const origen = puntoUbicacion(req.body.origen); const destino = puntoUbicacion(req.body.destino);
+    if (!origen || !destino || !req.actor) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Origen y destino deben incluir coordenadas numéricas o una dirección válida." } }); return; }
     try { res.status(201).json(dto(await deps.estimar(req.actor.idUsuario, origen, destino, req.header("Authorization")!.slice(7)))); } catch (causa) { error(res, causa); }
   });
   router.get("/estimaciones/:idEstimacion", async (req, res) => {

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f5f7f4">
-    <title>Viajes · Demo de recorrido</title>
+    <title>Viajes · Demo de recorrido y geocodificación</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <link rel="stylesheet" href="/estilos.css">
@@ -23,33 +23,52 @@
         <div>
           <p class="sobrelinea">PROGRAMACIÓN IV · GRUPO 1</p>
           <h1>Tu recorrido,<br><span>paso a paso.</span></h1>
-          <p class="introduccion">Elegí dos puntos del mapa y mirá cómo avanza un viaje de prueba.</p>
+          <p class="introduccion">Elegí dos puntos, buscá direcciones o coordenadas y mirá cómo avanza un viaje de prueba.</p>
         </div>
-        <div class="aviso-demo"><span aria-hidden="true">ⓘ</span> Simulación local: no crea ni guarda viajes.</div>
+        <div class="aviso-demo"><span aria-hidden="true">ⓘ</span> Simulación local con Google Maps / OSRM / Haversine.</div>
       </section>
 
       <section class="tablero" aria-label="Simulador de recorrido">
         <aside class="panel">
           <div class="panel-titulo">
-            <div><span class="sobrelinea">01 — RECORRIDO</span><h2>¿A dónde vamos?</h2></div>
+            <div><span class="sobrelinea">01 — RECORRIDO Y GEOCODIFICACIÓN</span><h2>¿A dónde vamos?</h2></div>
             <button id="boton-ubicacion" class="boton-icono" type="button" title="Usar mi ubicación" aria-label="Usar mi ubicación">◎</button>
           </div>
           <form id="formulario-ruta">
-            <fieldset class="campo-punto">
+            <fieldset class="campo-seccion">
               <legend><span class="marcador marcador-origen"></span> Punto de partida</legend>
-              <label for="latitud-origen">Latitud</label><label for="longitud-origen">Longitud</label>
-              <input id="latitud-origen" name="latitud-origen" type="number" step="any" min="-90" max="90" value="-27.451" required>
-              <input id="longitud-origen" name="longitud-origen" type="number" step="any" min="-180" max="180" value="-58.986" required>
+              <div class="campo-direccion">
+                <input id="direccion-origen" name="direccion-origen" type="text" placeholder="Ej: Plaza 25 de Mayo, Resistencia" value="Plaza 25 de Mayo, Resistencia" autocomplete="off">
+                <button type="button" id="boton-buscar-origen" class="boton-geocodificar" title="Buscar coordenadas por dirección">Buscar</button>
+              </div>
+              <div class="campo-coordenadas">
+                <label for="latitud-origen">Lat: <input id="latitud-origen" name="latitud-origen" type="number" step="any" min="-90" max="90" value="-27.451" required></label>
+                <label for="longitud-origen">Lng: <input id="longitud-origen" name="longitud-origen" type="number" step="any" min="-180" max="180" value="-58.986" required></label>
+              </div>
             </fieldset>
             <div class="conector" aria-hidden="true"></div>
-            <fieldset class="campo-punto">
+            <fieldset class="campo-seccion">
               <legend><span class="marcador marcador-destino"></span> Punto de destino</legend>
-              <label for="latitud-destino">Latitud</label><label for="longitud-destino">Longitud</label>
-              <input id="latitud-destino" name="latitud-destino" type="number" step="any" min="-90" max="90" value="-27.462" required>
-              <input id="longitud-destino" name="longitud-destino" type="number" step="any" min="-180" max="180" value="-58.993" required>
+              <div class="campo-direccion">
+                <input id="direccion-destino" name="direccion-destino" type="text" placeholder="Ej: Aeropuerto Resistencia" value="Terminal de Ómnibus, Resistencia" autocomplete="off">
+                <button type="button" id="boton-buscar-destino" class="boton-geocodificar" title="Buscar coordenadas por dirección">Buscar</button>
+              </div>
+              <div class="campo-coordenadas">
+                <label for="latitud-destino">Lat: <input id="latitud-destino" name="latitud-destino" type="number" step="any" min="-90" max="90" value="-27.462" required></label>
+                <label for="longitud-destino">Lng: <input id="longitud-destino" name="longitud-destino" type="number" step="any" min="-180" max="180" value="-58.993" required></label>
+              </div>
             </fieldset>
+
+            <div class="chips-lugares" aria-label="Destinos sugeridos">
+              <span class="chip-titulo">Sugerencias:</span>
+              <button type="button" class="chip" data-destino="Aeropuerto Resistencia">Aeropuerto</button>
+              <button type="button" class="chip" data-destino="Terminal de Ómnibus">Terminal</button>
+              <button type="button" class="chip" data-destino="Shopping Sarmiento">Shopping</button>
+              <button type="button" class="chip" data-destino="Campus UNNE">UNNE</button>
+            </div>
+
             <button class="boton boton-principal" id="boton-calcular" type="submit">Mostrar recorrido <span aria-hidden="true">↗</span></button>
-            <p id="mensaje-ruta" class="mensaje" role="status" aria-live="polite">Ingresá las coordenadas o elegí tu ubicación.</p>
+            <p id="mensaje-ruta" class="mensaje" role="status" aria-live="polite">Ingresá direcciones o coordenadas y elegí «Mostrar recorrido».</p>
           </form>
 
           <div class="tarjeta-precio" aria-live="polite">
@@ -79,10 +98,10 @@
             <div class="dato"><span class="dato-icono">↗</span><div><span class="texto-secundario">DISTANCIA</span><strong id="distancia-ruta">—</strong></div></div>
             <div class="dato"><span class="dato-icono">◷</span><div><span class="texto-secundario">DURACIÓN APROX.</span><strong id="duracion-ruta">—</strong></div></div>
           </div>
-          <div class="leyenda-mapa"><span class="marcador marcador-origen"></span> Origen <span class="marcador marcador-destino"></span> Destino</div>
+          <div class="leyenda-mapa"><span class="marcador marcador-origen"></span> Origen <span class="marcador marcador-destino"></span> Destino <span class="leyenda-ayuda">· Pines arrastrables e interactivos</span></div>
         </section>
       </section>
-      <footer>Rutas por <strong>OSRM</strong> · Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></footer>
+      <footer>Rutas y Geocodificación por <strong>Google Maps / OSRM / Haversine</strong> · Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></footer>
     </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
