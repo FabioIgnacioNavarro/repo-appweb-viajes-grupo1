@@ -47,7 +47,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Flujo A | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |
 | TIE-001 | WebSockets y tiempo real (Tema 20) | Alta | pendiente | Flujo B | Canal bidireccional para notificación de ofertas al chofer y seguimiento de viaje al pasajero con reconexión demostrable. |
 | OBS-001 | Observabilidad con OpenTelemetry y Jaeger (Tema 18) | Alta | terminado | Flujo C | ADR 0050 y `docs/demo-observabilidad.md`. SDK OpenTelemetry en servicios, propagación W3C traceparent y logs correlacionados, y servicio Jaeger en Compose. |
-| SEG-002 | Firebase Emulator Suite y RBAC (Tema 19) | Alta | en revisión | Flujo C | Closes #28. ADR 0054 y `requests/seguridad-rbac.http`. Emulador JWKS offline en Compose/TypeScript, validación criptográfica asimétrica RS256, RBAC en claims y verificación de 3 escenarios (200/401/403). |
+| SEG-002 | Firebase Emulator Suite y RBAC (Tema 19) | Alta | terminado | Flujo C | Closes #28. ADR 0054 y `requests/seguridad-rbac.http`. Emulador JWKS offline en Compose/TypeScript, validación criptográfica asimétrica RS256, RBAC en claims y verificación de 3 escenarios (200/401/403). |
 | GEO-001 | Google Maps Rutas y Geocodificación | Media | terminado | Flujo C | Closes #29. Puerto Geocodificador (directa en cascada por cercanía e inversa) y adaptadores Google Maps / Nominatim (OpenStreetMap) / fallback determinista en ms-tarifas y demo web interactiva. ADR 0051, ADR 0052 y ADR 0053. |
 
 ## Regla de actualización
