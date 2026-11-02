@@ -130,4 +130,21 @@ Las tres repeticiones completaron 300/300 búsquedas, 300/300 sondas `/health` y
 
 La repetición 3 superó el umbral de crecimiento RSS de 10 % entre los minutos 2 y 5. El RSS máximo de las tres ejecuciones fue menor a 151 MiB (límite 512 MiB) y, aproximadamente dos minutos después de finalizar la prueba, el proceso bajó a 92,51 MiB. Esto apunta a crecimiento de memoria durante la carga que se recupera al cesar el tráfico; no elimina el incumplimiento del umbral de esa repetición. Por ello la línea de base está medida, pero MED-001 no se declara aceptada todavía.
 
-Esta serie cubre el escenario de carga de la línea de base. Falta ejecutar el escenario de reposo, medir una variante posterior a cualquier optimización y comparar las tres repeticiones de cada variante antes de cerrar MED-001.
+La línea de base del escenario de carga quedó medida en tres repeticiones. Una ejecución superó el umbral de crecimiento RSS, así que la variante aún no cumple todos los criterios. La serie de reposo se registra a continuación; falta medir una variante final/optimizada y compararla en tres repeticiones equivalentes antes de cerrar MED-001.
+
+### Línea de base en reposo de `ms-flota` — 2026-11-02
+
+- **Código y entorno:** misma variante y entorno de la línea de base de carga anterior; commit de repositorio `87a64d6`, búsqueda sin cambios desde `203451f`.
+- **Configuración:** 500 perfiles sintéticos preparados; sin actualizaciones de ubicación; una búsqueda y una sonda `/health` y `/ready/flota` por segundo; 60 s de calentamiento, 300 s medidos y 60 s de recuperación; semilla 42.
+- **Informes JSON locales:** `6009526d-8776-4ab0-a1b0-4aac33c4c539`, `0a31325b-1e77-4e45-af5d-144c95b238e1` y `406f2154-574f-41ac-aa0c-290ce94460fc`.
+
+| Repetición | Búsquedas exitosas | Búsqueda p95 / p99 (ms) | `/health` p95 / p99 (ms) | `/ready/flota` p95 / p99 (ms) | Errores / cola perdida | CPU p95 (%) | Event loop p99 / máximo (ms) | RSS máximo (MiB) | Crecimiento RSS min. 2 a 5 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 300 / 300 | 10,75 / 13,15 | 4,44 / 7,34 | 8,10 / 10,06 | 0 / 0 | 16,46 | 26,46 / 35,45 | 103,78 | -14,04 % |
+| 2 | 300 / 300 | 11,24 / 15,96 | 5,02 / 8,94 | 8,33 / 11,56 | 0 / 0 | 15,68 | 27,44 / 28,95 | 106,40 | 0,12 % |
+| 3 | 300 / 300 | 10,31 / 24,00 | 6,99 / 17,54 | 8,24 / 14,20 | 0 / 0 | 18,24 | 25,12 / 30,95 | 109,82 | 0,00 % |
+| **Mediana** | **300 / 300** | **10,75 / 15,96** | **5,02 / 8,94** | **8,24 / 11,56** | **0 / 0** | **16,46** | **26,46 / 30,95** | **106,40** | **0,00 %** |
+
+Las tres repeticiones completaron 300/300 búsquedas y 300/300 sondas por endpoint; todas respondieron HTTP 200 y no hubo solicitudes perdidas por cola. Las latencias p95/p99, CPU, event loop y RSS quedaron dentro de los umbrales. La corrida 1 redujo el RSS entre los minutos 2 y 5; las corridas 2 y 3 se mantuvieron prácticamente estables.
+
+La línea de base tiene ahora tres repeticiones válidas por escenario (reposo y carga). MED-001 sigue abierto: una repetición del escenario de carga superó el límite de crecimiento RSS y aún no se midió una variante final/optimizada en tres repeticiones equivalentes.

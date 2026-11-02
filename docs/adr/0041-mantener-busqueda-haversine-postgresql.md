@@ -34,7 +34,7 @@ La línea de base se ejecutó tres veces con 500 choferes, 250 actualizaciones/s
 
 Mantener la alternativa A para el objetivo actual de 500 choferes. Su latencia de búsqueda cumple los umbrales en las tres repeticiones y evita introducir infraestructura espacial sin una necesidad medida. No se agregará PostGIS ni geohash en esta decisión.
 
-La selección del algoritmo queda resuelta para la escala académica actual; esto **no cierra MED-001**. La serie registró un incumplimiento del crecimiento RSS (12,77 % en la repetición 3, por encima del 10 %) y una repetición ofreció una actualización menos que las 75.000 previstas. Además, todavía no se midió una variante posterior a una optimización ni el escenario de reposo.
+La selección del algoritmo queda resuelta para la escala académica actual; esto **no cierra MED-001**. La serie de carga registró un incumplimiento del crecimiento RSS (12,77 % en la repetición 3, por encima del 10 %) y una repetición ofreció una actualización menos que las 75.000 previstas. El escenario de reposo se midió posteriormente en tres repeticiones y se registra en `docs/mediciones.md`; todavía falta medir una variante final/optimizada.
 
 ## Consecuencias
 
