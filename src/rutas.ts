@@ -77,3 +77,10 @@ export function crearCalculadorRuta(env: NodeJS.ProcessEnv = process.env): Calcu
   if (proveedor === "HAVERSINE") return new RutaHaversine();
   throw new Error(`RUTA_PROVEEDOR inválido: ${proveedor}. Usá GOOGLE, OSRM o HAVERSINE.`);
 }
+
+export {
+  type Geocodificador,
+  GeocodificadorGoogle,
+  GeocodificadorFalso,
+  crearGeocodificador
+} from "./ms-tarifas/proveedores";

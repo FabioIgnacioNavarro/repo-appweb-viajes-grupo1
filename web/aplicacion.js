@@ -1,4 +1,9 @@
 const formularioRuta = document.querySelector('#formulario-ruta');
+const direccionOrigen = document.querySelector('#direccion-origen');
+const direccionDestino = document.querySelector('#direccion-destino');
+const botonBuscarOrigen = document.querySelector('#boton-buscar-origen');
+const botonBuscarDestino = document.querySelector('#boton-buscar-destino');
+
 const campos = {
   latitudOrigen: document.querySelector('#latitud-origen'),
   longitudOrigen: document.querySelector('#longitud-origen'),
@@ -42,7 +47,7 @@ function punto(latitud, longitud, clase, texto) {
 function leerCoordenadas() {
   const origen = [Number(campos.latitudOrigen.value), Number(campos.longitudOrigen.value)];
   const destino = [Number(campos.latitudDestino.value), Number(campos.longitudDestino.value)];
-  if (![...origen, ...destino].every(Number.isFinite)) throw new Error('Completá las cuatro coordenadas.');
+  if (![...origen, ...destino].every(Number.isFinite)) throw new Error('Completá las coordenadas o buscá por dirección.');
   if (Math.abs(origen[0]) > 90 || Math.abs(destino[0]) > 90 || Math.abs(origen[1]) > 180 || Math.abs(destino[1]) > 180) {
     throw new Error('La latitud debe estar entre −90 y 90, y la longitud entre −180 y 180.');
   }
@@ -53,6 +58,77 @@ function mostrarMensaje(texto, tipo = '') {
   mensajeRuta.textContent = texto;
   mensajeRuta.className = `mensaje ${tipo}`;
 }
+
+async function buscarDireccion(texto) {
+  const respuesta = await fetch('/demostracion/geocodificar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ direccion: texto }),
+  });
+  const datos = await respuesta.json();
+  if (!respuesta.ok) throw new Error(datos.error?.mensaje || `No se pudo geocodificar "${texto}".`);
+  return datos.coordenada;
+}
+
+async function resolverOrigenPorTexto() {
+  const texto = direccionOrigen.value.trim();
+  if (!texto) return;
+  mostrarMensaje(`Buscando coordenadas para "${texto}"…`);
+  try {
+    const coord = await buscarDireccion(texto);
+    campos.latitudOrigen.value = coord.latitud.toFixed(6);
+    campos.longitudOrigen.value = coord.longitud.toFixed(6);
+    if (marcadorOrigen) mapa.removeLayer(marcadorOrigen);
+    marcadorOrigen = punto(coord.latitud, coord.longitud, 'origen', `Origen: ${texto}`);
+    mapa.panTo([coord.latitud, coord.longitud]);
+    mostrarMensaje(`Origen resuelto: [${coord.latitud.toFixed(4)}, ${coord.longitud.toFixed(4)}]`, 'exito');
+    if (hayRuta) limpiarRuta();
+  } catch (error) {
+    mostrarMensaje(error.message, 'error');
+  }
+}
+
+async function resolverDestinoPorTexto(textoPersonalizado) {
+  const texto = (textoPersonalizado ?? direccionDestino.value).trim();
+  if (!texto) return;
+  direccionDestino.value = texto;
+  mostrarMensaje(`Buscando coordenadas para "${texto}"…`);
+  try {
+    const coord = await buscarDireccion(texto);
+    campos.latitudDestino.value = coord.latitud.toFixed(6);
+    campos.longitudDestino.value = coord.longitud.toFixed(6);
+    if (marcadorDestino) mapa.removeLayer(marcadorDestino);
+    marcadorDestino = punto(coord.latitud, coord.longitud, 'destino', `Destino: ${texto}`);
+    mapa.panTo([coord.latitud, coord.longitud]);
+    mostrarMensaje(`Destino resuelto: [${coord.latitud.toFixed(4)}, ${coord.longitud.toFixed(4)}]`, 'exito');
+    if (hayRuta) limpiarRuta();
+  } catch (error) {
+    mostrarMensaje(error.message, 'error');
+  }
+}
+
+if (botonBuscarOrigen) {
+  botonBuscarOrigen.addEventListener('click', () => resolverOrigenPorTexto());
+}
+if (direccionOrigen) {
+  direccionOrigen.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); resolverOrigenPorTexto(); } });
+}
+if (botonBuscarDestino) {
+  botonBuscarDestino.addEventListener('click', () => resolverDestinoPorTexto());
+}
+if (direccionDestino) {
+  direccionDestino.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); resolverDestinoPorTexto(); } });
+}
+
+document.querySelectorAll('.chip').forEach((chip) => {
+  chip.addEventListener('click', async () => {
+    const destinoSugerido = chip.dataset.destino;
+    if (!destinoSugerido) return;
+    await resolverDestinoPorTexto(destinoSugerido);
+    // Dispara automáticamente el cálculo del recorrido
+    formularioRuta.dispatchEvent(new Event('submit', { cancelable: true }));
+  });
+});
 
 function actualizarEtapa() {
   nombreEstado.textContent = indiceEtapa < 0 ? 'Sin iniciar' : nombresEtapas[indiceEtapa];
@@ -179,8 +255,8 @@ formularioRuta.addEventListener('submit', async (evento) => {
       : decodificarPolilinea(datos.polilinea, datos.proveedor_ruta === 'GOOGLE' ? 5 : 6);
     if (ruta.length < 2) throw new Error('El proveedor no devolvió un recorrido válido.');
     lineaRuta = L.polyline(ruta, { color: '#167957', weight: 5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }).addTo(mapa);
-    marcadorOrigen = punto(origen[0], origen[1], 'origen', 'Punto de partida');
-    marcadorDestino = punto(destino[0], destino[1], 'destino', 'Punto de destino');
+    marcadorOrigen = punto(origen[0], origen[1], 'origen', direccionOrigen?.value || 'Punto de partida');
+    marcadorDestino = punto(destino[0], destino[1], 'destino', direccionDestino?.value || 'Punto de destino');
     mapa.fitBounds(lineaRuta.getBounds(), { padding: [42, 42] });
     document.querySelector('#distancia-ruta').textContent = mostrarMedida(datos.distancia_metros);
     document.querySelector('#duracion-ruta').textContent = mostrarDuracion(datos.duracion_segundos);
@@ -212,7 +288,7 @@ botonAvanzar.addEventListener('click', () => {
 botonReiniciar.addEventListener('click', () => {
   indiceEtapa = -1;
   actualizarEtapa();
-  mostrarMensaje(hayRuta ? 'Simulación reiniciada. El recorrido sigue visible.' : 'Ingresá las coordenadas o elegí tu ubicación.');
+  mostrarMensaje(hayRuta ? 'Simulación reiniciada. El recorrido sigue visible.' : 'Ingresá direcciones o coordenadas.');
 });
 
 Object.values(campos).forEach((campo) => campo.addEventListener('input', () => {
@@ -227,6 +303,7 @@ document.querySelector('#boton-ubicacion').addEventListener('click', () => {
   navigator.geolocation.getCurrentPosition((ubicacion) => {
     campos.latitudOrigen.value = ubicacion.coords.latitude.toFixed(6);
     campos.longitudOrigen.value = ubicacion.coords.longitude.toFixed(6);
+    if (direccionOrigen) direccionOrigen.value = 'Mi ubicación actual';
     if (hayRuta) limpiarRuta();
     mostrarMensaje('Origen actualizado. Elegí «Mostrar recorrido».', 'exito');
   }, () => mostrarMensaje('No se pudo obtener la ubicación. Podés ingresar las coordenadas manualmente.', 'error'), { timeout: 10000 });
