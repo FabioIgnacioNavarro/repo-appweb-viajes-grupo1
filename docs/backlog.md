@@ -14,11 +14,11 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 |---|---|---:|---|---|---|
 | MVP-001 | Definir el recorrido mínimo demostrable | Alta | terminado | Común | `docs/alcance-minimo.md` describe el flujo, los endpoints, los soportes necesarios y el criterio de aceptación sin reducir requisitos del enunciado. |
 | DOM-001 | Documentar variante A: precio dinámico por demanda | Alta | terminado | Común | La variante está registrada en AGENTS, modelo, API y backlog. |
-| DOM-003 | Definir regla configurable de precio dinámico | Alta | en revisión | Flujo C | Closes #13. ADR 0021 aceptado; regla versionada en PostgreSQL (`tarifa.regla_tarifa`), importes exactos en `BigInt` y límites `[0.75, 2.00]` verificados en `dominio.test.ts`. |
+| DOM-003 | Definir regla configurable de precio dinámico | Alta | terminado | Flujo C | Closes #13. ADR 0021 aceptado; regla versionada en PostgreSQL (`tarifa.regla_tarifa`), importes exactos en `BigInt` y límites `[0.75, 2.00]` verificados en `dominio.test.ts`. |
 | DOM-004 | Congelar precio al confirmar | Alta | terminado | Flujo A | Dominio y schema.sql congelan precio_estimado y factores_precio en PostgreSQL de forma inmutable. |
 | DOM-005 | Resolver carrera entre recálculo y confirmación | Alta | pendiente | Flujo A | Un test concurrente demuestra que nunca se confirma un precio distinto al aceptado. |
 | DOM-006 | Registrar evidencia de cálculo dinámico | Alta | terminado | Flujo A | factores_precio JSONB persiste en viajes.viaje el snapshot auditable de la estimación confirmada. |
-| DOM-007 | Elegir fuente del dato de lluvia | Alta | en revisión | Flujo C | Closes #15. ADR 0008 aceptado; adaptador Open-Meteo con caché de 15 min por zona, doble falso y rechazo de observaciones vencidas (`CLIMA_DESACTUALIZADO`). |
+| DOM-007 | Elegir fuente del dato de lluvia | Alta | terminado | Flujo C | Closes #15. ADR 0008 aceptado; adaptador Open-Meteo con caché de 15 min por zona, doble falso y rechazo de observaciones vencidas (`CLIMA_DESACTUALIZADO`). |
 | DOM-002 | Cerrar estados y transiciones del viaje | Alta | en progreso | Flujo A | Cada transición válida e inválida está documentada y testeada. |
 | ARC-001 | Completar ADR de módulos | Alta | en progreso | Común | La decisión CommonJS/ESM queda aceptada y reproducida desde clon limpio. |
 | ARC-002 | Completar ADR de persistencia | Alta | terminado | Flujo A | ADR 0034 define SQL directo con pg, importes BIGINT exactos y puertos asíncronos. |
@@ -38,8 +38,8 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | FLOT-001 | Implementar dominio inicial de ms-flota | Alta | terminado | Flujo B | Disponibilidad, ubicación, candidatos, ocupación y autorización tienen puertos y tests en memoria. |
 | FLOT-002 | Integrar adaptador PostgreSQL y esquema inicial | Alta | terminado | Flujo B | PostgreSQL se compone en `ms-flota`, persiste disponibilidad y ubicación actual, aplica actualización condicional y expone readiness con `SELECT 1`. |
 | FLOT-003 | Publicar endpoints iniciales de ms-flota | Alta | terminado | Flujo B | Las cuatro rutas están documentadas y protegidas por JWT externo o por el proveedor falso explícito de desarrollo. |
-| TAR-001 | Implementar dominio de `ms-tarifas` | Alta | en revisión | Flujo C | Closes #24. Dominio puro en `src/ms-tarifas/dominio.ts` con aritmética `BigInt`, límites de multiplicador, vigencia de 3 min y pruebas en `dominio.test.ts`. |
-| TAR-002 | Adaptadores de `ms-tarifas` | Alta | en revisión | Flujo C | Closes #25. Adaptadores OSRM/Google/Haversine, Open-Meteo, HTTP (`traceparent` + JWT), PostgreSQL (`postgres.test.ts`) y router HTTP (`http.test.ts`). |
+| TAR-001 | Implementar dominio de `ms-tarifas` | Alta | terminado | Flujo C | Closes #24. Dominio puro en `src/ms-tarifas/dominio.ts` con aritmética `BigInt`, límites de multiplicador, vigencia de 3 min y pruebas en `dominio.test.ts`. |
+| TAR-002 | Adaptadores de `ms-tarifas` | Alta | terminado | Flujo C | Closes #25. Adaptadores OSRM/Google/Haversine, Open-Meteo, HTTP (`traceparent` + JWT), PostgreSQL (`postgres.test.ts`) y router HTTP (`http.test.ts`). |
 | INT-001 | Integrar tarifas, viajes y flota por HTTP | Alta | en progreso | Común | Estimación, demanda, candidatos y ocupación se consultan entre servicios con JWT propagado, timeout, reintento GET limitado y error seguro; falta persistencia y asignación atómica distribuida de viajes. |
 | INT-002 | Persistir viajes, ofertas, cobros e idempotencia en PostgreSQL | Alta | terminado | Flujo A | Repositorios PostgreSQL de viajes, ofertas, cobros e idempotencia conectados en servidor.ts y probados en postgres.test.ts. |
 | OPS-002 | Completar gateway, JWT y Compose | Alta | terminado | Flujo C | Compose arranca PostgreSQL, los tres procesos y Nginx con healthchecks, DNS interno y proveedores controlados para E2E. |
