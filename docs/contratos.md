@@ -116,3 +116,11 @@ y clase de resultado, sin URL, token, coordenadas ni respuesta remota.
 Las rutas `/interno/` y `/estimaciones/:idEstimacion` solo se usan dentro de la red Compose; Nginx
 las rechaza desde el exterior respondiendo `404 RUTA_NO_ENCONTRADA` con el sobre de error uniforme.
 Las rutas públicas respetan estrictamente el contrato consolidado en `docs/api.md`.
+
+## Eventos WebSocket de viajes
+
+`ms-viajes` expone `/tiempo-real` detrás de Nginx. El handshake valida `Authorization: Bearer <JWT>` con el mismo validador que HTTP y enlaza el socket únicamente al `id_usuario` autenticado. El navegador puede enviar el JWT en los subprotocolos `viajes.v1`, `autenticacion-jwt`, `<JWT>`; el servidor negocia solo `viajes.v1` y no devuelve el token. No se aceptan JWT por query string. Las ofertas se publican al chofer destinatario; los cambios de estado, al pasajero y al chofer asignado. La ubicación recibida desde Flota se valida contra la asignación activa y se redondea a tres decimales antes de publicarla al pasajero.
+
+La publicación es un puerto de salida, separado del dominio y de `ws`. Es de mejor esfuerzo: errores de socket no revierten operaciones confirmadas en PostgreSQL. El chofer recibe `OFERTA_NUEVA`, `OFERTA_VENCIDA` (cuando el servidor materializa el vencimiento al consultar o aceptar) y `OFERTA_CANCELADA` (si el viaje se asigna a otro o se cancela). El evento nuevo incluye `expira_en` para que el cliente pueda actualizar la interfaz en el vencimiento exacto sin mantener un temporizador del lado servidor. No hay cola de eventos ni reproducción al reconectar; el cliente restaura primero desde `GET /viajes/:idViaje` o `GET /choferes/yo/ofertas`. PostgreSQL conserva la fuente de verdad. Este diseño solo distribuye eventos dentro de una instancia; varias réplicas requieren una decisión explícita y un bus compartido.
+
+El endpoint interno `POST /interno/viajes/:idViaje/ubicacion-chofer` recibe ubicación desde Flota con el JWT del chofer. Está bloqueado en el gateway público y valida rol, relación activa chofer-viaje y estado antes de emitir el mensaje; nunca publica coordenadas precisas.

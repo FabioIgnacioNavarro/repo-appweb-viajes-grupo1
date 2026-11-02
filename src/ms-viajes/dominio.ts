@@ -16,6 +16,42 @@ export interface ActorAutenticado {
   rol: Rol;
 }
 
+/** Puerto de salida para eventos efímeros; el adaptador de transporte queda fuera del dominio. */
+export interface PublicadorEventosTiempoReal {
+  publicarAUsuario(idUsuario: string, evento: string, datos: Record<string, unknown>): void;
+}
+
+/** Regla de distribución de cambios: solo los participantes persistidos reciben el estado del viaje. */
+export class PublicarEstadoViaje {
+  constructor(private readonly eventos: PublicadorEventosTiempoReal) {}
+  ejecutar(viaje: Viaje): void {
+    const datos = { id_viaje: viaje.id, estado: viaje.estado.toLowerCase(), id_chofer: viaje.choferId ?? null, actualizado_en: new Date().toISOString() };
+    try {
+      this.eventos.publicarAUsuario(viaje.pasajeroId, "ESTADO_VIAJE_ACTUALIZADO", datos);
+      if (viaje.choferId) this.eventos.publicarAUsuario(viaje.choferId, "ESTADO_VIAJE_ACTUALIZADO", datos);
+    } catch { /* La publicación efímera no revierte el estado persistido. */ }
+  }
+}
+
+/** Publica únicamente una ubicación nueva de un chofer con viaje activo, y la degrada antes de exponerla. */
+export class PublicarUbicacionChoferEnViaje {
+  constructor(private readonly viajes: RepositorioViajes, private readonly eventos: PublicadorEventosTiempoReal) {}
+  async ejecutar(actor: ActorAutenticado, ubicacion: { latitud: number; longitud: number; actualizadoEn: string }): Promise<boolean> {
+    exigirRol(actor, "CHOFER");
+    const viaje = await this.viajes.obtenerActivoPorChofer(actor.idUsuario);
+    if (!viaje || viaje.choferId !== actor.idUsuario || !["CHOFER_EN_CAMINO", "EN_CURSO"].includes(viaje.estado)) return false;
+    try {
+      this.eventos.publicarAUsuario(viaje.pasajeroId, "UBICACION_CHOFER_ACTUALIZADA", {
+        id_viaje: viaje.id,
+        latitud: Math.round(ubicacion.latitud * 1000) / 1000,
+        longitud: Math.round(ubicacion.longitud * 1000) / 1000,
+        actualizado_en: ubicacion.actualizadoEn
+      });
+    } catch { /* La publicación efímera no revierte el estado persistido. */ }
+    return true;
+  }
+}
+
 export interface Coordenada {
   latitud: number;
   longitud: number;
@@ -53,7 +89,7 @@ export interface Viaje {
   motivoCancelacion?: string;
 }
 
-export type EstadoOferta = "PENDIENTE" | "ACEPTADA" | "RECHAZADA" | "VENCIDA";
+export type EstadoOferta = "PENDIENTE" | "ACEPTADA" | "RECHAZADA" | "VENCIDA" | "CANCELADA" | "NO_SELECCIONADA";
 
 export interface Oferta {
   id: string;
@@ -77,6 +113,7 @@ export interface Cobro {
 export interface RepositorioViajes {
   guardar(viaje: Viaje): Promise<Viaje>;
   obtener(id: string): Promise<Viaje | undefined>;
+  obtenerActivoPorChofer(idChofer: string): Promise<Viaje | undefined>;
   listar(): Promise<Viaje[]>;
 }
 
@@ -139,6 +176,11 @@ export class RepositorioViajesMemoria implements RepositorioViajes {
 
   async obtener(id: string): Promise<Viaje | undefined> {
     const viaje = this.datos.get(id);
+    return viaje ? structuredClone(viaje) : undefined;
+  }
+
+  async obtenerActivoPorChofer(idChofer: string): Promise<Viaje | undefined> {
+    const viaje = [...this.datos.values()].find((item) => item.choferId === idChofer && ESTADOS_QUE_OCUPAN_CHOFER.has(item.estado));
     return viaje ? structuredClone(viaje) : undefined;
   }
 
@@ -324,7 +366,7 @@ export class CrearOferta {
 }
 
 export class AceptarOferta {
-  constructor(private readonly ofertas: RepositorioOfertas, private readonly viajes: RepositorioViajes, private readonly asignador: AsignadorAtomico) {}
+  constructor(private readonly ofertas: RepositorioOfertas, private readonly viajes: RepositorioViajes, private readonly asignador: AsignadorAtomico, private readonly eventos?: PublicadorEventosTiempoReal) {}
 
   async ejecutar(actor: ActorAutenticado, ofertaId: string, ahora = new Date()): Promise<Viaje> {
     exigirRol(actor, "CHOFER");
@@ -333,7 +375,8 @@ export class AceptarOferta {
     if (oferta.choferId !== actor.idUsuario) throw new ErrorDominio("OFERTA_NO_AUTORIZADA", "La oferta no pertenece al chofer.");
     if (oferta.estado !== "PENDIENTE") throw new ErrorDominio("OFERTA_NO_DISPONIBLE", "La oferta ya fue respondida.");
     if (oferta.expiraEm.getTime() <= ahora.getTime()) {
-      await this.ofertas.guardar({ ...oferta, estado: "VENCIDA", respondidaEm: new Date(ahora) });
+      const vencida = await this.ofertas.guardar({ ...oferta, estado: "VENCIDA", respondidaEm: new Date(ahora) });
+      publicarEstadoOferta(this.eventos, vencida, "OFERTA_VENCIDA", "vigencia_vencida");
       throw new ErrorDominio("OFERTA_VENCIDA", "La oferta ya vencio.");
     }
     const viaje = exigirViaje(await this.viajes.obtener(oferta.viajeId));
@@ -341,6 +384,12 @@ export class AceptarOferta {
     if (!(await this.asignador.intentarAsignar(viaje.id, actor.idUsuario))) throw new ErrorDominio("ASIGNACION_EN_CONFLICTO", "El viaje o el chofer ya fueron asignados.");
     const actualizado = await this.viajes.guardar({ ...viaje, choferId: actor.idUsuario, estado: "ASIGNADO" });
     await this.ofertas.guardar({ ...oferta, estado: "ACEPTADA", respondidaEm: new Date(ahora) });
+    for (const otra of await this.ofertas.listarPorViaje(viaje.id)) {
+      if (otra.id !== oferta.id && otra.estado === "PENDIENTE") {
+        const noSeleccionada = await this.ofertas.guardar({ ...otra, estado: "NO_SELECCIONADA", respondidaEm: new Date(ahora) });
+        publicarEstadoOferta(this.eventos, noSeleccionada, "OFERTA_CANCELADA", "viaje_asignado");
+      }
+    }
     return actualizado;
   }
 }
@@ -370,7 +419,7 @@ export class ConsultarViaje {
 }
 
 export class CancelarViaje {
-  constructor(private readonly viajes: RepositorioViajes, private readonly asignador: AsignadorAtomico) {}
+  constructor(private readonly viajes: RepositorioViajes, private readonly asignador: AsignadorAtomico, private readonly ofertas?: RepositorioOfertas, private readonly eventos?: PublicadorEventosTiempoReal) {}
 
   async ejecutar(actor: ActorAutenticado, viajeId: string, motivo: string, ahora = new Date()): Promise<Viaje> {
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
@@ -378,8 +427,43 @@ export class CancelarViaje {
     if (!estado || (actor.rol === "PASAJERO" && viaje.pasajeroId !== actor.idUsuario) || (actor.rol === "CHOFER" && viaje.choferId !== actor.idUsuario)) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El actor no puede cancelar este viaje.");
     if (["FINALIZADO", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_CHOFER", "CANCELADO_POR_OPERADOR"].includes(viaje.estado)) throw new ErrorDominio("VIAJE_TERMINAL", "El viaje ya termino.");
     if (viaje.choferId) await this.asignador.liberar(viaje.id, viaje.choferId);
-    return await this.viajes.guardar({ ...viaje, estado, motivoCancelacion: motivo, canceladoEm: new Date(ahora) });
+    const cancelado = await this.viajes.guardar({ ...viaje, estado, motivoCancelacion: motivo, canceladoEm: new Date(ahora) });
+    const ofertas = this.ofertas ? await this.ofertas.listarPorViaje(viaje.id) : [];
+    for (const oferta of ofertas) {
+      if (oferta.estado === "PENDIENTE") {
+        const anulada = await this.ofertas!.guardar({ ...oferta, estado: "CANCELADA", respondidaEm: new Date(ahora) });
+        publicarEstadoOferta(this.eventos, anulada, "OFERTA_CANCELADA", "viaje_cancelado");
+      }
+    }
+    return cancelado;
   }
+}
+
+/** Al consultar ofertas, materializa vencimientos ya ocurridos y avisa al chofer. */
+export class ConsultarOfertasChofer {
+  constructor(private readonly ofertas: RepositorioOfertas, private readonly eventos?: PublicadorEventosTiempoReal) {}
+  async ejecutar(actor: ActorAutenticado, ahora = new Date()): Promise<Oferta[]> {
+    exigirRol(actor, "CHOFER");
+    const ofertas = await this.ofertas.listarPorChofer(actor.idUsuario);
+    const resultado: Oferta[] = [];
+    for (const oferta of ofertas) {
+      if (oferta.estado === "PENDIENTE" && oferta.expiraEm.getTime() <= ahora.getTime()) {
+        const vencida = await this.ofertas.guardar({ ...oferta, estado: "VENCIDA", respondidaEm: new Date(ahora) });
+        publicarEstadoOferta(this.eventos, vencida, "OFERTA_VENCIDA", "vigencia_vencida");
+        resultado.push(vencida);
+      } else resultado.push(oferta);
+    }
+    return resultado;
+  }
+}
+
+function publicarEstadoOferta(eventos: PublicadorEventosTiempoReal | undefined, oferta: Oferta, evento: "OFERTA_VENCIDA" | "OFERTA_CANCELADA", motivo: string): void {
+  try {
+    eventos?.publicarAUsuario(oferta.choferId, evento, {
+      id_oferta: oferta.id, id_viaje: oferta.viajeId, estado: oferta.estado.toLowerCase(), motivo,
+      actualizado_en: (oferta.respondidaEm ?? new Date()).toISOString()
+    });
+  } catch { /* El cambio de estado persistido prevalece sobre la notificación efímera. */ }
 }
 
 export class AvanzarViaje {

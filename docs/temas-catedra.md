@@ -16,6 +16,7 @@ Este documento registra los temas especiales seleccionados por el grupo para su 
 * **Demostración práctica planificada:**
   * Dos clientes conectados (un pasajero y un chofer) reciben al instante los eventos emitidos por el backend.
   * Simulación de desconexión y reconexión básica, demostrando cómo el cliente recupera el estado de verdad mediante una consulta `GET` y restablece el canal en tiempo real.
+  * El chofer recibe eventos de oferta nueva, vencida o cancelada; `expira_en` permite marcar el vencimiento aunque el cliente permanezca conectado sin polling.
 
 ---
 

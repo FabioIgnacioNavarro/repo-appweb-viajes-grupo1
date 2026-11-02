@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { ValidadorToken } from "../compartido/jwt";
 import { BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, type ActorAutenticado, type AutorizadorUbicacion, type RepositorioChoferes, type RepositorioUbicaciones, type RepositorioViajesActivos } from "./dominio";
 
-export interface DependenciasFlota { choferes: RepositorioChoferes; ubicaciones: RepositorioUbicaciones; viajes: RepositorioViajesActivos; crearRepositorioViajes?(jwt: string): RepositorioViajesActivos; validadorToken: ValidadorToken; autorizador: AutorizadorUbicacion; }
+export interface PublicadorUbicacionViaje { publicar(actor: ActorAutenticado, ubicacion: { latitud: number; longitud: number; actualizadoAt: Date }, jwt: string): Promise<void>; }
+export interface DependenciasFlota { choferes: RepositorioChoferes; ubicaciones: RepositorioUbicaciones; viajes: RepositorioViajesActivos; crearRepositorioViajes?(jwt: string): RepositorioViajesActivos; validadorToken: ValidadorToken; autorizador: AutorizadorUbicacion; publicadorUbicacionViaje?: PublicadorUbicacionViaje; }
 
 function objeto(valor: unknown): valor is Record<string, unknown> { return typeof valor === "object" && valor !== null; }
 function errorHttp(error: unknown, respuesta: Response): void {
@@ -27,7 +28,19 @@ export function crearRouterFlota(dependencias: DependenciasFlota): express.Route
   });
 
   router.post("/choferes/yo/ubicacion", async (pedido, respuesta) => {
-    try { const cuerpo = pedido.body as unknown; if (!objeto(cuerpo) || typeof cuerpo.latitud !== "number" || typeof cuerpo.longitud !== "number") { respuesta.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "latitud y longitud son obligatorias.", detalles: {} } }); return; } const actualizado = typeof cuerpo.actualizado_at === "string" ? new Date(cuerpo.actualizado_at) : new Date(); const precision = typeof cuerpo.precision_metros === "number" ? cuerpo.precision_metros : undefined; const actor = actorDe(pedido); respuesta.status(200).json(serializarUbicacion(await new RegistrarUbicacionActual(dependencias.choferes, dependencias.ubicaciones, randomUUID).ejecutar(actor, { latitud: cuerpo.latitud, longitud: cuerpo.longitud }, actualizado, precision))); } catch (error) { errorHttp(error, respuesta); }
+    try {
+      const cuerpo = pedido.body as unknown;
+      if (!objeto(cuerpo) || typeof cuerpo.latitud !== "number" || typeof cuerpo.longitud !== "number") { respuesta.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "latitud y longitud son obligatorias.", detalles: {} } }); return; }
+      const actualizado = typeof cuerpo.actualizado_at === "string" ? new Date(cuerpo.actualizado_at) : new Date();
+      const precision = typeof cuerpo.precision_metros === "number" ? cuerpo.precision_metros : undefined;
+      const actor = actorDe(pedido);
+      const ubicacion = await new RegistrarUbicacionActual(dependencias.choferes, dependencias.ubicaciones, randomUUID).ejecutar(actor, { latitud: cuerpo.latitud, longitud: cuerpo.longitud }, actualizado, precision);
+      if (dependencias.publicadorUbicacionViaje && ubicacion.actualizadoAt.getTime() === actualizado.getTime()) {
+        try { await dependencias.publicadorUbicacionViaje.publicar(actor, ubicacion, pedido.jwtExterno!); }
+        catch { console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio: "ms-viajes", operacion: "publicar_ubicacion_tiempo_real", resultado: "timeout_o_red" })); }
+      }
+      respuesta.status(200).json(serializarUbicacion(ubicacion));
+    } catch (error) { errorHttp(error, respuesta); }
   });
 
   router.get("/choferes/cercanos", async (pedido, respuesta) => {

@@ -6,6 +6,8 @@ Medir de forma reproducible la recepción de ubicaciones y la búsqueda de chofe
 
 La hipótesis inicial es que el servicio puede sostener esa carga durante cinco minutos sin superar los umbrales de latencia, errores, event loop y memoria definidos aquí. Estos valores son objetivos de aceptación del proyecto para un entorno académico reproducible; no son resultados medidos ni una garantía de producción. Se fijan antes de ejecutar las pruebas y no se ajustan después para hacer coincidir los resultados.
 
+**Alcance tras TIE-001:** las actualizaciones de Flota también intentan notificar a `ms-viajes` por HTTP interno para publicar ubicación a pasajeros con un viaje en curso. En las mediciones completas del sistema se debe levantar los tres servicios y registrar además latencia, errores y CPU/memoria de `ms-viajes`; las mediciones históricas de MED-001 corresponden a Flota y no incluyen este tráfico adicional.
+
 ## Umbrales iniciales de aceptación
 
 Cada solicitud válida se mide de extremo a extremo en el gateway. Los resultados del proceso, gateway y base se registran por separado cuando la herramienta lo permita.
