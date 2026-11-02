@@ -29,6 +29,24 @@ services:
       timeout: 3s
       retries: 5
 
+  auth-emulator:
+    build: .
+    command: ["node", "dist/emulador-auth/servidor.js"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PUERTO_EMULADOR_AUTH: 9099
+      JWT_ISSUER: ${JWT_ISSUER:-http://auth-emulator:9099/demo-viajes-grupo1}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-demo-viajes-grupo1}
+    ports:
+      - "${PUERTO_EMULADOR_AUTH_HOST:-9099}:9099"
+    expose:
+      - "9099"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9099/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   ms-viajes:
     build: .
     command: ["node", "dist/ms-viajes/servidor.js"]
@@ -37,9 +55,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-viajes}:${POSTGRES_PASSWORD:-viajes_dev_only}@postgres:5432/${POSTGRES_DB:-viajes}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       JWT_MODO: ${JWT_MODO:-falso}
-      JWT_JWKS_URL: ${JWT_JWKS_URL:-}
-      JWT_ISSUER: ${JWT_ISSUER:-}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      JWT_JWKS_URL: ${JWT_JWKS_URL:-http://auth-emulator:9099/.well-known/jwks.json}
+      JWT_ISSUER: ${JWT_ISSUER:-http://auth-emulator:9099/demo-viajes-grupo1}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-demo-viajes-grupo1}
       JWT_ROLE_CLAIM: ${JWT_ROLE_CLAIM:-rol}
       TIMEOUT_SERVICIO_MS: ${TIMEOUT_SERVICIO_MS:-1500}
       REINTENTOS_SERVICIO: ${REINTENTOS_SERVICIO:-1}
@@ -51,6 +69,8 @@ services:
       postgres:
         condition: service_healthy
       jaeger:
+        condition: service_started
+      auth-emulator:
         condition: service_started
     expose: ["3000"]
     healthcheck:
@@ -75,6 +95,8 @@ services:
         condition: service_healthy
       jaeger:
         condition: service_started
+      auth-emulator:
+        condition: service_started
       ms-viajes:
         condition: service_started
       ms-flota:
@@ -96,6 +118,8 @@ services:
       postgres:
         condition: service_healthy
       jaeger:
+        condition: service_started
+      auth-emulator:
         condition: service_started
       ms-viajes:
         condition: service_started

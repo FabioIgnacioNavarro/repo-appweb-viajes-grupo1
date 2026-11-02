@@ -1,0 +1,176 @@
+# ==============================================================================
+# SEG-002: Verificación de Seguridad, Emulador de Identidad JWKS y RBAC
+# Cátedra Programación IV - Tema Especial 19 (Firebase Emulator Suite y RBAC)
+# ==============================================================================
+# Este archivo contiene peticiones reproducibles para demostrar:
+# 1. Inspección del emulador de identidad (JWKS y emisión dinámica de tokens RS256).
+# 2. Escenario 1: Acceso autorizado (200 / 201).
+# 3. Escenario 2: Rechazo por falta o invalidez de credenciales (401 Unauthorized).
+# 4. Escenario 3: Rechazo por rol incorrecto o violación de propiedad (403 Forbidden).
+# ==============================================================================
+
+@auth = http://localhost:9099
+@gateway = http://localhost:8080
+@ms_viajes = http://localhost:3000
+@ms_flota = http://localhost:3002
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 0: Inspección del Emulador de Identidad (JWKS y Tokens)
+### ----------------------------------------------------------------------------
+
+### 0.1 Health check del emulador de auth
+GET {{auth}}/health
+
+### 0.2 Endpoint público estándar OIDC JWKS (claves públicas RSA en formato JWK)
+GET {{auth}}/.well-known/jwks.json
+
+### 0.3 Endpoint compatible con Firebase Auth Emulator
+GET {{auth}}/emulator/v1/projects/demo-viajes-grupo1/keys
+
+### 0.4 Obtener catálogo de tokens RS256 válidos para los 3 actores de demo
+GET {{auth}}/auth/tokens-demo
+
+### 0.5 Emitir token dinámico para pasajero legítimo
+# @name emitirTokenPasajero
+POST {{auth}}/auth/token
+Content-Type: application/json
+
+{
+  "id_usuario": "usr-pasajero-demo-1",
+  "rol": "pasajero",
+  "expira_en_segundos": 3600
+}
+
+### 0.6 Emitir token dinámico para chofer legítimo
+# @name emitirTokenChofer
+POST {{auth}}/auth/token
+Content-Type: application/json
+
+{
+  "id_usuario": "usr-chofer-demo-1",
+  "rol": "chofer",
+  "expira_en_segundos": 3600
+}
+
+### 0.7 Emitir token dinámico para administrador
+# @name emitirTokenAdmin
+POST {{auth}}/auth/token
+Content-Type: application/json
+
+{
+  "id_usuario": "usr-admin-demo-1",
+  "rol": "administrador",
+  "expira_en_segundos": 3600
+}
+
+### 0.8 Emitir token con FIRMA ADULTERADA (Ataque Criptográfico de Modificación de Payload)
+# @name emitirTokenAdulterado
+POST {{auth}}/auth/token
+Content-Type: application/json
+
+{
+  "id_usuario": "usr-atacante",
+  "rol": "administrador",
+  "adulterar_firma": true
+}
+
+### 0.9 Emitir token EXPIRADO (Ataque de Reutilización de Credenciales Vencidas)
+# @name emitirTokenExpirado
+POST {{auth}}/auth/token
+Content-Type: application/json
+
+{
+  "id_usuario": "usr-pasajero-demo-1",
+  "rol": "pasajero",
+  "expira_en_segundos": -60
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 1: Escenario 1 - Acceso Autorizado (HTTP 200 / 201)
+### ----------------------------------------------------------------------------
+# Requisitos: Token RS256 criptográficamente válido, emitido por emulador,
+# no expirado, con el rol adecuado para el recurso solicitado.
+
+### 1.1 Pasajero consulta la lista de sus propios viajes
+# Esperado: HTTP 200 OK con array de viajes del usuario
+GET {{gateway}}/viajes
+Authorization: Bearer {{emitirTokenPasajero.response.body.token}}
+
+### 1.2 Chofer habilitado activa su disponibilidad en ms-flota
+# Esperado: HTTP 200 OK con disponibilidad=true
+PATCH {{gateway}}/choferes/yo/disponibilidad
+Authorization: Bearer {{emitirTokenChofer.response.body.token}}
+Content-Type: application/json
+
+{
+  "disponibilidad": true
+}
+
+### 1.3 Chofer actualiza su ubicación GPS
+# Esperado: HTTP 200 OK con las coordenadas registradas
+POST {{gateway}}/choferes/yo/ubicacion
+Authorization: Bearer {{emitirTokenChofer.response.body.token}}
+Content-Type: application/json
+
+{
+  "latitud": -27.4510,
+  "longitud": -58.9860
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 2: Escenario 2 - Acceso No Autenticado / Token Inválido (HTTP 401)
+### ----------------------------------------------------------------------------
+# Requisitos: Rechazar peticiones anónimas, con firma violada, o vencidas.
+
+### 2.1 Petición sin encabezado Authorization (Token Ausente)
+# Esperado: HTTP 401 Unauthorized -> error.codigo = "TOKEN_REQUERIDO"
+GET {{gateway}}/viajes
+
+### 2.2 Petición con cadena no compatible con formato JWT (Token Malformado)
+# Esperado: HTTP 401 Unauthorized -> error.codigo = "TOKEN_INVALIDO"
+GET {{gateway}}/viajes
+Authorization: Bearer esto-no-es-un-jwt-valido-12345
+
+### 2.3 Petición con token con firma criptográfica alterada (Firma Falsificada)
+# Esperado: HTTP 401 Unauthorized -> error.codigo = "TOKEN_INVALIDO"
+GET {{gateway}}/viajes
+Authorization: Bearer {{emitirTokenAdulterado.response.body.token}}
+
+### 2.4 Petición con token expirado (exp en el pasado)
+# Esperado: HTTP 401 Unauthorized -> error.codigo = "TOKEN_INVALIDO"
+GET {{gateway}}/viajes
+Authorization: Bearer {{emitirTokenExpirado.response.body.token}}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 3: Escenario 3 - Acceso No Autorizado / RBAC y Usurpación (HTTP 403)
+### ----------------------------------------------------------------------------
+# Requisitos: Token RS256 con firma válida pero rol no autorizado o
+# intento de acceder/modificar recursos de otro usuario (autorización por recurso).
+
+### 3.1 Violación RBAC: Un pasajero intenta modificar la disponibilidad de chofer
+# Esperado: HTTP 403 Forbidden -> error.codigo = "ROL_NO_AUTORIZADO"
+PATCH {{gateway}}/choferes/yo/disponibilidad
+Authorization: Bearer {{emitirTokenPasajero.response.body.token}}
+Content-Type: application/json
+
+{
+  "disponibilidad": true
+}
+
+### 3.2 Violación RBAC: Un chofer intenta consultar demanda interna de pasajeros
+# Esperado: HTTP 403 Forbidden -> error.codigo = "ROL_NO_AUTORIZADO"
+GET {{ms_viajes}}/interno/demanda-por-zona?zona_id=resistencia
+Authorization: Bearer {{emitirTokenChofer.response.body.token}}
+
+### 3.3 Violación de Propiedad de Recurso: Chofer intenta consultar viaje de otro chofer/pasajero
+# Esperado: HTTP 403 Forbidden -> error.codigo = "VIAJE_NO_AUTORIZADO"
+GET {{gateway}}/viajes/viaje-privado-ajeno-999
+Authorization: Bearer {{emitirTokenChofer.response.body.token}}
+
+### 3.4 Auditoría Administrativa Legítima: Rol ADMINISTRADOR tiene permiso de lectura
+# Esperado: Si el viaje existe retorna 200 OK, si no existe retorna 404 (NO retorna 403)
+GET {{gateway}}/viajes/viaje-privado-ajeno-999
+Authorization: Bearer {{emitirTokenAdmin.response.body.token}}
