@@ -23,7 +23,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | ARC-001 | Completar ADR de módulos | Alta | en progreso | Común | La decisión CommonJS/ESM queda aceptada y reproducida desde clon limpio. |
 | ARC-002 | Completar ADR de persistencia | Alta | terminado | Flujo A | ADR 0034 define SQL directo con pg, importes BIGINT exactos y puertos asíncronos. |
 | ARC-003 | Elegir mecanismo de asignación concurrente | Alta | terminado | Flujo A | ADR 0033, índice parcial ux_viaje_chofer_activo y test de 50 aceptaciones concurrentes en ms-viajes/postgres.test.ts. |
-| ARC-004 | Elegir geolocalización | Alta | en revisión | Flujo B | ADR 0041 compara PostgreSQL con Haversine, PostGIS y geohash; justifica la opción actual con tres mediciones reproducibles de 500 choferes. |
+| ARC-004 | Elegir geolocalización | Alta | terminado | Flujo B | PR #36 mergeado. ADR 0041 compara PostgreSQL con Haversine, PostGIS y geohash; justifica la opción actual con tres mediciones reproducibles de 500 choferes. |
 | ARC-005 | Elegir canal de tiempo real | Media | pendiente | Flujo B | El canal y la recuperación tras reconexión están documentados. |
 | API-001 | Consolidar contrato HTTP | Alta | terminado | Flujo C | Closes #20. Contrato consolidado en docs/api.md y docs/contratos.md, sobre uniforme de error, códigos de estado alineados, bloqueo de rutas internas en Nginx y prueba en src/e2e.test.ts. |
 | SEC-001 | Diseñar autorización por recurso | Alta | terminado | Flujo C | Hay pruebas de acceso permitido y denegado para viajes y ubicaciones. |
