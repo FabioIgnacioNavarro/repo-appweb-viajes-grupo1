@@ -104,6 +104,7 @@ La latencia HTTP se mide desde que empieza la solicitud hasta que se consume la 
 | Tiempo desde la solicitud hasta la asignación aceptada | ms | Solo flujo integrado, con aceptación automática |
 | Lag p99 y máximo del event loop | ms | Proceso `ms-flota` |
 | Memoria RSS y crecimiento durante la prueba | MiB y % | Proceso `ms-flota` |
+| Heap usado, memoria externa y `ArrayBuffer` | MiB | Diagnóstico del proceso `ms-flota`; `arrayBuffers` es subconjunto de `external` y no se suma a ella |
 | CPU, conexiones y consultas PostgreSQL | %, cantidad y duración | Host/base y repetición |
 | Estado y latencia de `/health` y `/ready/flota` | código HTTP y ms | Cada sonda |
 
@@ -130,4 +131,74 @@ Las tres repeticiones completaron 300/300 búsquedas, 300/300 sondas `/health` y
 
 La repetición 3 superó el umbral de crecimiento RSS de 10 % entre los minutos 2 y 5. El RSS máximo de las tres ejecuciones fue menor a 151 MiB (límite 512 MiB) y, aproximadamente dos minutos después de finalizar la prueba, el proceso bajó a 92,51 MiB. Esto apunta a crecimiento de memoria durante la carga que se recupera al cesar el tráfico; no elimina el incumplimiento del umbral de esa repetición. Por ello la línea de base está medida, pero MED-001 no se declara aceptada todavía.
 
-Esta serie cubre el escenario de carga de la línea de base. Falta ejecutar el escenario de reposo, medir una variante posterior a cualquier optimización y comparar las tres repeticiones de cada variante antes de cerrar MED-001.
+La línea de base del escenario de carga quedó medida en tres repeticiones. Una ejecución superó el umbral de crecimiento RSS; la serie diagnóstica y comparación con la estrategia final seleccionada se registran al final de este documento.
+
+### Línea de base en reposo de `ms-flota` — 2026-11-02
+
+- **Código y entorno:** misma variante y entorno de la línea de base de carga anterior; commit de repositorio `87a64d6`, búsqueda sin cambios desde `203451f`.
+- **Configuración:** 500 perfiles sintéticos preparados; sin actualizaciones de ubicación; una búsqueda y una sonda `/health` y `/ready/flota` por segundo; 60 s de calentamiento, 300 s medidos y 60 s de recuperación; semilla 42.
+- **Informes JSON locales:** `6009526d-8776-4ab0-a1b0-4aac33c4c539`, `0a31325b-1e77-4e45-af5d-144c95b238e1` y `406f2154-574f-41ac-aa0c-290ce94460fc`.
+
+| Repetición | Búsquedas exitosas | Búsqueda p95 / p99 (ms) | `/health` p95 / p99 (ms) | `/ready/flota` p95 / p99 (ms) | Errores / cola perdida | CPU p95 (%) | Event loop p99 / máximo (ms) | RSS máximo (MiB) | Crecimiento RSS min. 2 a 5 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 300 / 300 | 10,75 / 13,15 | 4,44 / 7,34 | 8,10 / 10,06 | 0 / 0 | 16,46 | 26,46 / 35,45 | 103,78 | -14,04 % |
+| 2 | 300 / 300 | 11,24 / 15,96 | 5,02 / 8,94 | 8,33 / 11,56 | 0 / 0 | 15,68 | 27,44 / 28,95 | 106,40 | 0,12 % |
+| 3 | 300 / 300 | 10,31 / 24,00 | 6,99 / 17,54 | 8,24 / 14,20 | 0 / 0 | 18,24 | 25,12 / 30,95 | 109,82 | 0,00 % |
+| **Mediana** | **300 / 300** | **10,75 / 15,96** | **5,02 / 8,94** | **8,24 / 11,56** | **0 / 0** | **16,46** | **26,46 / 30,95** | **106,40** | **0,00 %** |
+
+Las tres repeticiones completaron 300/300 búsquedas y 300/300 sondas por endpoint; todas respondieron HTTP 200 y no hubo solicitudes perdidas por cola. Las latencias p95/p99, CPU, event loop y RSS quedaron dentro de los umbrales. La corrida 1 redujo el RSS entre los minutos 2 y 5; las corridas 2 y 3 se mantuvieron prácticamente estables.
+
+La línea de base tiene tres repeticiones válidas por escenario (reposo y carga). La estrategia final seleccionada en ADR 0041 también se volvió a medir tres veces con desglose de memoria y se compara con la línea de base al final de este documento.
+
+### Diagnóstico de memoria del proceso
+
+Las corridas anteriores registran RSS, pero no separan memoria del heap de Node y memoria externa. La instrumentación diagnóstica añade `heapUsed`, `external` y `arrayBuffers` a cada muestra de `ms-flota` y a los resúmenes p95/máximo del JSON. `arrayBuffers` forma parte de `external`; se informa aparte para identificar buffers, pero no debe sumarse de nuevo al total. Los informes previos no tienen estas columnas y no se deben comparar como si las hubieran medido.
+
+#### Corrida diagnóstica de carga con desglose de memoria — 2026-11-02
+
+- **Commit instrumentado:** `80247bb`; el cambio solo agrega muestras de memoria y resumen, no altera el flujo de ubicaciones ni la búsqueda.
+- **Informe local:** `b7b9f1b1-267c-4054-837e-ba91140de32e`.
+- **Configuración:** escenario carga, 500 choferes, 60 s de calentamiento, 300 s medidos, 60 s de recuperación y semilla 42.
+- **Solicitudes:** 75.000/75.000 actualizaciones, 300/300 búsquedas y 300/300 sondas por endpoint; todas respondieron correctamente y no hubo errores ni pérdidas por cola.
+- **Latencias p95/p99:** actualizaciones 15,20/117,12 ms; búsquedas 33,71/154,15 ms; `/health` 6,34/62,90 ms; `/ready/flota` 14,54/152,52 ms.
+- **Proceso:** event loop p99/máximo 30,47/35 ms; RSS máximo 155,61 MiB; heap usado p95/máximo 42,55/58,68 MiB; memoria externa 4,31/4,39 MiB; `ArrayBuffer` 0,77/0,85 MiB.
+
+| Memoria del proceso | Promedio min. 2 (MiB) | Promedio min. 5 (MiB) | Cambio |
+|---|---:|---:|---:|
+| RSS | 141,90 | 155,12 | +9,32 % |
+| Heap usado | 31,97 | 31,89 | -0,25 % |
+| Memoria externa | 3,95 | 3,95 | -0,07 % |
+| `ArrayBuffer` (subconjunto de externa) | 0,39 | 0,40 | +1,69 % (0,01 MiB) |
+
+Aproximadamente 95 s después de terminar la medición, una muestra posterior de proceso registró RSS 89,19 MiB, heap 19,85 MiB, externa 3,63 MiB y `ArrayBuffer` 0,09 MiB. Que el RSS aumente mientras heap y externa permanecen casi planos, y luego baje al cesar el tráfico, es compatible con un pico/transitorio de memoria del runtime; no prueba por sí solo que no exista una fuga. Las tres corridas diagnósticas, incluida esta, se comparan con la línea de base en la siguiente sección. La repetición 3 histórica de la línea de base permanece registrada con 12,77 %.
+
+### Comparación: línea de base y estrategia final seleccionada
+
+La estrategia final seleccionada por ARC-004/ADR 0041 es la consulta existente de PostgreSQL con prefiltrado por cuadro y Haversine. `src/ms-flota/postgres.ts` y el algoritmo no cambiaron respecto de la línea de base; la variante final incorpora únicamente la instrumentación de memoria de este trabajo. La comparación valida la estrategia elegida con una nueva serie y no afirma una mejora de algoritmo.
+
+- **Commit medido:** `83b2d2b` (la imagen de `ms-flota` se construyó desde el mismo código de servicio; el commit intermedio siguiente solo actualizó documentación).
+- **Informes JSON locales:** `b7b9f1b1-267c-4054-837e-ba91140de32e`, `c81683cd-d3d1-4952-9600-15bfe4d3708e` y `3e2fcc26-6910-4554-8bfc-11b54a95be9d`.
+- **Configuración idéntica:** escenario de carga, 500 choferes, 60 s de calentamiento, 300 s medidos, 60 s de recuperación y semilla 42.
+
+| Repetición final | Actualizaciones | Actualización p95 / p99 (ms) | Búsqueda p95 / p99 (ms) | Errores / cola perdida | CPU p95 (%) | Event loop p99 / máximo (ms) | RSS máximo (MiB) | Crecimiento RSS min. 2 a 5 | Crecimiento heap / externa |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 75.000 / 75.000 | 15,20 / 117,12 | 33,71 / 154,15 | 0 / 0 | 62,53 | 30,47 / 35,00 | 155,61 | 9,32 % | -0,25 % / -0,07 % |
+| 2 | 75.000 / 75.000 | 26,50 / 195,71 | 40,45 / 223,30 | 0 / 0 | 64,34 | 33,69 / 48,30 | 143,49 | 3,05 % | -2,22 % / 0,22 % |
+| 3 | 75.000 / 75.000 | 15,76 / 159,92 | 27,76 / 117,35 | 0 / 0 | 63,46 | 35,29 / 49,97 | 155,07 | 1,93 % | -5,03 % / 0,55 % |
+| **Mediana** | **75.000 / 75.000** | **15,76 / 159,92** | **33,71 / 154,15** | **0 / 0** | **63,46** | **33,69 / 48,30** | **155,07** | **3,05 %** | **-2,22 % / 0,22 %** |
+
+Las 900 búsquedas y las 900 sondas de cada tipo respondieron HTTP 200 en la serie final. Las latencias p95/p99, el event loop, el RSS máximo y el crecimiento RSS quedaron debajo de sus umbrales en las tres repeticiones.
+
+| Indicador mediano | Línea de base | Estrategia final seleccionada | Cambio |
+|---|---:|---:|---:|
+| Actualización p95 / p99 (ms) | 14,65 / 116,85 | 15,76 / 159,92 | +7,6 % / +36,9 % |
+| Búsqueda p95 / p99 (ms) | 28,02 / 209,35 | 33,71 / 154,15 | +20,3 % / -26,4 % |
+| CPU p95 (%) | 61,69 | 63,46 | +2,9 % |
+| Event loop p99 / máximo (ms) | 29,18 / 45,48 | 33,69 / 48,30 | +15,5 % / +6,2 % |
+| RSS máximo (MiB) | 148,73 | 155,07 | +4,3 % |
+| Crecimiento RSS min. 2 a 5 | 7,21 % | 3,05 % | -4,16 puntos porcentuales |
+| Actualizaciones exitosas | 74.999–75.000 | 75.000 en cada repetición | Las tres finales completaron el volumen |
+
+La serie diagnóstica registró crecimiento RSS de 9,32 %, 3,05 % y 1,93 %, mientras el heap usado no creció entre los minutos 2 y 5 y la memoria externa permaneció casi estable. Una de las corridas anteriores dio 12,77 %; por eso se conserva como incumplimiento observado, pero el desglose, la recuperación tras detener el tráfico y las tres repeticiones posteriores explican que fue un aumento transitorio del RSS y no muestran acumulación sostenida del heap de JavaScript. Esta interpretación es evidencia acotada del entorno medido, no una garantía sobre escalas o entornos diferentes.
+
+No se aplicó una optimización al algoritmo de búsqueda: la consulta ya cumplía sus umbrales y ADR 0041 seleccionó mantenerla. El resultado final conserva esa estrategia, satisface los límites en tres repeticiones y no introduce PostGIS ni geohash sin evidencia de un cuello de botella.
