@@ -9,6 +9,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./src/ms-flota/schema.sql:/docker-entrypoint-initdb.d/001-ms-flota.sql:ro
       - ./src/ms-tarifas/schema.sql:/docker-entrypoint-initdb.d/002-ms-tarifas.sql:ro
+      - ./src/ms-viajes/schema.sql:/docker-entrypoint-initdb.d/003-ms-viajes.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

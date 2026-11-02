@@ -1,160 +1,116 @@
-# Plataforma de viajes — demo de terminal
+# Plataforma Backend de Viajes — Programación IV (Grupo 1)
 
-Primer vertical ejecutable del trabajo práctico. Permite simular un viaje completo con pasajero o
-chofer, tarifa estimada, actor genérico, inicio, finalización y precio a pagar.
+Plataforma backend de viajes en tiempo real construida bajo **Arquitectura Hexagonal**, microservicios en **Node.js 22 LTS / TypeScript**, base de datos relacional **PostgreSQL**, observabilidad distribuida con **OpenTelemetry y Jaeger**, y autenticación externa basada en **OIDC/JWKS y RBAC**.
 
-## Ejecutar
+Incluye la **Variante Obligatoria A (Precio dinámico por demanda auditado)** y los temas especiales de cátedra:
+- **Tema 18:** Observabilidad distribuida con OpenTelemetry, SDK OTLP, propagación de contexto W3C `traceparent` y servidor Jaeger.
+- **Tema 19:** Emulador de Identidad JWKS, emisión asimétrica RS256, roles RBAC y control de acceso por recurso.
 
-Requiere Node.js 22 o superior.
+---
 
-```text
-npm install
-npm test
-npm run demo
-```
+## 🚀 Secuencia de Clon Limpio (Paso a Paso)
 
-La demo solicita `PASAJERO` o `CHOFER`, las coordenadas de tu ubicación actual y las coordenadas del
-destino. El actor del rol opuesto se completa automáticamente. Los viajes se guardan en memoria
-durante la ejecución. La terminal no puede leer GPS automáticamente; para eso hará falta un
-adaptador web o móvil con permiso de geolocalización.
+Para reproducir el entorno desde un clon limpio de forma 100% determinista:
 
-Por defecto usa OSRM para calcular rutas reales por calles. Para Google Routes API, copiá `.env.example`
-a `.env`, configurá `RUTA_PROVEEDOR=GOOGLE` y agregá una clave de Google Cloud en
-`GOOGLE_MAPS_API_KEY`. Para trabajar sin red usá `RUTA_PROVEEDOR=HAVERSINE`.
-
-## Demo web del recorrido
-
-Ejecutá `npm run demo:web` y abrí `http://localhost:3000`. La página deja cargar las coordenadas,
-consultar una ruta por calles con OSRM y avanzar manualmente por los estados de una simulación local.
-No crea viajes en el backend ni guarda información. Requiere conexión a internet para cargar el mapa
-y consultar el servicio público de OSRM.
-
-El diseño y las decisiones de dominio están en [docs/modelo.md](docs/modelo.md) y la estrategia
-geográfica pendiente en [docs/adr/0013-busqueda-geografica.md](docs/adr/0013-busqueda-geografica.md).
-El alcance y los límites de la página están en [docs/demo-web.md](docs/demo-web.md).
-
-## `ms-flota`
-
-Para compilar y ejecutar `ms-flota`:
-
-```text
-npm run flota
-```
-
-El servicio escucha por defecto en `http://localhost:3002`, usa PostgreSQL cuando existe `DATABASE_URL`
-y valida JWT externos con JWKS (`JWT_JWKS_URL`, `JWT_ISSUER`, `JWT_AUDIENCE` y `JWT_ROLE_CLAIM`). No
-implementa login. Si no se configura `DATABASE_URL`, el proceso usa memoria solo para desarrollo/tests.
-
-Para iniciar PostgreSQL y aplicar el esquema:
-
-```text
-docker compose up -d postgres
-docker compose exec -T postgres psql -U viajes -d viajes < src/ms-flota/schema.sql
-npm run flota
-```
-
-La conexión desde el host usa el puerto `5434`; dentro del contenedor PostgreSQL sigue usando `5432`.
-En PowerShell, si la redirección `<` no está habilitada por la versión instalada, puede aplicarse el
-esquema desde Git Bash o ejecutarse el comando equivalente con `Get-Content src/ms-flota/schema.sql |
-docker compose exec -T postgres psql -U viajes -d viajes`.
-El readiness consulta efectivamente PostgreSQL mediante `SELECT 1`.
-
-Para probar endpoints protegidos sin Firebase, usar un entorno que no sea producción y activar el proveedor
-falso con `JWT_MODO=falso`. En PowerShell:
-
-```text
-$env:JWT_MODO='falso'; $env:NODE_ENV='development'; npm.cmd run flota
-```
-
-Después de compilar, se puede generar un actor de prueba con:
-
-```text
-node -e "const {ValidadorJwtFalso}=require('./dist/compartido/jwt-falso'); console.log(new ValidadorJwtFalso().generar({idUsuario:'chofer-1',rol:'CHOFER'}))"
-```
-
-El token tiene la forma
-`falso.<payload-base64url>`. Acepta `PASAJERO`, `CHOFER`, `SOPORTE` y `ADMINISTRADOR`; no firma tokens y
-se rechaza explícitamente cuando `NODE_ENV=production`.
-
-## `ms-viajes`
-
-Para compilar y ejecutar el servicio HTTP de viajes:
-
-```text
-npm run viajes
-```
-
-Escucha por defecto en `http://localhost:3000`. Para desarrollo local, copiá `.env.example` a `.env`
-con `JWT_MODO=falso`; para un entorno real, usá `JWT_MODO=real` y completá `JWT_JWKS_URL`,
-`JWT_ISSUER` y `JWT_AUDIENCE`. La confirmación usa `POST /viajes` con `id_estimacion` y
-`Clave-Idempotencia`; la estimación se consulta en `MS_TARIFAS_URL` y el dominio conserva el precio
-y los factores recibidos. Los adaptadores de persistencia todavía son de memoria en esta etapa.
-
-## `ms-tarifas` (prototipo de dominio y HTTP)
-
-Se agregaron cálculo exacto en pesos enteros, snapshots auditables, vigencia de 3 minutos,
-Haversine offline, adaptadores OSRM/Google Routes, Open-Meteo y repositorios PostgreSQL. El endpoint
-`POST /viajes/estimacion` y la consulta interna `GET /estimaciones/:idEstimacion` requieren JWT.
-Para OSRM se debe configurar una instancia propia en `OSRM_BASE_URL`; no se debe usar el servidor
-público para pruebas de carga. `RUTA_PROVEEDOR=HAVERSINE` activa modo offline.
-
-La estimación consulta disponibilidad de `ms-flota` y demanda interna de `ms-viajes`; ambos reciben el
-JWT del pasajero. Al confirmar, `ms-viajes` consulta candidatos y genera ofertas para hasta veinte
-choferes únicos. `ms-flota` comprueba la ocupación consultando `ms-viajes`; si ese servicio cae, no
-devuelve candidatos. Las llamadas internas usan timeout y reintento configurables. El matching y la
-consulta de candidatos tienen pruebas con dobles HTTP.
-
-`/health` indica que el proceso vive y `/ready` comprueba la base en `ms-tarifas`. La configuración
-de precios semilla y sus límites están descritos en los ADR de `docs/adr/`.
-
-## Integración local con Docker Compose
-
-El archivo `.env.example` es una plantilla de desarrollo, no contiene credenciales reales. En
-PowerShell, desde la raíz del repositorio:
-
+### 1. Clonar y configurar variables de entorno
 ```powershell
+git clone https://github.com/FabioIgnacioNavarro/repo-appweb-viajes-grupo1.git
+cd repo-appweb-viajes-grupo1
+
+# Crear archivo de configuración local a partir de la plantilla
 Copy-Item .env.example .env
+```
+
+### 2. Instalar dependencias y compilar TypeScript
+```powershell
+npm.cmd install
+npm.cmd run build
+```
+
+### 3. Levantar la plataforma completa en Docker Compose
+```powershell
 docker compose config
 docker compose up --build -d
+```
+Docker Compose inicializa automáticamente:
+1. **`postgres`:** Aplica los esquemas DDL de los tres servicios (`src/ms-flota/schema.sql`, `src/ms-tarifas/schema.sql`, `src/ms-viajes/schema.sql`).
+2. **`jaeger`:** Levanta el recolector OTLP y la interfaz gráfica de trazas.
+3. **`auth-emulator`:** Inicializa las claves RSA 2048 y publica el endpoint JWKS.
+4. **`ms-viajes`**, **`ms-tarifas`**, **`ms-flota`:** Conectan a PostgreSQL y quedan listos.
+5. **`nginx`:** Expone el API Gateway unificado en el puerto `8080`.
+
+### 4. Ejecutar la suite completa de pruebas
+```powershell
+# Ejecuta todas las pruebas unitarias y de integración offline (94 tests)
+npm.cmd test
+```
+
+### 5. Ejecutar la suite E2E contra el API Gateway
+```powershell
 $env:E2E_BASE_URL = "http://localhost:8080"
 npm.cmd run test:e2e
 ```
 
-Compose arranca PostgreSQL, los tres servicios y Nginx. El único puerto HTTP publicado es el gateway
-`http://localhost:8080`; PostgreSQL permanece dentro de la red de Compose. Los
-puertos de los servicios solo están en la red privada. Por defecto Compose usa `HAVERSINE` para
-poder probar sin un servidor de rutas; el modo E2E usa clima controlado y no requiere salida a internet. Para rutas por
-calles, configurá `RUTA_PROVEEDOR=OSRM` y `OSRM_BASE_URL` con una instancia propia. No se usa el
-servidor público de OSRM para carga.
+---
 
-El proveedor JWT falso funciona solo fuera de producción. Para obtener tokens de prueba, compilá y
-generá, por ejemplo, un pasajero:
+## 🏛️ Topología de Servicios y Puertos
 
+| Servicio | Puerto Host | Descripción | Endpoints Clave |
+|---|---|---|---|
+| **`nginx` (API Gateway)** | `8080` | Entrada única pública con enrutamiento y blindaje de rutas internas. | `GET /health`<br>`GET /ready/*`<br>`POST /viajes/estimacion`<br>`POST /viajes` |
+| **`auth-emulator`** | `9099` | Emulador OIDC / Firebase Auth con claves RSA 2048 y tokens dinámicos. | `GET /.well-known/jwks.json`<br>`GET /auth/tokens-demo`<br>`POST /auth/token` |
+| **`jaeger`** | `16686` | Interfaz web de observabilidad distribuida y análisis de latencias. | `http://localhost:16686` (Web UI)<br>`http://localhost:4318` (OTLP) |
+| **`ms-viajes`** | *Interno :3000* | Ciclo de vida, asignación atómica concurrente, cobros e idempotencia. | `GET /ready`<br>`POST /viajes`<br>`GET /viajes/:id` |
+| **`ms-tarifas`** | *Interno :3001* | Cálculo de tarifa dinámica (BigInt), OSRM/Google/Haversine y Open-Meteo. | `GET /ready`<br>`POST /viajes/estimacion` |
+| **`ms-flota`** | *Interno :3002* | Choferes, disponibilidad, geocercanía e historial de ubicaciones GPS. | `GET /ready`<br>`GET /choferes/cercanos` |
+| **`postgres`** | *Interno :5432* | Base relacional con esquemas `flota`, `tarifa` y `viajes`. | Conexión con pooling y transacciones |
+
+---
+
+## 🩺 Ciclo de Vida: Arranque, Readiness y Graceful Shutdown
+
+1. **Arranque y Validación:** Todos los microservicios validan sus variables de entorno requeridas al iniciar; si falta una variable obligatoria, el proceso aborta inmediatamente con un mensaje explícito sin dejar estado inconsistente.
+2. **Health Check (`GET /health`):** Retorna `200 OK` indicando que el proceso Node.js o el contenedor está vivo.
+3. **Readiness Check (`GET /ready`):**
+   - Ejecuta una consulta real `SELECT 1` contra el pool de PostgreSQL.
+   - Si la base responde exitosamente, devuelve `200 {"estado":"listo"}`.
+   - Si la base no responde o está caída, devuelve `503 {"estado":"no_listo"}`.
+   - En el API Gateway, se consulta el estado individual mediante `GET /ready/viajes`, `GET /ready/tarifas` y `GET /ready/flota`.
+4. **Apagado Limpio (*Graceful Shutdown*):**
+   - Todos los microservicios (`ms-viajes`, `ms-tarifas`, `ms-flota` y `auth-emulator`) capturan las señales estándar del sistema operativo `SIGINT` y `SIGTERM`.
+   - Al recibirlas, dejan de aceptar nuevas peticiones HTTP, esperan que terminen las transacciones en vuelo y cierran los pools de conexiones a PostgreSQL (`await pool.end()`) limpiamente.
+
+---
+
+## 🎮 Modos de Demostración y Pruebas Manuales
+
+### 1. Demo Web Interactiva con Mapa
 ```powershell
-npm.cmd run build
-node -e "const {ValidadorJwtFalso}=require('./dist/compartido/jwt-falso'); console.log(new ValidadorJwtFalso().generar({idUsuario:'pasajero-demo',rol:'PASAJERO'}))"
+npm.cmd run demo:web
 ```
+Abre `http://localhost:3000` en tu navegador. Permite buscar origen y destino mediante geocodificación en cascada por cercanía (Gran Resistencia $\rightarrow$ Regional $\rightarrow$ Nacional) o arrastrando el pin interactivo con geocodificación inversa, calcula la tarifa con distancia y duración real, y muestra los factores dinámicos.
 
-Usá `/health` para verificar que el gateway vive y `/ready/viajes`, `/ready/tarifas` o
-`/ready/flota` para consultar readiness de cada servicio. En este corte `/ready/viajes` responde
-`listo` e informa que su repositorio sigue en memoria. `/interno/` y `/estimaciones/` están
-bloqueados desde el gateway.
-
-**Limitación actual:** `ms-viajes` aún usa repositorios en memoria y el asignador no es atómico entre réplicas. Por lo tanto, el matching HTTP y
-la confirmación funcionan dentro de una instancia, pero reinicios y concurrencia distribuida aún
-requieren completar persistencia/transacciones PostgreSQL antes de considerar el recorrido de
-producción. El readiness real de `ms-flota` y `ms-tarifas` sí ejecuta `SELECT 1`.
-
-Los endpoints internos, errores y límites de reintento están en [docs/contratos.md](docs/contratos.md)
-y [docs/adr/0030-integracion-http-entre-servicios.md](docs/adr/0030-integracion-http-entre-servicios.md).
-
-## PostgreSQL
-
-Para levantar solo PostgreSQL:
-
-```text
-docker compose up -d postgres
+### 2. Demo Interactiva por Terminal
+```powershell
+npm.cmd run demo
 ```
+Permite ingresar rol (pasajero o chofer), coordenadas de origen y destino, y simula todo el ciclo de vida por consola.
 
-La estrategia inicial de cercanía y sus límites están en
-[docs/adr/0017-busqueda-flota-inicial.md](docs/adr/0017-busqueda-flota-inicial.md).
+### 3. Peticiones REST Reproducibles (.http)
+En Visual Studio Code con la extensión *REST Client*:
+- **`requests/flujo-e2e.http`:** Ejecución secuencial de todo el flujo (ubicación de chofer $\rightarrow$ disponibilidad $\rightarrow$ estimación $\rightarrow$ confirmación $\rightarrow$ oferta $\rightarrow$ asignación atómica $\rightarrow$ inicio $\rightarrow$ finalización y cobro).
+- **`requests/seguridad-rbac.http`:** Demostración formal de los 3 escenarios obligatorios de seguridad:
+  1. `200/201`: Acceso autorizado con token RS256 legítimo.
+  2. `401`: Token ausente, firma adulterada o token expirado.
+  3. `403`: Rol no autorizado o intento de acceder a recursos privados de otro usuario.
+
+---
+
+## 📚 Documentación de Referencia
+
+- [docs/modelo.md](docs/modelo.md): Entidades, estados, ciclo de vida e invariantes del dominio.
+- [docs/api.md](docs/api.md): Contrato HTTP consolidado de endpoints públicos e internos.
+- [docs/contratos.md](docs/contratos.md): Convenciones compartidas, formatos de datos y reglas de integración.
+- [docs/backlog.md](docs/backlog.md): Estado detallado de las tareas y criterios de aceptación.
+- [docs/ataque.md](docs/ataque.md): Bitácora de ataques controlados y verificación de defensas efectivas.
+- [docs/adr/](docs/adr/): Registro numerado de decisiones arquitectónicas (ADRs).
