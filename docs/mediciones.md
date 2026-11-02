@@ -109,4 +109,25 @@ La latencia HTTP se mide desde que empieza la solicitud hasta que se consume la 
 
 ## Registro de resultados
 
-Todavía no hay resultados de aceptación de cinco minutos por variante. La prueba corta verifica el funcionamiento del simulador, pero no demuestra los umbrales de carga. Por cada variante se anotarán: commit, fechas, entorno, escenario, semilla, configuración, tres resultados individuales, mediana, cumplimiento de cada umbral, problemas observados y decisión tomada. Los umbrales anteriores se mantienen como referencia; si el grupo decide cambiarlos, debe justificarlo antes de una nueva serie y conservar los valores anteriores para que la comparación siga siendo honesta.
+Por cada variante se anotan commit, fechas, entorno, escenario, semilla, configuración, tres resultados individuales, mediana, cumplimiento de cada umbral, problemas observados y decisión tomada. Los umbrales se mantienen como referencia; si el grupo decide cambiarlos, debe justificarlo antes de una nueva serie y conservar los valores anteriores.
+
+### Línea de base de carga de `ms-flota` — 2026-11-02
+
+- **Código de búsqueda:** `203451f` (Haversine con prefiltrado por cuadro en PostgreSQL; sin cambios en `src/ms-flota` desde ese commit).
+- **Commit del repositorio y simulador:** `b603a8f`.
+- **Entorno:** Windows x64, Node del generador `v24.16.0`, contenedores Node 22, Docker `29.7.2`, PostgreSQL `16.15`, AMD Ryzen 5 7530U, 15.7 GiB RAM.
+- **Configuración:** escenario de carga, 500 choferes, 60 s de calentamiento, 300 s medidos y 60 s de recuperación, semilla 42, gateway local y mediciones en `ms-flota` habilitadas.
+- **Informes JSON locales:** `58c21f4e-8bbf-4938-af79-58fa4112d817`, `b936324e-d2ed-4c92-b664-a164bf941298` y `b3f6e382-c832-42f8-bcb9-cbce2c2c115d`. Los archivos se guardan en `carga/resultados/` y no se versionan.
+
+| Repetición | Actualizaciones exitosas | Actualización p95 / p99 (ms) | Búsqueda p95 / p99 (ms) | Errores / cola perdida | CPU p95 (%) | Event loop p99 / máximo (ms) | RSS máximo (MiB) | Crecimiento RSS min. 2 a 5 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 74.999 / 75.000 (249,9967 req/s) | 12,46 / 75,53 | 25,50 / 141,55 | 0 / 0 | 61,69 | 27,77 / 45,48 | 143,24 | 2,05 % |
+| 2 | 75.000 / 75.000 (250 req/s) | 19,03 / 116,85 | 34,60 / 209,35 | 0 / 0 | 61,91 | 30,46 / 49,94 | 150,08 | 7,21 % |
+| 3 | 75.000 / 75.000 (250 req/s) | 14,65 / 169,29 | 28,02 / 244,44 | 0 / 0 | 60,37 | 29,18 / 33,78 | 148,73 | 12,77 % |
+| **Mediana** | **75.000 / 75.000 (250 req/s)** | **14,65 / 116,85** | **28,02 / 209,35** | **0 / 0** | **61,69** | **29,18 / 45,48** | **148,73** | **7,21 %** |
+
+Las tres repeticiones completaron 300/300 búsquedas, 300/300 sondas `/health` y 300/300 sondas `/ready/flota`, todas con HTTP 200; no hubo solicitudes perdidas por cola. La repetición 1 quedó una actualización por debajo de 75.000 (diferencia de 0,0033 req/s respecto del objetivo); las otras dos alcanzaron las 75.000. Las medianas de latencia de actualización y búsqueda quedaron debajo de sus umbrales.
+
+La repetición 3 superó el umbral de crecimiento RSS de 10 % entre los minutos 2 y 5. El RSS máximo de las tres ejecuciones fue menor a 151 MiB (límite 512 MiB) y, aproximadamente dos minutos después de finalizar la prueba, el proceso bajó a 92,51 MiB. Esto apunta a crecimiento de memoria durante la carga que se recupera al cesar el tráfico; no elimina el incumplimiento del umbral de esa repetición. Por ello la línea de base está medida, pero MED-001 no se declara aceptada todavía.
+
+Esta serie cubre el escenario de carga de la línea de base. Falta ejecutar el escenario de reposo, medir una variante posterior a cualquier optimización y comparar las tres repeticiones de cada variante antes de cerrar MED-001.
