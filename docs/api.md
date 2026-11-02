@@ -1,271 +1,226 @@
-# API inicial
+# Contrato de API HTTP Consolidado
 
-Este documento define un contrato preliminar. Las rutas, los parámetros y los nombres propios de los datos de la aplicación se escriben en español. Los métodos, códigos de estado y encabezados estándar de HTTP conservan sus nombres oficiales. El contrato se consolidará antes de implementar y podrá convertirse en una especificación OpenAPI.
+Este documento consolida el contrato de la API HTTP de la plataforma para todos los microservicios (`ms-viajes`, `ms-tarifas`, `ms-flota`) y el API Gateway (`nginx:8080`).
 
-## Convenciones
+---
 
-- JSON para pedidos y respuestas.
-- Los nombres de rutas y parámetros están en español, sin tildes ni espacios; se usa `kebab-case` en rutas y `camelCase` en parámetros de ruta.
-- Los campos JSON están en español y usan `snake_case`.
-- La moneda del sistema es el peso argentino (`ARS`), sin centavos. Los importes se representan como cadenas con dígitos enteros en JSON, por ejemplo `"8086"`; el dominio y PostgreSQL los manejan como enteros exactos. Las respuestas incluyen `moneda: "ARS"` junto a los importes. No convertir importes a `number` de JavaScript.
-- Autenticación mediante `Authorization: Bearer <token>`; los servicios verifican tokens externos por JWKS según ADR 0025.
-- Las operaciones que crean o confirman efectos irrepetibles aceptan el encabezado `Clave-Idempotencia`.
-- Los errores tienen una forma uniforme: `codigo`, `mensaje` y, cuando corresponda, `detalles`.
-- El servidor valida tipos, campos permitidos, tamaños y valores límite en tiempo de ejecución.
+## 1. Convenciones Globales
 
-## Salud y ciclo de vida
+1. **Protocolo y Formato:** Todas las peticiones y respuestas utilizan `application/json; charset=utf-8`.
+2. **Nomenclatura:**
+   - Rutas HTTP: `kebab-case` en español (ej. `/viajes/estimacion`, `/choferes/yo/disponibilidad`).
+   - Parámetros de ruta y query strings: `camelCase` en rutas (`:idViaje`, `:idOferta`) y `snake_case` en query strings (`zona_id`, `ids_choferes`, `radio_metros`).
+   - Campos en cuerpos JSON: `snake_case` en español (`id_estimacion`, `precio_estimado`, `factores_precio`).
+3. **Moneda e Importes:**
+   - Moneda única: Peso Argentino (`ARS`), sin centavos.
+   - En JSON, los importes monetarios se exponen como **cadenas de dígitos enteros** (ej. `"8086"` o `"12500"`) para evitar pérdida de precisión de punto flotante (`IEEE 754`).
+   - Cada importe va acompañado por su atributo `"moneda": "ARS"`.
+   - En el dominio y en PostgreSQL se representan y operan exclusivamente como enteros exactos (`BigInt` / `BIGINT`).
+4. **Autenticación y RBAC:**
+   - Encabezado estándar: `Authorization: Bearer <token>`.
+   - La autenticación es externa (OIDC/JWKS con firma criptográfica asimétrica `RS256` según ADR 0016 y ADR 0054).
+   - Los roles soportados son: `PASAJERO`, `CHOFER`, `SOPORTE`, `ADMINISTRADOR`.
+   - Ningún servicio implementa formulario ni base de datos de contraseñas.
+5. **Idempotencia:**
+   - Peticiones con mutaciones de estado o creación de efectos (`POST /viajes`) requieren el encabezado `Clave-Idempotencia: <string>`.
+   - Un reintento con la misma clave devuelve de forma determinista la misma respuesta sin duplicar entidades ni cobrar múltiples veces.
+6. **Trazabilidad y Observabilidad:**
+   - Propagación W3C mediante encabezado `traceparent` (según ADR 0050).
+   - El middleware inyecta `X-Trace-Id` en las respuestas de los servicios y correlaciona los logs de eventos.
+7. **Sobre Uniforme de Errores:**
+   - Todos los errores HTTP (sin excepción) devuelven el esquema estándar:
+     ```json
+     {
+       "error": {
+         "codigo": "CODIGO_ESTABLE",
+         "mensaje": "Mensaje legible en español.",
+         "detalles": {}
+       }
+     }
+     ```
+   - Nunca se filtran stack traces, consultas SQL, contraseñas ni secretos internos en las respuestas de error.
 
-| Método | Ruta | Propósito |
-|---|---|---|
-| GET | `/health` | Indicar que el proceso está vivo. |
-| GET | `/ready` | Indicar que el proceso está listo y que la base de datos está disponible; responde `503` mientras esa dependencia no esté configurada. |
+---
 
-En el gateway, el estado de cada servicio se consulta con `GET /ready/viajes`, `GET /ready/tarifas`
-y `GET /ready/flota`. `ms-viajes` responde `503` hasta que se integre su persistencia PostgreSQL;
-`ms-tarifas` y `ms-flota` responden listo solo después de `SELECT 1`.
+## 2. Salud, Ciclo de Vida y Readiness
 
-## Identidad y perfiles
-
-| Método | Ruta | Propósito |
-|---|---|---|
-| POST | `/autenticacion/registro` | Registrar un pasajero o chofer. |
-| POST | `/autenticacion/inicio-sesion` | Autenticar a un usuario. |
-| GET | `/perfil` | Obtener el perfil propio. |
-| PATCH | `/choferes/yo/disponibilidad` | Cambiar la disponibilidad del chofer autenticado. |
-| POST | `/choferes/yo/ubicacion` | Registrar la ubicación actual del chofer autenticado. |
-
-## `ms-flota`
-
-Las siguientes rutas pertenecen al servicio de flota y reciben un JWT externo en `Authorization`.
-No existe login dentro de este servicio.
-
-| Método | Ruta | Entrada | Resultado |
+| Método | Ruta Pública (Gateway) | Destino Interno | Propósito |
 |---|---|---|---|
-| PATCH | `/choferes/yo/disponibilidad` | `{ "disponibilidad": true\|false }` | Perfil actualizado del chofer autenticado. |
-| POST | `/choferes/yo/ubicacion` | `{ "latitud": number, "longitud": number, "actualizado_at"?: ISO-8601, "precision_metros"?: number }` | Última ubicación aceptada. |
-| GET | `/choferes/cercanos?latitud=&longitud=&radio_metros=` | Coordenada y radio en metros | Candidatos habilitados, disponibles, con ubicación reciente y sin viaje activo. Devuelve distancia, no expone coordenadas privadas. |
-| GET | `/choferes/:idChofer` | Identificador del usuario chofer | Perfil y ubicación solo si el actor está autorizado. |
+| `GET` | `/health` | Gateway local | Verifica que el proceso Nginx está activo. |
+| `GET` | `/ready/viajes` | `ms-viajes:3000/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
+| `GET` | `/ready/tarifas` | `ms-tarifas:3001/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
+| `GET` | `/ready/flota` | `ms-flota:3002/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 
-Reglas de `ms-flota`:
+---
 
-- Solo un chofer habilitado y con carnet validado puede activarse o informar ubicación.
-- Una ubicación con marca temporal anterior o igual a la actual no sobrescribe la posición persistida.
-- El resultado de cercanos excluye choferes con viaje activo y ubicaciones cuya antigüedad supere el límite configurado.
-- `GET /choferes/:idChofer` responde `403` cuando el actor no tiene relación autorizada con la ubicación.
-- Errores usan la forma común `{ "error": { "codigo", "mensaje", "detalles" } }`.
+## 3. Catálogo de Endpoints Públicos (API Gateway :8080)
 
-## Viajes
+### 3.1 Servicio `ms-tarifas` (Estimación y Precios)
 
-| Método | Ruta | Propósito |
-|---|---|---|
-| POST | `/viajes/estimacion` | Calcular una estimación sin crear un viaje, incluyendo multiplicador y vigencia. |
-| POST | `/viajes` | Solicitar y confirmar un viaje. |
-| GET | `/viajes/:idViaje` | Consultar un viaje autorizado. |
-| POST | `/viajes/:idViaje/cancelacion` | Cancelar según las reglas de estado y rol. |
-| POST | `/viajes/:idViaje/llegada` | Marcar la llegada del chofer. |
-| POST | `/viajes/:idViaje/inicio` | Iniciar el viaje. |
-| POST | `/viajes/:idViaje/finalizacion` | Finalizar el viaje y calcular la tarifa y el cobro. |
-| GET | `/viajes` | Consultar el historial permitido para el usuario autenticado. |
-| GET | `/viajes/:idViaje/seguimiento` | Consultar el seguimiento en tiempo real; el canal queda pendiente de decisión. |
-
-### API HTTP de `ms-viajes`
-
-Las rutas de viajes requieren `Authorization: Bearer <token>`. `POST /viajes` requiere además
-`Clave-Idempotencia` y un cuerpo `{ "id_estimacion": "..." }`. La API conserva el precio y los
-factores de la estimación; el cliente no puede enviar un precio alternativo. Los handlers traducen
-los errores del dominio a la forma común y nunca devuelven stack traces.
-
-## Limites de los servicios
-
-La implementacion se separa en tres servicios, sin cambiar las rutas publicas del contrato:
-
-| Servicio | Responsabilidad | Dependencias contractuales |
-|---|---|---|
-| `ms-viajes` | Ciclo de vida, ofertas, asignacion, cancelacion, finalizacion, cobro simulado e idempotencia. | Consume estimaciones de `ms-tarifas` y candidatos de `ms-flota`. |
-| `ms-tarifas` | Rutas, distancia, duracion, tarifa dinamica y vigencia de estimaciones. | Recibe origen, destino y factores de demanda configurados. |
-| `ms-flota` | Choferes, habilitacion, disponibilidad, ubicaciones y cercania. | Informa candidatos y su marca temporal de ubicacion. |
-
-Cada servicio valida el JWT en su entrada y entrega un actor autenticado al dominio. Ningun servicio
-emite credenciales ni implementa el login.
-
-### Contrato de estimación de `ms-tarifas`
-
-`POST /viajes/estimacion` recibe solo origen y destino; nunca acepta precio, multiplicador ni factores
-del cliente. La respuesta de éxito `201` contiene `id_estimacion`, `precio_estimado` (cadena entera),
-`moneda`, `distancia_metros`, `duracion_segundos`, `multiplicador_demanda`, `zona`,
-`factores_precio`, `version_regla`, `creada_en` y `vigente_hasta`. La estimación vence a los tres
-minutos. Si ruta, clima, flota, viajes o PostgreSQL no responden dentro del presupuesto definido,
-devuelve `503 DEPENDENCIA_NO_DISPONIBLE`; no usa factores neutrales ni Haversine implícito.
-
-`GET /estimaciones/:idEstimacion` es una consulta interna de `ms-viajes`; requiere el mismo JWT del
-pasajero y solo devuelve la estimación si está vigente y pertenece al sujeto del token. El dominio
-de `ms-viajes` conserva una copia inmutable de precio y factores durante la confirmación; la
-persistencia SQL de viajes queda pendiente.
-
-`factores_precio.zona_id` identifica la zona usada para la regla y el conteo de solicitudes activas.
-Es un dato auditable adicional; no permite al cliente elegir la zona ni alterar el precio.
-
-El error de entrada es `400 ENTRADA_INVALIDA`; la falta de token o un token incorrecto es `401`;
-un rol sin permiso es `403`. Todos los errores respetan el objeto `{ error: { codigo, mensaje,
-detalles } }`.
-
-## Ofertas
-
-| Método | Ruta | Propósito |
-|---|---|---|
-| GET | `/choferes/yo/ofertas` | Ver las ofertas activas del chofer autenticado. |
-| POST | `/choferes/yo/ofertas/:idOferta/aceptacion` | Aceptar una oferta antes de su vencimiento. |
-| POST | `/choferes/yo/ofertas/:idOferta/rechazo` | Rechazar una oferta. |
-
-Al confirmar un viaje, `ms-viajes` consulta automáticamente candidatos cercanos en `ms-flota` y
-crea ofertas para hasta veinte choferes únicos. La oferta vence a los 60 segundos. Si la consulta de
-flota falla, `POST /viajes` responde `503 DEPENDENCIA_NO_DISPONIBLE`; en la implementación actual
-en memoria, un reintento en el mismo proceso y con la misma `Clave-Idempotencia` devuelve el mismo
-viaje y reanuda la búsqueda sin duplicar ofertas. La persistencia de esta garantía entre reinicios
-queda pendiente del adaptador PostgreSQL de `ms-viajes`.
-
-### Contratos internos entre servicios
-
-Estos recursos se consumen solo dentro de la red privada; Nginx no los publica:
-
-| Servicio que responde | Método y ruta | Respuesta |
-|---|---|---|
-| `ms-viajes` | `GET /interno/demanda-por-zona?zona_id=` | `{ "zona_id": "...", "solicitudes_activas": 0 }`, para el actor pasajero autenticado. |
-| `ms-viajes` | `GET /interno/choferes/ocupados?ids_choferes=id1,id2` | `{ "ids_choferes_ocupados": [] }`; limita la consulta a 100 IDs. |
-
-Los clientes internos reenvían el JWT recibido, usan timeout configurable `TIMEOUT_SERVICIO_MS`
-(1500 ms por defecto) y un solo reintento GET (`REINTENTOS_SERVICIO=1`) luego de 100 ms ante timeout,
-429, 502, 503 o 504. Una caída, rechazo de autenticación o respuesta inválida se traduce a
-`503 DEPENDENCIA_NO_DISPONIBLE`; el sistema no trata una dependencia caída como una respuesta vacía.
-Los logs incluyen servicio, operación y resultado, nunca JWT, URL, coordenadas ni cuerpo.
-
-## Operación y administración
-
-| Método | Ruta | Propósito |
-|---|---|---|
-| GET | `/operaciones/viajes-activos` | Ver los viajes en curso como operador. |
-| POST | `/operaciones/viajes/:idViaje/cancelacion` | Cancelar un viaje como operador, indicando el motivo. |
-| PATCH | `/administracion/choferes/:idChofer/estado` | Habilitar o deshabilitar un chofer. |
-| PUT | `/administracion/configuracion-tarifa` | Configurar los parámetros de tarifa. |
-
-## Precio dinámico
-
-La tarifa base se calcula en el servidor a partir de la distancia y duración estimadas. Sobre esa base se aplican, en el orden de definición acordado, los ajustes configurados por lluvia, choferes disponibles, demanda de solicitudes en la zona y franja horaria. Las franjas usan la hora local de la zona. La respuesta de `/viajes/estimacion` debe incluir, como mínimo, `precio_estimado`, `moneda`, `multiplicador_demanda`, `zona`, `factores_precio`, `vigente_hasta`, `version_regla` e `id_estimacion`. La estimación puede confirmarse durante los tres minutos posteriores a su creación. La confirmación debe referenciar esa estimación y usar exactamente el precio que el pasajero vio, aunque cambien los factores mientras tanto.
-
-El viaje persistirá el precio confirmado y el resumen auditable de todos los factores usados al estimar. El cliente nunca envía un multiplicador como importe confiable.
-
-Ejemplo preliminar de pedido de estimación:
-
-```json
-{
-  "origen": { "latitud": -27.451, "longitud": -58.986 },
-  "destino": { "latitud": -27.462, "longitud": -58.993 }
-}
-```
-
-Ejemplo preliminar de respuesta y confirmación:
-
-```json
-{
-  "id_estimacion": "estimacion-de-prueba",
-  "precio_estimado": "8086",
-  "moneda": "ARS",
-  "multiplicador_demanda": 1.0,
-  "zona": "centro",
-  "factores_precio": {
-    "choferes_disponibles": 12,
-    "solicitudes_activas": 10,
-    "llueve": false,
-    "franja_horaria": "mañana",
-    "lluvia_mm": 0.0,
-    "fuente_clima": "proveedor-pendiente"
-  },
-  "version_regla": 1,
-  "creada_en": "2026-09-29T12:04:05Z",
-  "vigente_hasta": "2026-09-29T12:07:05Z"
-}
-```
-
-La confirmación envía `id_estimacion` en el cuerpo de `POST /viajes` y la clave de reintento en `Clave-Idempotencia`. Si la estimación tiene más de tres minutos, el servidor rechaza la confirmación con `409` y el código `ESTIMACION_VENCIDA`; el pasajero solicita otra estimación. El ejemplo de importe es orientativo, no una tarifa definida para el sistema. La distancia se expresa en metros y la duración en segundos en los contratos que informen esas magnitudes. Los horarios de las franjas ya están definidos en `docs/modelo.md`; la fórmula, los límites de cada factor y la fuente de lluvia siguen propuestos o pendientes.
-
-## Respuestas y errores mínimos
-
-- `200`: consulta o actualización exitosa.
-- `201`: recurso creado.
-- `400`: entrada inválida.
-- `401`: falta autenticación o el token no es válido.
-- `403`: usuario autenticado sin permiso sobre el recurso.
-- `404`: recurso inexistente o no visible según la política elegida.
-- `409`: conflicto de estado, concurrencia o idempotencia.
-- `422`: regla de negocio no cumplida.
-- `429`: límite de solicitudes excedido.
-- `500`: error inesperado, sin filtrar detalles internos.
-
-Ejemplo de error:
-
-```json
-{
-  "error": {
-    "codigo": "VIAJE_NO_DISPONIBLE",
-    "mensaje": "El viaje no está disponible para este usuario.",
-    "detalles": {}
+#### `POST /viajes/estimacion`
+Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, duración, lluvia y franja horaria.
+- **Autorización:** Requiere rol `PASAJERO`.
+- **Cuerpo recibido:**
+  ```json
+  {
+    "origen": { "latitud": -27.451, "longitud": -58.986 },
+    "destino": { "latitud": -27.462, "longitud": -58.993 }
   }
-}
-```
+  ```
+  *Nota: Admite también resolución por texto:* `{"direccion": "Av. Alberdi 250, Resistencia"}`.
+- **Respuesta exitosa (`201 Created`):**
+  ```json
+  {
+    "id_estimacion": "uuid-estimacion",
+    "precio_estimado": "3700",
+    "moneda": "ARS",
+    "distancia_metros": 2500,
+    "duracion_segundos": 300,
+    "multiplicador_demanda": 1.2,
+    "zona": "Resistencia",
+    "factores_precio": {
+      "zona_id": "resistencia",
+      "choferes_disponibles": 5,
+      "solicitudes_activas": 2,
+      "precipitacion_mm": 0,
+      "llueve": false,
+      "fuente_clima": "OPEN_METEO",
+      "clima_observado_en": "2026-11-02T13:00:00.000Z",
+      "franja_horaria": "siesta",
+      "factor_lluvia": 1.0,
+      "factor_disponibilidad": 1.1,
+      "factor_demanda": 1.0,
+      "factor_horario": 0.95
+    },
+    "version_regla": 1,
+    "creada_en": "2026-11-02T13:00:00.000Z",
+    "vigente_hasta": "2026-11-02T13:03:00.000Z",
+    "origen": { "latitud": -27.451, "longitud": -58.986 },
+    "destino": { "latitud": -27.462, "longitud": -58.993 },
+    "polilinea": "encoded_polyline_o_null"
+  }
+  ```
 
-## Demo por terminal
+---
 
-La demo local se ejecuta con `npm run demo`. Solicita el rol del actor, una latitud y longitud de la
-ubicación actual y una latitud y longitud de destino, muestra la estimación, confirma el viaje, lo
-inicia y lo finaliza. En una terminal las coordenadas actuales se ingresan manualmente porque el
-proceso no tiene acceso directo al GPS del dispositivo. No reemplaza los
-endpoints HTTP: sirve para demostrar el caso de uso mientras todavía no existe el adaptador web.
-Los datos se guardan en memoria durante el proceso y se muestran al finalizar.
+### 3.2 Servicio `ms-viajes` (Ciclo de Vida del Viaje y Ofertas)
 
-La demo usa el proveedor configurado en `RUTA_PROVEEDOR`: `OSRM` para rutas reales por calles,
-`GOOGLE` para Google Routes API o `HAVERSINE` para modo offline. La estimación informa el proveedor
-utilizado, la distancia real de ruta cuando está disponible y la duración devuelta por el proveedor.
+#### `POST /viajes`
+Confirma la solicitud de un viaje a partir de una estimación vigente. Congela el precio y los factores de auditoría de forma inmutable.
+- **Autorización:** Requiere rol `PASAJERO`.
+- **Encabezados:** `Clave-Idempotencia: <string>`.
+- **Cuerpo recibido:** `{"id_estimacion": "uuid-estimacion"}`.
+- **Respuesta (`201 Created`):** Objeto Viaje con estado `"solicitado"`.
 
-## Estimación de la demo web
+#### `GET /viajes`
+Lista los viajes propios del usuario autenticado (o todos si es `ADMINISTRADOR`/`SOPORTE`).
+- **Respuesta (`200 OK`):** `{"viajes": [ ... ]}`.
 
-El servidor local de `npm run demo:web` expone `POST /demostracion/estimaciones` para que la pantalla
-muestre el precio calculado por el mismo caso de uso que utiliza la demo de terminal. Este recurso
-es auxiliar y local: no es parte del contrato final de producto y no crea ni confirma un viaje.
+#### `GET /viajes/:idViaje`
+Consulta el detalle de un viaje específico.
+- **Autorización:** Solo el pasajero creador, el chofer asignado, `SOPORTE` o `ADMINISTRADOR`.
+- **Respuesta (`200 OK`):** Objeto Viaje detallado. Si no pertenece al actor $\rightarrow$ `403 VIAJE_NO_AUTORIZADO`.
 
-Pedido:
+#### `POST /viajes/:idViaje/cancelacion`
+Cancela un viaje activo según reglas de transición.
+- **Cuerpo:** `{"motivo": "string opcional"}`.
+- **Respuesta (`200 OK`):** Viaje en estado `"cancelado"`.
 
-```json
-{
-  "origen": { "latitud": -27.451, "longitud": -58.986 },
-  "destino": { "latitud": -27.462, "longitud": -58.993 }
-}
-```
+#### `POST /viajes/:idViaje/llegada`
+El chofer asignado marca su llegada al punto de encuentro.
+- **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona de `ASIGNADO` a `CHOFER_EN_CAMINO`.
+- **Respuesta (`200 OK`):** Viaje en estado `"chofer_en_camino"`.
 
-La respuesta incluye `precio_estimado` como cadena entera de pesos, `moneda: "ARS"`,
-`distancia_metros`, `duracion_segundos`, `proveedor_ruta`, `polilinea` cuando el proveedor la
-devuelve e `vigente_hasta`. El cálculo usa la tarifa vigente en `src/viaje.ts` y el proveedor
-seleccionado mediante `RUTA_PROVEEDOR`. La fórmula actual aplica tarifa base, distancia y duración;
-los ajustes dinámicos por demanda, disponibilidad, clima y franja horaria siguen pendientes.
+#### `POST /viajes/:idViaje/inicio`
+El chofer inicia el recorrido con el pasajero a bordo.
+- **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona a `EN_CURSO`.
+- **Respuesta (`200 OK`):** Viaje en estado `"en_curso"`.
 
-Adicionalmente, el servidor de la demo web expone dos recursos auxiliares de geocodificación (según ADR 0051, ADR 0052 y ADR 0053):
+#### `POST /viajes/:idViaje/finalizacion`
+El chofer finaliza el viaje, fijando el precio final y generando el cobro único.
+- **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona a `FINALIZADO`.
+- **Respuesta (`200 OK`):** `{ "viaje": { ... }, "cobro": { ... } }`.
 
-- `POST /demostracion/geocodificar`: recibe `{ "direccion": string, "proximidad"?: { "latitud": number, "longitud": number } }` y resuelve las coordenadas aplicando búsqueda en cascada centrada en `proximidad` (Gran Resistencia 25 km → Chaco/Corrientes 250 km → Argentina). Responde `200` con `{ "direccion": string, "coordenada": { "latitud": number, "longitud": number } }`.
-- `POST /demostracion/geocodificar-inversa`: recibe `{ "latitud": number, "longitud": number }` y devuelve el nombre de la calle o lugar correspondiente al punto seleccionado o arrastrado en el mapa. Responde `200` con `{ "direccion": string, "coordenada": { "latitud": number, "longitud": number } }`.
+#### `GET /choferes/yo/ofertas`
+Lista las ofertas vigentes enviadas al chofer autenticado.
+- **Autorización:** Exclusivo del rol `CHOFER`.
+- **Respuesta (`200 OK`):** `{"ofertas": [ ... ]}`.
 
-## Primeros endpoints HTTP
+#### `POST /choferes/yo/ofertas/:idOferta/aceptacion`
+El chofer acepta una oferta de viaje antes de su vencimiento (60 segundos).
+- **Autorización:** Exclusivo del `CHOFER` destinatario de la oferta.
+- **Respuesta (`200 OK`):** Objeto Viaje transicionado a `ASIGNADO`.
 
-El servidor local también publica `GET /health`, `GET /ready` y el endpoint inicial del recorrido,
-`POST /viajes/estimacion`. Este último conserva la estimación en memoria durante sus tres minutos de
-vigencia y devuelve un `id_estimacion` único. La respuesta añade `multiplicador_demanda: 1`, porque
-la fórmula dinámica acordada todavía no está implementada. La zona, los factores y la versión de
-regla se incorporarán cuando se cierren DOM-003 y DOM-007; no se inventan valores mientras tanto.
+#### `POST /choferes/yo/ofertas/:idOferta/rechazo`
+El chofer rechaza la oferta explícitamente.
+- **Respuesta (`200 OK`):** Objeto Oferta en estado `"rechazada"`.
 
-Las estimaciones se persisten en PostgreSQL y los viajes se mantienen en memoria en esta etapa. El
-precio confirmado conserva el snapshot de la estimación y `Clave-Idempotencia` evita duplicados. El
-readiness de `ms-viajes` informa que el proceso está listo y explicita esa limitación de persistencia.
-## Ejecución integrada
+---
 
-En Compose, Nginx publica `POST /viajes/estimacion` hacia `ms-tarifas`, las rutas de ciclo de vida
-`/viajes` hacia `ms-viajes`, `/choferes` hacia `ms-flota` y `/choferes/yo/ofertas` hacia
-`ms-viajes`. La prueba reproducible usa `JWT_MODO=falso`, Haversine y clima controlado; está
-documentada en `requests/flujo-e2e.http` y no modifica los contratos de producción.
+### 3.3 Servicio `ms-flota` (Choferes y Ubicaciones)
+
+#### `PATCH /choferes/yo/disponibilidad`
+Cambia el estado de disponibilidad del chofer autenticado.
+- **Autorización:** Exclusivo de rol `CHOFER` habilitado.
+- **Cuerpo:** `{"disponibilidad": true}` o `{"disponibilidad": false}`.
+- **Respuesta (`200 OK`):** Datos del chofer con nueva disponibilidad.
+
+#### `POST /choferes/yo/ubicacion`
+Registra la posición GPS actual del chofer.
+- **Autorización:** Exclusivo de rol `CHOFER` habilitado.
+- **Cuerpo:** `{"latitud": -27.451, "longitud": -58.986, "actualizado_at"?: ISO-8601, "precision_metros"?: number}`.
+- **Respuesta (`200 OK`):** Última ubicación guardada.
+
+#### `GET /choferes/cercanos?latitud=&longitud=&radio_metros=`
+Busca choferes habilitados, disponibles, con ubicación reciente y sin viaje activo en la zona.
+- **Respuesta (`200 OK`):** `{ "candidatos": [ { "id_chofer": "...", "distancia_metros": 850, "ubicacion_actualizada_at": "..." } ] }`. No expone coordenadas privadas.
+
+#### `GET /choferes/:idChofer`
+Consulta de ubicación y perfil sujeta a autorización por recurso.
+- **Respuesta (`200 OK`):** `{ "chofer": { ... }, "ubicacion": { ... } }`. Si el actor no tiene autorización sobre ese chofer $\rightarrow$ `403 UBICACION_NO_AUTORIZADA`.
+
+---
+
+## 4. Endpoints Internos y Protección en el API Gateway
+
+Las siguientes rutas **no deben ser accesibles desde el exterior**. El API Gateway Nginx las intercepta y devuelve `404 RUTA_NO_ENCONTRADA`:
+
+| Endpoint Interno | Proveedor | Consumidor | Propósito |
+|---|---|---|---|
+| `GET /interno/demanda-por-zona?zona_id=` | `ms-viajes` | `ms-tarifas` | Consulta solicitudes activas en la zona para el cálculo dinámico. |
+| `GET /interno/choferes/ocupados?ids_choferes=` | `ms-viajes` | `ms-flota` | Excluye choferes que tienen viaje activo (`ASIGNADO`, `CHOFER_EN_CAMINO`, `EN_CURSO`). |
+| `GET /estimaciones/:idEstimacion` | `ms-tarifas` | `ms-viajes` | Recupera la estimación vigente para congelar precio al confirmar. |
+
+---
+
+## 5. Matriz Exhaustiva de Códigos HTTP y Códigos de Dominio
+
+| Código HTTP | Significado | Código de Dominio (`error.codigo`) | Situación en que se produce |
+|---|---|---|---|
+| **`400`** | Bad Request | `ENTRADA_INVALIDA` | Cuerpo malformado, campos no permitidos o tipos erróneos. |
+| **`400`** | Bad Request | `COORDENADAS_INVALIDAS` | Latitud o longitud fuera de rango (-90..90, -180..180). |
+| **`400`** | Bad Request | `DIRECCION_INVALIDA` | Dirección vacía o no resoluble sintácticamente. |
+| **`400`** | Bad Request | `CLAVE_IDEMPOTENCIA_REQUERIDA` | Falta encabezado `Clave-Idempotencia` en mutación. |
+| **`400`** | Bad Request | `RADIO_INVALIDO` / `PRECISION_INVALIDA` | Parámetros numéricos fuera de límites en ms-flota. |
+| **`401`** | Unauthorized | `TOKEN_REQUERIDO` | Encabezado `Authorization` ausente o sin formato `Bearer`. |
+| **`401`** | Unauthorized | `TOKEN_INVALIDO` | Firma RS256 alterada, token expirado (`exp`), emisor/audiencia ajenos o clave `kid` desconocida. |
+| **`403`** | Forbidden | `ROL_NO_AUTORIZADO` | Usuario autenticado intentando invocar endpoint de otro rol (ej. Pasajero en endpoint de chofer). |
+| **`403`** | Forbidden | `VIAJE_NO_AUTORIZADO` | Intento de consultar o avanzar un viaje perteneciente a otro usuario. |
+| **`403`** | Forbidden | `OFERTA_NO_AUTORIZADA` | Intento de responder oferta dirigida a otro chofer. |
+| **`403`** | Forbidden | `UBICACION_NO_AUTORIZADA` | Intento de consultar coordenadas privadas de chofer sin viaje asignado. |
+| **`403`** | Forbidden | `ESTIMACION_NO_AUTORIZADA` | Intento de consultar estimación solicitada por otro pasajero. |
+| **`404`** | Not Found | `VIAJE_NO_ENCONTRADO` | El identificador de viaje no existe en el sistema. |
+| **`404`** | Not Found | `OFERTA_NO_ENCONTRADA` | La oferta solicitada no existe. |
+| **`404`** | Not Found | `CHOFER_NO_ENCONTRADO` | El chofer no está registrado. |
+| **`404`** | Not Found | `ESTIMACION_NO_ENCONTRADA` | La estimación solicitada no existe. |
+| **`404`** | Not Found | `DIRECCION_NO_ENCONTRADA` | El geocodificador no halló resultados para el texto. |
+| **`404`** | Not Found | `RUTA_NO_ENCONTRADA` | Ruta inexistente o interceptada como ruta interna en Gateway. |
+| **`409`** | Conflict | `ESTIMACION_VENCIDA` | Se intentó confirmar un viaje tras superar los 3 minutos de vigencia. |
+| **`409`** | Conflict | `OFERTA_VENCIDA` / `OFERTA_NO_DISPONIBLE` | La oferta superó los 60s o ya fue respondida. |
+| **`409`** | Conflict | `ASIGNACION_EN_CONFLICTO` | Carrera concurrente: otro chofer ganó la asignación o el chofer ya tiene viaje activo. |
+| **`409`** | Conflict | `CHOFER_NO_HABILITADO` | Chofer con carnet no validado o inhabilitado administrativamente. |
+| **`422`** | Unprocessable Entity | `TRANSICION_INVALIDA` | Cambio de estado de viaje prohibido por la máquina de estados. |
+| **`422`** | Unprocessable Entity | `IMPORTE_INVALIDO` / `REGLA_INVALIDA` | Parámetros matemáticos o de regla fuera de rango permitido. |
+| **`422`** | Unprocessable Entity | `ZONA_NO_ENCONTRADA` | Coordenadas fuera de cobertura de las zonas tarifarias activas. |
+| **`503`** | Service Unavailable | `DEPENDENCIA_NO_DISPONIBLE` | Falla o timeout al consultar PostgreSQL, OSRM, Google Routes, Open-Meteo o microservicio hermano. |
+| **`500`** | Internal Server Error | `ERROR_INTERNO` | Error imprevisto en la ejecución del servidor. |
