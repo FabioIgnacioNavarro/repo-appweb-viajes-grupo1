@@ -1,18 +1,23 @@
 import { distanceHaversineMetros } from "./utilidades";
 import {
   ErrorTarifas,
+  construirNivelesCascada,
+  estaDentroDeCuadro,
+  validarCoordenada,
   type CalculadorRuta,
   type Coordenada,
+  type CuadroDelimitador,
   type FuenteClima,
   type FuenteDemanda,
   type FuenteDisponibilidad,
   type Geocodificador,
   type ObservacionClima,
+  type OpcionesGeocodificacion,
   type RutaCalculada,
   type ZonaTarifaria
 } from "./dominio";
 
-export type { Geocodificador };
+export type { Geocodificador, OpcionesGeocodificacion, CuadroDelimitador };
 
 type Obtener = (url: string, opciones?: RequestInit) => Promise<Response>;
 function registrarFalla(servicio: string, operacion: string, resultado: string): void {
@@ -110,41 +115,104 @@ export function crearCalculadorRuta(env: NodeJS.ProcessEnv = process.env, timeou
 }
 
 export class GeocodificadorGoogle implements Geocodificador {
-  constructor(private readonly apiKey: string, private readonly timeoutMs = 1800, private readonly obtener: Obtener = fetch) {
+  private readonly cacheDirecta = new Map<string, Coordenada>();
+  private readonly cacheInversa = new Map<string, string>();
+
+  constructor(
+    private readonly apiKey: string,
+    private readonly timeoutMs = 1800,
+    private readonly obtener: Obtener = fetch,
+    private readonly radioNivel1Km = 25,
+    private readonly radioNivel2Km = 250
+  ) {
     if (!apiKey) throw new Error("GOOGLE_MAPS_API_KEY es obligatoria para Google Geocoding.");
   }
 
-  async geocodificar(direccion: string): Promise<Coordenada> {
+  private async consultarGoogle(parametros: URLSearchParams, operacion: string): Promise<{
+    status?: string;
+    results?: Array<{ formatted_address?: string; geometry?: { location?: { lat?: number; lng?: number } } }>;
+  }> {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?${parametros}`;
+    let respuesta: Response;
+    try {
+      respuesta = await this.obtener(url, { signal: AbortSignal.timeout(this.timeoutMs) });
+    } catch {
+      registrarFalla("google_geocoding", operacion, "timeout_o_red");
+      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Google Geocoding no respondió a tiempo.");
+    }
+    if (!respuesta.ok) {
+      registrarFalla("google_geocoding", operacion, `http_${respuesta.status}`);
+      throw new ErrorTarifas(
+        respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO",
+        "Google Geocoding no pudo procesar la consulta."
+      );
+    }
+    try {
+      return await respuesta.json() as {
+        status?: string;
+        results?: Array<{ formatted_address?: string; geometry?: { location?: { lat?: number; lng?: number } } }>;
+      };
+    } catch {
+      registrarFalla("google_geocoding", operacion, "json_invalido");
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Google Geocoding devolvió una respuesta inválida.");
+    }
+  }
+
+  async geocodificar(direccion: string, opciones?: OpcionesGeocodificacion): Promise<Coordenada> {
     const texto = direccion.trim();
     if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección a geocodificar no puede estar vacía.");
+
+    const claveCache = `${texto.toLowerCase()}|${opciones?.centro ? `${opciones.centro.latitud.toFixed(3)},${opciones.centro.longitud.toFixed(3)}` : "sin_centro"}`;
+    const enCache = this.cacheDirecta.get(claveCache);
+    if (enCache) return structuredClone(enCache);
+
+    if (opciones?.centro) {
+      const niveles = construirNivelesCascada(
+        opciones.centro,
+        opciones.radioNivel1Km ?? this.radioNivel1Km,
+        opciones.radioNivel2Km ?? this.radioNivel2Km,
+        "ar"
+      );
+
+      for (const nivel of niveles) {
+        const parametros = new URLSearchParams({
+          address: texto,
+          key: this.apiKey,
+          language: "es",
+          region: nivel.codigoPais
+        });
+        if (nivel.cuadro) {
+          parametros.set("bounds", `${nivel.cuadro.sur},${nivel.cuadro.oeste}|${nivel.cuadro.norte},${nivel.cuadro.este}`);
+        }
+        const cuerpo = await this.consultarGoogle(parametros, "geocodificar");
+        if (cuerpo.status === "ZERO_RESULTS" || !cuerpo.results || cuerpo.results.length === 0) {
+          continue;
+        }
+        if (cuerpo.status && cuerpo.status !== "OK") {
+          registrarFalla("google_geocoding", "geocodificar", cuerpo.status);
+          throw new ErrorTarifas("PROVEEDOR_GEO_RECHAZO", `Google Geocoding rechazó la consulta: ${cuerpo.status}.`);
+        }
+        for (const item of cuerpo.results) {
+          const ubicacion = item.geometry?.location;
+          if (typeof ubicacion?.lat === "number" && typeof ubicacion?.lng === "number" && Number.isFinite(ubicacion.lat) && Number.isFinite(ubicacion.lng)) {
+            const coord: Coordenada = { latitud: ubicacion.lat, longitud: ubicacion.lng };
+            if (!nivel.restringirCuadro || !nivel.cuadro || estaDentroDeCuadro(coord, nivel.cuadro)) {
+              this.cacheDirecta.set(claveCache, coord);
+              return structuredClone(coord);
+            }
+          }
+        }
+      }
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
+    }
+
     const parametros = new URLSearchParams({
       address: texto,
       key: this.apiKey,
       language: "es",
       region: "ar"
     });
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?${parametros}`;
-    let respuesta: Response;
-    try {
-      respuesta = await this.obtener(url, { signal: AbortSignal.timeout(this.timeoutMs) });
-    } catch {
-      registrarFalla("google_geocoding", "geocodificar", "timeout_o_red");
-      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Google Geocoding no respondió a tiempo.");
-    }
-    if (!respuesta.ok) {
-      registrarFalla("google_geocoding", "geocodificar", `http_${respuesta.status}`);
-      throw new ErrorTarifas(respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO", "Google Geocoding no pudo resolver la dirección.");
-    }
-    let cuerpo: {
-      status?: string;
-      results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
-    };
-    try {
-      cuerpo = await respuesta.json() as typeof cuerpo;
-    } catch {
-      registrarFalla("google_geocoding", "geocodificar", "json_invalido");
-      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Google Geocoding devolvió una respuesta inválida.");
-    }
+    const cuerpo = await this.consultarGoogle(parametros, "geocodificar");
     if (cuerpo.status === "ZERO_RESULTS" || !cuerpo.results || cuerpo.results.length === 0) {
       throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
     }
@@ -156,39 +224,75 @@ export class GeocodificadorGoogle implements Geocodificador {
     if (typeof ubicacion?.lat !== "number" || typeof ubicacion?.lng !== "number" || !Number.isFinite(ubicacion.lat) || !Number.isFinite(ubicacion.lng)) {
       throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Google Geocoding no devolvió coordenadas válidas.");
     }
-    return { latitud: ubicacion.lat, longitud: ubicacion.lng };
+    const resultado = { latitud: ubicacion.lat, longitud: ubicacion.lng };
+    this.cacheDirecta.set(claveCache, resultado);
+    return structuredClone(resultado);
+  }
+
+  async geocodificarInversa(coordenada: Coordenada): Promise<string> {
+    validarCoordenada(coordenada);
+    const clave = `${coordenada.latitud.toFixed(5)},${coordenada.longitud.toFixed(5)}`;
+    const cacheada = this.cacheInversa.get(clave);
+    if (cacheada) return cacheada;
+
+    const parametros = new URLSearchParams({
+      latlng: `${coordenada.latitud},${coordenada.longitud}`,
+      key: this.apiKey,
+      language: "es",
+      region: "ar"
+    });
+    const cuerpo = await this.consultarGoogle(parametros, "geocodificar_inversa");
+    if (cuerpo.status === "ZERO_RESULTS" || !cuerpo.results || cuerpo.results.length === 0) {
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", "No se encontró una dirección para las coordenadas indicadas.");
+    }
+    if (cuerpo.status && cuerpo.status !== "OK") {
+      registrarFalla("google_geocoding", "geocodificar_inversa", cuerpo.status);
+      throw new ErrorTarifas("PROVEEDOR_GEO_RECHAZO", `Google Geocoding rechazó la consulta inversa: ${cuerpo.status}.`);
+    }
+    const direccion = cuerpo.results[0]?.formatted_address?.trim();
+    if (!direccion) {
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Google Geocoding no devolvió una dirección formateada.");
+    }
+    this.cacheInversa.set(clave, direccion);
+    return direccion;
   }
 }
 
+interface RespuestaInversaNominatim {
+  display_name?: string;
+  error?: string;
+  address?: {
+    road?: string;
+    pedestrian?: string;
+    house_number?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    state?: string;
+    amenity?: string;
+    tourism?: string;
+    shop?: string;
+    building?: string;
+  };
+}
+
 export class GeocodificadorNominatim implements Geocodificador {
+  private readonly cacheDirecta = new Map<string, Coordenada>();
+  private readonly cacheInversa = new Map<string, string>();
+
   constructor(
     private readonly userAgent = "viajes-grupo1-tp/1.0 (contacto@universidad.edu.ar)",
     private readonly timeoutMs = 2500,
-    private readonly obtener: Obtener = fetch
+    private readonly obtener: Obtener = fetch,
+    private readonly radioNivel1Km = 25,
+    private readonly radioNivel2Km = 250
   ) {}
 
-  async geocodificar(direccion: string): Promise<Coordenada> {
-    const texto = direccion.trim();
-    if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección a geocodificar no puede estar vacía.");
-
-    // Coordenadas explícitas numéricas: e.g. "-27.451, -58.986"
-    const regexCoord = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/;
-    const match = regexCoord.exec(texto);
-    if (match) {
-      const latitud = Number(match[1]);
-      const longitud = Number(match[2]);
-      if (Number.isFinite(latitud) && Number.isFinite(longitud) && latitud >= -90 && latitud <= 90 && longitud >= -180 && longitud <= 180) {
-        return { latitud, longitud };
-      }
-    }
-
-    const parametros = new URLSearchParams({
-      q: texto,
-      format: "json",
-      limit: "1"
-    });
+  private async consultarBusqueda(parametros: URLSearchParams): Promise<Coordenada | undefined> {
     const url = `https://nominatim.openstreetmap.org/search?${parametros}`;
-
     let respuesta: Response;
     try {
       respuesta = await this.obtener(url, {
@@ -217,7 +321,7 @@ export class GeocodificadorNominatim implements Geocodificador {
     }
 
     if (!Array.isArray(resultados) || resultados.length === 0) {
-      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
+      return undefined;
     }
 
     const latitud = Number(resultados[0]?.lat);
@@ -228,34 +332,265 @@ export class GeocodificadorNominatim implements Geocodificador {
 
     return { latitud, longitud };
   }
+
+  async geocodificar(direccion: string, opciones?: OpcionesGeocodificacion): Promise<Coordenada> {
+    const texto = direccion.trim();
+    if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección a geocodificar no puede estar vacía.");
+
+    // Coordenadas explícitas numéricas: e.g. "-27.451, -58.986"
+    const regexCoord = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/;
+    const match = regexCoord.exec(texto);
+    if (match) {
+      const latitud = Number(match[1]);
+      const longitud = Number(match[2]);
+      if (Number.isFinite(latitud) && Number.isFinite(longitud) && latitud >= -90 && latitud <= 90 && longitud >= -180 && longitud <= 180) {
+        return { latitud, longitud };
+      }
+    }
+
+    const claveCache = `${texto.toLowerCase()}|${opciones?.centro ? `${opciones.centro.latitud.toFixed(3)},${opciones.centro.longitud.toFixed(3)}` : "sin_centro"}`;
+    const enCache = this.cacheDirecta.get(claveCache);
+    if (enCache) return structuredClone(enCache);
+
+    if (opciones?.centro) {
+      const niveles = construirNivelesCascada(
+        opciones.centro,
+        opciones.radioNivel1Km ?? this.radioNivel1Km,
+        opciones.radioNivel2Km ?? this.radioNivel2Km,
+        "ar"
+      );
+
+      for (const nivel of niveles) {
+        const parametros = new URLSearchParams({
+          q: texto,
+          format: "json",
+          limit: "1",
+          countrycodes: nivel.codigoPais
+        });
+        if (nivel.cuadro) {
+          parametros.set(
+            "viewbox",
+            `${nivel.cuadro.oeste.toFixed(6)},${nivel.cuadro.norte.toFixed(6)},${nivel.cuadro.este.toFixed(6)},${nivel.cuadro.sur.toFixed(6)}`
+          );
+        }
+        if (nivel.restringirCuadro) {
+          parametros.set("bounded", "1");
+        }
+        const encontrado = await this.consultarBusqueda(parametros);
+        if (encontrado) {
+          this.cacheDirecta.set(claveCache, encontrado);
+          return structuredClone(encontrado);
+        }
+      }
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
+    }
+
+    const parametros = new URLSearchParams({
+      q: texto,
+      format: "json",
+      limit: "1"
+    });
+    const encontrado = await this.consultarBusqueda(parametros);
+    if (!encontrado) {
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
+    }
+    this.cacheDirecta.set(claveCache, encontrado);
+    return structuredClone(encontrado);
+  }
+
+  async geocodificarInversa(coordenada: Coordenada): Promise<string> {
+    validarCoordenada(coordenada);
+    const clave = `${coordenada.latitud.toFixed(5)},${coordenada.longitud.toFixed(5)}`;
+    const cacheada = this.cacheInversa.get(clave);
+    if (cacheada) return cacheada;
+
+    const parametros = new URLSearchParams({
+      lat: String(coordenada.latitud),
+      lon: String(coordenada.longitud),
+      format: "json",
+      zoom: "18",
+      addressdetails: "1"
+    });
+    const url = `https://nominatim.openstreetmap.org/reverse?${parametros}`;
+
+    let respuesta: Response;
+    try {
+      respuesta = await this.obtener(url, {
+        headers: { "User-Agent": this.userAgent },
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    } catch {
+      registrarFalla("nominatim_osm", "geocodificar_inversa", "timeout_o_red");
+      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "El servicio de geocodificación inversa de OpenStreetMap no respondió a tiempo.");
+    }
+
+    if (!respuesta.ok) {
+      registrarFalla("nominatim_osm", "geocodificar_inversa", `http_${respuesta.status}`);
+      throw new ErrorTarifas(
+        respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO",
+        "El servicio de geocodificación inversa no pudo resolver la ubicación."
+      );
+    }
+
+    let cuerpo: RespuestaInversaNominatim;
+    try {
+      cuerpo = await respuesta.json() as RespuestaInversaNominatim;
+    } catch {
+      registrarFalla("nominatim_osm", "geocodificar_inversa", "json_invalido");
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "El servicio de geocodificación inversa devolvió una respuesta inválida.");
+    }
+
+    if (cuerpo.error) {
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", "No se encontró una dirección para las coordenadas seleccionadas.");
+    }
+
+    const dir = cuerpo.address;
+    if (dir) {
+      const lugar = dir.amenity || dir.tourism || dir.shop || dir.building;
+      const calleBase = dir.road || dir.pedestrian || dir.neighbourhood || dir.suburb;
+      const calleConAltura = calleBase ? [calleBase, dir.house_number].filter(Boolean).join(" ") : undefined;
+      const localidad = dir.city || dir.town || dir.village || dir.municipality || dir.state;
+      const partes = [lugar, calleConAltura, localidad].filter(Boolean);
+      if (partes.length > 0) {
+        const formateada = partes.join(", ");
+        this.cacheInversa.set(clave, formateada);
+        return formateada;
+      }
+    }
+
+    if (cuerpo.display_name) {
+      const resumida = cuerpo.display_name
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ");
+      if (resumida) {
+        this.cacheInversa.set(clave, resumida);
+        return resumida;
+      }
+    }
+
+    throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", "No se encontró una dirección para las coordenadas seleccionadas.");
+  }
+}
+
+interface SemillaGeografica {
+  claves: string[];
+  nombreVisible: string;
+  coordenada: Coordenada;
 }
 
 export class GeocodificadorFalso implements Geocodificador {
-  private readonly semillas: Record<string, Coordenada> = {
-    "plaza 25 de mayo": { latitud: -27.451, longitud: -58.986 },
-    "plaza 25 de mayo, resistencia": { latitud: -27.451, longitud: -58.986 },
-    "resistencia": { latitud: -27.451, longitud: -58.986 },
-    "terminal": { latitud: -27.462, longitud: -58.993 },
-    "terminal de omnibus": { latitud: -27.462, longitud: -58.993 },
-    "terminal de omnibus, resistencia": { latitud: -27.462, longitud: -58.993 },
-    "aeropuerto": { latitud: -27.448, longitud: -59.056 },
-    "aeropuerto resistencia": { latitud: -27.448, longitud: -59.056 },
-    "aeropuerto internacional de resistencia": { latitud: -27.448, longitud: -59.056 },
-    "casa de las culturas": { latitud: -27.452, longitud: -58.984 },
-    "parque de la democracia": { latitud: -27.433, longitud: -58.966 },
-    "shopping sarmiento": { latitud: -27.438, longitud: -58.972 },
-    "facultad de ingenieria unne": { latitud: -27.466, longitud: -58.979 },
-    "campus unne": { latitud: -27.466, longitud: -58.979 },
-    "unne campus resistencia": { latitud: -27.466, longitud: -58.979 }
-  };
+  private readonly catalogo: SemillaGeografica[] = [
+    {
+      claves: ["plaza 25 de mayo", "plaza 25 de mayo, resistencia", "resistencia"],
+      nombreVisible: "Plaza 25 de Mayo, Resistencia",
+      coordenada: { latitud: -27.451, longitud: -58.986 }
+    },
+    {
+      claves: ["terminal", "terminal de omnibus", "terminal de omnibus, resistencia"],
+      nombreVisible: "Terminal de Ómnibus, Resistencia",
+      coordenada: { latitud: -27.462, longitud: -58.993 }
+    },
+    {
+      claves: ["aeropuerto", "aeropuerto resistencia", "aeropuerto internacional de resistencia"],
+      nombreVisible: "Aeropuerto Internacional de Resistencia",
+      coordenada: { latitud: -27.448, longitud: -59.056 }
+    },
+    {
+      claves: ["casa de las culturas"],
+      nombreVisible: "Casa de las Culturas, Resistencia",
+      coordenada: { latitud: -27.452, longitud: -58.984 }
+    },
+    {
+      claves: ["parque de la democracia"],
+      nombreVisible: "Parque de la Democracia, Resistencia",
+      coordenada: { latitud: -27.433, longitud: -58.966 }
+    },
+    {
+      claves: ["shopping sarmiento", "sarmiento"],
+      nombreVisible: "Shopping Sarmiento, Resistencia",
+      coordenada: { latitud: -27.438, longitud: -58.972 }
+    },
+    {
+      claves: ["facultad de ingenieria unne", "campus unne", "unne campus resistencia", "unne"],
+      nombreVisible: "Campus UNNE, Resistencia",
+      coordenada: { latitud: -27.466, longitud: -58.979 }
+    },
+    {
+      claves: ["hospital perrando", "perrando"],
+      nombreVisible: "Hospital Julio C. Perrando, Resistencia",
+      coordenada: { latitud: -27.449, longitud: -58.976 }
+    },
+    {
+      claves: ["av 9 de julio", "9 de julio", "av 9 de julio, resistencia"],
+      nombreVisible: "Av. 9 de Julio, Resistencia",
+      coordenada: { latitud: -27.452, longitud: -58.985 }
+    },
+    {
+      claves: ["costanera corrientes", "corrientes", "plaza 25 de mayo, corrientes"],
+      nombreVisible: "Costanera General San Martín, Corrientes",
+      coordenada: { latitud: -27.465, longitud: -58.839 }
+    },
+    {
+      claves: ["av 9 de julio", "9 de julio", "av 9 de julio, corrientes"],
+      nombreVisible: "Av. 9 de Julio, Corrientes",
+      coordenada: { latitud: -27.475, longitud: -58.825 }
+    },
+    {
+      claves: ["saenz pena", "sáenz peña", "presidencia roque saenz pena", "av 9 de julio"],
+      nombreVisible: "Centro, Presidencia Roque Sáenz Peña, Chaco",
+      coordenada: { latitud: -26.785, longitud: -60.439 }
+    },
+    {
+      claves: ["obelisco", "buenos aires", "av 9 de julio", "9 de julio"],
+      nombreVisible: "Obelisco, Av. 9 de Julio, Buenos Aires",
+      coordenada: { latitud: -34.6037, longitud: -58.3816 }
+    }
+  ];
 
-  constructor(semillasPersonalizadas?: Record<string, Coordenada>) {
+  constructor(
+    semillasPersonalizadas?: Record<string, Coordenada>,
+    private readonly radioNivel1Km = 25,
+    private readonly radioNivel2Km = 250
+  ) {
     if (semillasPersonalizadas) {
-      this.semillas = { ...this.semillas, ...semillasPersonalizadas };
+      for (const [clave, coordenada] of Object.entries(semillasPersonalizadas)) {
+        this.catalogo.unshift({
+          claves: [clave.toLowerCase()],
+          nombreVisible: clave,
+          coordenada
+        });
+      }
     }
   }
 
-  async geocodificar(direccion: string): Promise<Coordenada> {
+  private buscarEnCandidatos(texto: string, candidatos: SemillaGeografica[]): Coordenada | undefined {
+    // 1. Coincidencia exacta con alguna clave
+    for (const item of candidatos) {
+      if (item.claves.includes(texto)) {
+        return structuredClone(item.coordenada);
+      }
+    }
+
+    // 2. Coincidencia por subcadena, priorizando las claves más largas y específicas
+    const pares: Array<{ clave: string; coordenada: Coordenada }> = [];
+    for (const item of candidatos) {
+      for (const clave of item.claves) {
+        pares.push({ clave, coordenada: item.coordenada });
+      }
+    }
+    pares.sort((a, b) => b.clave.length - a.clave.length);
+    for (const par of pares) {
+      if (texto.includes(par.clave)) {
+        return structuredClone(par.coordenada);
+      }
+    }
+    return undefined;
+  }
+
+  async geocodificar(direccion: string, opciones?: OpcionesGeocodificacion): Promise<Coordenada> {
     const texto = direccion.trim().toLowerCase();
     if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección no puede estar vacía.");
 
@@ -270,20 +605,58 @@ export class GeocodificadorFalso implements Geocodificador {
       }
     }
 
-    // 2. Coincidencia exacta
-    if (this.semillas[texto]) {
-      return structuredClone(this.semillas[texto]);
+    // 2. Si se provee centro de proximidad, buscar en cascada (Nivel 1 -> Nivel 2 -> Nivel 3)
+    if (opciones?.centro) {
+      const niveles = construirNivelesCascada(
+        opciones.centro,
+        opciones.radioNivel1Km ?? this.radioNivel1Km,
+        opciones.radioNivel2Km ?? this.radioNivel2Km,
+        "ar"
+      );
+
+      for (const nivel of niveles) {
+        const candidatosNivel = nivel.restringirCuadro && nivel.cuadro
+          ? this.catalogo.filter((item) => estaDentroDeCuadro(item.coordenada, nivel.cuadro!))
+          : this.catalogo;
+        const encontrado = this.buscarEnCandidatos(texto, candidatosNivel);
+        if (encontrado) return encontrado;
+      }
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección de prueba: "${direccion}".`);
     }
 
-    // 3. Coincidencia por subcadena, priorizando las claves más largas y específicas
-    const entradas = Object.entries(this.semillas).sort((a, b) => b[0].length - a[0].length);
-    for (const [clave, coord] of entradas) {
-      if (texto.includes(clave)) {
-        return structuredClone(coord);
+    // 3. Búsqueda directa sin centro de proximidad
+    const encontrado = this.buscarEnCandidatos(texto, this.catalogo);
+    if (encontrado) return encontrado;
+
+    throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección de prueba: "${direccion}".`);
+  }
+
+  async geocodificarInversa(coordenada: Coordenada): Promise<string> {
+    validarCoordenada(coordenada);
+    let mejorSemilla: SemillaGeografica | undefined;
+    let menorDistancia = Number.POSITIVE_INFINITY;
+
+    for (const item of this.catalogo) {
+      const dist = distanceHaversineMetros(coordenada, item.coordenada);
+      if (dist < menorDistancia) {
+        menorDistancia = dist;
+        mejorSemilla = item;
       }
     }
 
-    throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección de prueba: "${direccion}".`);
+    if (mejorSemilla && menorDistancia <= 600) {
+      return mejorSemilla.nombreVisible;
+    }
+
+    const centroResistencia: Coordenada = { latitud: -27.451, longitud: -58.986 };
+    const distResistencia = distanceHaversineMetros(coordenada, centroResistencia);
+    if (distResistencia <= 25_000) {
+      return `Gran Resistencia (${coordenada.latitud.toFixed(4)}, ${coordenada.longitud.toFixed(4)})`;
+    }
+    if (distResistencia <= 250_000) {
+      return `Región Chaco / Corrientes (${coordenada.latitud.toFixed(4)}, ${coordenada.longitud.toFixed(4)})`;
+    }
+    return `Argentina (${coordenada.latitud.toFixed(4)}, ${coordenada.longitud.toFixed(4)})`;
   }
 }
 
@@ -294,23 +667,29 @@ export function crearGeocodificador(
   const proveedorGeo = env.GEOCODIFICADOR_PROVEEDOR?.toUpperCase();
   const proveedorRuta = (env.RUTA_PROVEEDOR ?? "OSRM").toUpperCase();
   const modo = env.PROVEEDORES_MODO?.toLowerCase();
+  const radioNivel1Km = Number(env.GEO_RADIO_NIVEL1_KM ?? 25);
+  const radioNivel2Km = Number(env.GEO_RADIO_NIVEL2_KM ?? 250);
+
+  if (!Number.isFinite(radioNivel1Km) || radioNivel1Km <= 0 || !Number.isFinite(radioNivel2Km) || radioNivel2Km <= radioNivel1Km) {
+    throw new Error("GEO_RADIO_NIVEL1_KM y GEO_RADIO_NIVEL2_KM deben ser números positivos con nivel 2 > nivel 1.");
+  }
 
   // 1. Modo falso explícito para tests unitarios / offline
   if (modo === "falso" || proveedorGeo === "FALSO" || (proveedorRuta === "HAVERSINE" && !proveedorGeo)) {
-    return new GeocodificadorFalso();
+    return new GeocodificadorFalso(undefined, radioNivel1Km, radioNivel2Km);
   }
 
   // 2. Google Maps si se especifica o si hay clave presente
   if ((proveedorGeo === "GOOGLE" || (!proveedorGeo && proveedorRuta === "GOOGLE")) && env.GOOGLE_MAPS_API_KEY) {
-    return new GeocodificadorGoogle(env.GOOGLE_MAPS_API_KEY, timeoutMs);
+    return new GeocodificadorGoogle(env.GOOGLE_MAPS_API_KEY, timeoutMs, fetch, radioNivel1Km, radioNivel2Km);
   }
 
   // 3. Nominatim (OpenStreetMap) por defecto para resolución en vivo sin tarjetas
   if (proveedorGeo === "NOMINATIM" || !proveedorGeo || proveedorRuta === "OSRM") {
-    return new GeocodificadorNominatim("viajes-grupo1-tp/1.0", timeoutMs);
+    return new GeocodificadorNominatim("viajes-grupo1-tp/1.0", timeoutMs, fetch, radioNivel1Km, radioNivel2Km);
   }
 
-  return new GeocodificadorFalso();
+  return new GeocodificadorFalso(undefined, radioNivel1Km, radioNivel2Km);
 }
 
 export class FuenteClimaOpenMeteo implements FuenteClima {

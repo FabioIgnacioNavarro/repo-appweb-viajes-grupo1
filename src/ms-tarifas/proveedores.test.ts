@@ -286,3 +286,123 @@ test("CrearEstimacion falla si se pasan direcciones pero no hay geocodificador c
     (err: ErrorTarifas) => err.codigo === "GEOCODIFICADOR_NO_CONFIGURADO"
   );
 });
+
+test("GeocodificadorNominatim busca en cascada de 3 niveles (Gran Resistencia -> Chaco/Corrientes -> Argentina)", async () => {
+  const urlsLlamadas: string[] = [];
+  const obtenerMock = async (url: string) => {
+    urlsLlamadas.push(url);
+    // Simula que el nivel 1 (25 km) no encuentra nada, pero el nivel 2 (250 km) sí encuentra Sáenz Peña
+    if (urlsLlamadas.length === 1) {
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
+    return new Response(
+      JSON.stringify([{ lat: "-26.785", lon: "-60.439" }]),
+      { status: 200 }
+    );
+  };
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch, 25, 250);
+  const coord = await geocodificador.geocodificar("Sáenz Peña", {
+    centro: { latitud: -27.451, longitud: -58.986 }
+  });
+
+  assert.equal(coord.latitud, -26.785);
+  assert.equal(coord.longitud, -60.439);
+  assert.equal(urlsLlamadas.length, 2);
+  assert.match(urlsLlamadas[0]!, /bounded=1/);
+  assert.match(urlsLlamadas[0]!, /countrycodes=ar/);
+  assert.match(urlsLlamadas[1]!, /bounded=1/);
+});
+
+test("GeocodificadorNominatim llega al 3er nivel nacional (Argentina sin bounded) cuando no hay coincidencia local ni regional", async () => {
+  const urlsLlamadas: string[] = [];
+  const obtenerMock = async (url: string) => {
+    urlsLlamadas.push(url);
+    if (urlsLlamadas.length < 3) {
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
+    return new Response(
+      JSON.stringify([{ lat: "-34.6037", lon: "-58.3816" }]),
+      { status: 200 }
+    );
+  };
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch, 25, 250);
+  const coord = await geocodificador.geocodificar("Obelisco", {
+    centro: { latitud: -27.451, longitud: -58.986 }
+  });
+
+  assert.equal(coord.latitud, -34.6037);
+  assert.equal(coord.longitud, -58.3816);
+  assert.equal(urlsLlamadas.length, 3);
+  assert.doesNotMatch(urlsLlamadas[2]!, /bounded=1/);
+  assert.match(urlsLlamadas[2]!, /countrycodes=ar/);
+});
+
+test("GeocodificadorNominatim resuelve geocodificación inversa con calle, altura y ciudad", async () => {
+  const obtenerMock = async (url: string) => {
+    assert.match(url, /nominatim\.openstreetmap\.org\/reverse/);
+    return new Response(
+      JSON.stringify({
+        address: {
+          road: "Avenida 9 de Julio",
+          house_number: "250",
+          city: "Resistencia"
+        }
+      }),
+      { status: 200 }
+    );
+  };
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch);
+  const direccion = await geocodificador.geocodificarInversa({ latitud: -27.452, longitud: -58.985 });
+  assert.equal(direccion, "Avenida 9 de Julio 250, Resistencia");
+});
+
+test("GeocodificadorGoogle resuelve geocodificación inversa", async () => {
+  let urlCapturada = "";
+  const obtenerMock = async (url: string) => {
+    urlCapturada = url;
+    return new Response(
+      JSON.stringify({
+        status: "OK",
+        results: [{ formatted_address: "Plaza 25 de Mayo, Resistencia, Chaco, Argentina" }]
+      }),
+      { status: 200 }
+    );
+  };
+
+  const geocodificador = new GeocodificadorGoogle("clave-falsa", 1000, obtenerMock as typeof fetch);
+  const direccion = await geocodificador.geocodificarInversa({ latitud: -27.451, longitud: -58.986 });
+  assert.equal(direccion, "Plaza 25 de Mayo, Resistencia, Chaco, Argentina");
+  assert.match(urlCapturada, /latlng=-27\.451%2C-58\.986/);
+});
+
+test("GeocodificadorFalso prioriza en cascada según ubicación del usuario y resuelve inversa", async () => {
+  const geocodificador = new GeocodificadorFalso();
+
+  // Desde Resistencia, "Av 9 de Julio" resuelve en Resistencia
+  const enResistencia = await geocodificador.geocodificar("Av 9 de Julio", {
+    centro: { latitud: -27.451, longitud: -58.986 },
+    radioNivel1Km: 10
+  });
+  assert.equal(enResistencia.latitud, -27.452);
+
+  // Desde Corrientes (con radio nivel 1 de 10 km), "Av 9 de Julio" resuelve en Corrientes
+  const enCorrientes = await geocodificador.geocodificar("Av 9 de Julio", {
+    centro: { latitud: -27.469, longitud: -58.830 },
+    radioNivel1Km: 10
+  });
+  assert.equal(enCorrientes.latitud, -27.475);
+
+  // Desde Buenos Aires, "Av 9 de Julio" resuelve en Buenos Aires
+  const enBsAs = await geocodificador.geocodificar("Av 9 de Julio", {
+    centro: { latitud: -34.603, longitud: -58.381 },
+    radioNivel1Km: 10
+  });
+  assert.equal(enBsAs.latitud, -34.6037);
+
+  // Geocodificación inversa de un punto cercano a Plaza 25 de Mayo
+  const nombreInverso = await geocodificador.geocodificarInversa({ latitud: -27.4512, longitud: -58.9861 });
+  assert.equal(nombreInverso, "Plaza 25 de Mayo, Resistencia");
+});

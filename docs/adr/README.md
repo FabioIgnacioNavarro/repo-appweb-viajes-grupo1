@@ -42,6 +42,7 @@ Decisiones adicionales registradas:
 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
 51. Geocodificación y cálculo de rutas con Google Maps Platform.
 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
+53. Geocodificación en cascada por cercanía y geocodificación inversa.
 
 ## Rangos reservados para flujos paralelos
 
@@ -55,3 +56,4 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
   - 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
   - 51. Geocodificación y cálculo de rutas con Google Maps Platform.
   - 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
+  - 53. Geocodificación en cascada por cercanía y geocodificación inversa.

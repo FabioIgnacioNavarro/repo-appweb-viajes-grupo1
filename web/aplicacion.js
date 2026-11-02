@@ -127,7 +127,7 @@ function invalidarRutaActual() {
 function fijarOrigen(latitud, longitud, etiqueta, centrar = false) {
   campos.latitudOrigen.value = latitud.toFixed(6);
   campos.longitudOrigen.value = longitud.toFixed(6);
-  const desc = etiqueta || direccionOrigen?.value || 'Punto de partida';
+  const desc = etiqueta || direccionOrigen?.value || 'Plaza 25 de Mayo, Resistencia';
   const textoPopup = armarPopupContenido('origen', desc, latitud, longitud);
   if (!marcadorOrigen) {
     marcadorOrigen = L.marker([latitud, longitud], {
@@ -138,10 +138,7 @@ function fijarOrigen(latitud, longitud, etiqueta, centrar = false) {
 
     marcadorOrigen.on('dragend', (e) => {
       const pos = e.target.getLatLng();
-      const nuevaDesc = direccionOrigen?.value ? `${direccionOrigen.value} (ajustado en mapa)` : 'Punto seleccionado en el mapa';
-      fijarOrigen(pos.lat, pos.lng, nuevaDesc);
-      marcadorOrigen.openPopup();
-      mostrarMensaje(`Origen reubicado en [${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}]`, 'exito');
+      void actualizarOrigenPorCoordenadaMapa(pos.lat, pos.lng);
     });
   } else {
     marcadorOrigen.setLatLng([latitud, longitud]);
@@ -159,7 +156,7 @@ function fijarOrigen(latitud, longitud, etiqueta, centrar = false) {
 function fijarDestino(latitud, longitud, etiqueta, centrar = false) {
   campos.latitudDestino.value = latitud.toFixed(6);
   campos.longitudDestino.value = longitud.toFixed(6);
-  const desc = etiqueta || direccionDestino?.value || 'Punto de destino';
+  const desc = etiqueta || direccionDestino?.value || 'Terminal de Ómnibus, Resistencia';
   const textoPopup = armarPopupContenido('destino', desc, latitud, longitud);
   if (!marcadorDestino) {
     marcadorDestino = L.marker([latitud, longitud], {
@@ -170,10 +167,7 @@ function fijarDestino(latitud, longitud, etiqueta, centrar = false) {
 
     marcadorDestino.on('dragend', (e) => {
       const pos = e.target.getLatLng();
-      const nuevaDesc = direccionDestino?.value ? `${direccionDestino.value} (ajustado en mapa)` : 'Punto seleccionado en el mapa';
-      fijarDestino(pos.lat, pos.lng, nuevaDesc);
-      marcadorDestino.openPopup();
-      mostrarMensaje(`Destino reubicado en [${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)}]`, 'exito');
+      void actualizarDestinoPorCoordenadaMapa(pos.lat, pos.lng);
     });
   } else {
     marcadorDestino.setLatLng([latitud, longitud]);
@@ -229,15 +223,66 @@ campos.longitudOrigen.addEventListener('input', actualizarOrigenDesdeInputs);
 campos.latitudDestino.addEventListener('input', actualizarDestinoDesdeInputs);
 campos.longitudDestino.addEventListener('input', actualizarDestinoDesdeInputs);
 
+function obtenerCentroProximidad() {
+  const lat = Number(campos.latitudOrigen.value);
+  const lon = Number(campos.longitudOrigen.value);
+  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    return { latitud: lat, longitud: lon };
+  }
+  return { latitud: -27.451, longitud: -58.986 };
+}
+
 async function buscarDireccion(texto) {
   const respuesta = await fetch('/demostracion/geocodificar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ direccion: texto }),
+    body: JSON.stringify({
+      direccion: texto,
+      proximidad: obtenerCentroProximidad(),
+    }),
   });
   const datos = await respuesta.json();
   if (!respuesta.ok) throw new Error(datos.error?.mensaje || `No se pudo geocodificar "${texto}".`);
   return datos.coordenada;
+}
+
+async function buscarDireccionInversa(latitud, longitud) {
+  try {
+    const respuesta = await fetch('/demostracion/geocodificar-inversa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitud, longitud }),
+    });
+    const datos = await respuesta.json();
+    if (respuesta.ok && datos.direccion) {
+      return datos.direccion;
+    }
+  } catch {
+    // Si falla la red, usa coordenadas formateadas como respaldo
+  }
+  return `Ubicación (${latitud.toFixed(4)}, ${longitud.toFixed(4)})`;
+}
+
+async function actualizarOrigenPorCoordenadaMapa(lat, lng) {
+  fijarOrigen(lat, lng, 'Buscando dirección del punto…', false);
+  marcadorOrigen?.openPopup();
+  mostrarMensaje('Identificando lugar o dirección en el mapa…');
+  const direccion = await buscarDireccionInversa(lat, lng);
+  if (direccionOrigen) direccionOrigen.value = direccion;
+  fijarOrigen(lat, lng, direccion, false);
+  marcadorOrigen?.openPopup();
+  mostrarMensaje(`Origen ubicado en: ${direccion}`, 'exito');
+}
+
+async function actualizarDestinoPorCoordenadaMapa(lat, lng) {
+  fijarDestino(lat, lng, 'Buscando dirección del punto…', false);
+  marcadorDestino?.openPopup();
+  mostrarMensaje('Identificando lugar o dirección en el mapa…');
+  const direccion = await buscarDireccionInversa(lat, lng);
+  if (direccionDestino) direccionDestino.value = direccion;
+  fijarDestino(lat, lng, direccion, false);
+  marcadorDestino?.openPopup();
+  mostrarMensaje(`Destino ubicado en: ${direccion}`, 'exito');
 }
 
 async function resolverOrigenPorTexto() {
@@ -325,22 +370,16 @@ document.addEventListener('click', (evento) => {
   if (botonOrigen) {
     const lat = Number(botonOrigen.dataset.lat);
     const lng = Number(botonOrigen.dataset.lng);
-    if (direccionOrigen) direccionOrigen.value = 'Punto seleccionado en el mapa';
-    fijarOrigen(lat, lng, 'Punto seleccionado en el mapa', false);
     mapa.closePopup();
-    marcadorOrigen?.openPopup();
-    mostrarMensaje(`Origen fijado en mapa: [${lat.toFixed(4)}, ${lng.toFixed(4)}]`, 'exito');
+    void actualizarOrigenPorCoordenadaMapa(lat, lng);
     return;
   }
   const botonDestino = evento.target.closest('.btn-fijar-destino');
   if (botonDestino) {
     const lat = Number(botonDestino.dataset.lat);
     const lng = Number(botonDestino.dataset.lng);
-    if (direccionDestino) direccionDestino.value = 'Punto seleccionado en el mapa';
-    fijarDestino(lat, lng, 'Punto seleccionado en el mapa', false);
     mapa.closePopup();
-    marcadorDestino?.openPopup();
-    mostrarMensaje(`Destino fijado en mapa: [${lat.toFixed(4)}, ${lng.toFixed(4)}]`, 'exito');
+    void actualizarDestinoPorCoordenadaMapa(lat, lng);
     return;
   }
 });

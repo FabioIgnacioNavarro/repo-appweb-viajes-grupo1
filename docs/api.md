@@ -247,6 +247,11 @@ devuelve e `vigente_hasta`. El cálculo usa la tarifa vigente en `src/viaje.ts` 
 seleccionado mediante `RUTA_PROVEEDOR`. La fórmula actual aplica tarifa base, distancia y duración;
 los ajustes dinámicos por demanda, disponibilidad, clima y franja horaria siguen pendientes.
 
+Adicionalmente, el servidor de la demo web expone dos recursos auxiliares de geocodificación (según ADR 0051, ADR 0052 y ADR 0053):
+
+- `POST /demostracion/geocodificar`: recibe `{ "direccion": string, "proximidad"?: { "latitud": number, "longitud": number } }` y resuelve las coordenadas aplicando búsqueda en cascada centrada en `proximidad` (Gran Resistencia 25 km → Chaco/Corrientes 250 km → Argentina). Responde `200` con `{ "direccion": string, "coordenada": { "latitud": number, "longitud": number } }`.
+- `POST /demostracion/geocodificar-inversa`: recibe `{ "latitud": number, "longitud": number }` y devuelve el nombre de la calle o lugar correspondiente al punto seleccionado o arrastrado en el mapa. Responde `200` con `{ "direccion": string, "coordenada": { "latitud": number, "longitud": number } }`.
+
 ## Primeros endpoints HTTP
 
 El servidor local también publica `GET /health`, `GET /ready` y el endpoint inicial del recorrido,

@@ -66,7 +66,27 @@ export interface EstimacionTarifa {
 }
 
 export interface CalculadorRuta { calcular(origen: Coordenada, destino: Coordenada): Promise<RutaCalculada>; }
-export interface Geocodificador { geocodificar(direccion: string): Promise<Coordenada>; }
+export interface CuadroDelimitador {
+  sur: number;
+  norte: number;
+  oeste: number;
+  este: number;
+}
+export interface OpcionesGeocodificacion {
+  centro?: Coordenada;
+  radioNivel1Km?: number;
+  radioNivel2Km?: number;
+}
+export interface NivelBusquedaGeografica {
+  nombre: "LOCAL" | "REGIONAL" | "NACIONAL";
+  cuadro?: CuadroDelimitador;
+  restringirCuadro: boolean;
+  codigoPais: string;
+}
+export interface Geocodificador {
+  geocodificar(direccion: string, opciones?: OpcionesGeocodificacion): Promise<Coordenada>;
+  geocodificarInversa?(coordenada: Coordenada): Promise<string>;
+}
 export type PuntoUbicacion = Coordenada | { direccion: string };
 export interface FuenteClima { consultar(zona: ZonaTarifaria): Promise<ObservacionClima>; }
 export interface FuenteDisponibilidad { contarDisponibles(zona: ZonaTarifaria, origen: Coordenada): Promise<number>; }
@@ -90,6 +110,58 @@ const EDAD_MAXIMA_CLIMA_MS = 15 * 60_000;
 export function validarCoordenada(coordenada: Coordenada): void {
   if (!Number.isFinite(coordenada.latitud) || coordenada.latitud < -90 || coordenada.latitud > 90) throw new ErrorTarifas("COORDENADAS_INVALIDAS", "La latitud debe estar entre -90 y 90.");
   if (!Number.isFinite(coordenada.longitud) || coordenada.longitud < -180 || coordenada.longitud > 180) throw new ErrorTarifas("COORDENADAS_INVALIDAS", "La longitud debe estar entre -180 y 180.");
+}
+
+export function calcularCuadroDelimitador(centro: Coordenada, radioKm: number): CuadroDelimitador {
+  validarCoordenada(centro);
+  if (!Number.isFinite(radioKm) || radioKm <= 0) {
+    throw new ErrorTarifas("RADIO_INVALIDO", "El radio de búsqueda debe ser un número positivo.");
+  }
+  const deltaLat = radioKm / 111.32;
+  const factorLon = Math.max(0.1, Math.cos((centro.latitud * Math.PI) / 180));
+  const deltaLon = radioKm / (111.32 * factorLon);
+  return {
+    sur: Math.max(-90, centro.latitud - deltaLat),
+    norte: Math.min(90, centro.latitud + deltaLat),
+    oeste: Math.max(-180, centro.longitud - deltaLon),
+    este: Math.min(180, centro.longitud + deltaLon)
+  };
+}
+
+export function estaDentroDeCuadro(coordenada: Coordenada, cuadro: CuadroDelimitador): boolean {
+  return (
+    coordenada.latitud >= cuadro.sur &&
+    coordenada.latitud <= cuadro.norte &&
+    coordenada.longitud >= cuadro.oeste &&
+    coordenada.longitud <= cuadro.este
+  );
+}
+
+export function construirNivelesCascada(
+  centro: Coordenada,
+  radioNivel1Km = 25,
+  radioNivel2Km = 250,
+  codigoPais = "ar"
+): NivelBusquedaGeografica[] {
+  return [
+    {
+      nombre: "LOCAL",
+      cuadro: calcularCuadroDelimitador(centro, radioNivel1Km),
+      restringirCuadro: true,
+      codigoPais
+    },
+    {
+      nombre: "REGIONAL",
+      cuadro: calcularCuadroDelimitador(centro, radioNivel2Km),
+      restringirCuadro: true,
+      codigoPais
+    },
+    {
+      nombre: "NACIONAL",
+      restringirCuadro: false,
+      codigoPais
+    }
+  ];
 }
 
 function exigirConteo(valor: number, nombre: string): void {
@@ -158,7 +230,7 @@ export class CrearEstimacion {
     private readonly geocodificador?: Geocodificador
   ) {}
 
-  private async resolverPunto(punto: PuntoUbicacion): Promise<Coordenada> {
+  private async resolverPunto(punto: PuntoUbicacion, centroReferencia?: Coordenada): Promise<Coordenada> {
     if ("latitud" in punto && "longitud" in punto && typeof punto.latitud === "number" && typeof punto.longitud === "number") {
       validarCoordenada(punto);
       return punto;
@@ -167,7 +239,10 @@ export class CrearEstimacion {
       if (!this.geocodificador) {
         throw new ErrorTarifas("GEOCODIFICADOR_NO_CONFIGURADO", "No se configuró un geocodificador para resolver direcciones en texto.");
       }
-      const coord = await this.geocodificador.geocodificar(punto.direccion);
+      const coord = await this.geocodificador.geocodificar(
+        punto.direccion,
+        centroReferencia ? { centro: centroReferencia } : undefined
+      );
       validarCoordenada(coord);
       return coord;
     }
@@ -176,10 +251,8 @@ export class CrearEstimacion {
 
   async ejecutar(pasajeroId: string, origenPunto: PuntoUbicacion, destinoPunto: PuntoUbicacion, ahora = new Date()): Promise<EstimacionTarifa> {
     if (!pasajeroId) throw new ErrorTarifas("ACTOR_INVALIDO", "Falta el identificador del pasajero autenticado.");
-    const [origen, destino] = await Promise.all([
-      this.resolverPunto(origenPunto),
-      this.resolverPunto(destinoPunto)
-    ]);
+    const origen = await this.resolverPunto(origenPunto);
+    const destino = await this.resolverPunto(destinoPunto, origen);
     const [zona, regla, ruta] = await Promise.all([
       this.zonas.resolver(origen), this.reglas.obtenerActiva(), this.rutas.calcular(origen, destino)
     ]);

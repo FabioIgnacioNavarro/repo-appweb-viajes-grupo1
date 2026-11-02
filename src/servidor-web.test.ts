@@ -17,9 +17,29 @@ function crearAplicacionDemo() {
       res.status(400).json({ error: { codigo: "DIRECCION_INVALIDA", mensaje: "Dirección requerida." } });
       return;
     }
+    const prox = req.body?.proximidad;
+    const centro = typeof prox?.latitud === "number" && typeof prox?.longitud === "number"
+      ? { latitud: prox.latitud, longitud: prox.longitud }
+      : { latitud: -27.451, longitud: -58.986 };
     try {
-      const coordenada = await geocodificador.geocodificar(direccion);
+      const coordenada = await geocodificador.geocodificar(direccion, { centro });
       res.status(200).json({ direccion, coordenada });
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : "Error";
+      res.status(404).json({ error: { codigo: "DIRECCION_NO_ENCONTRADA", mensaje } });
+    }
+  });
+
+  app.post("/demostracion/geocodificar-inversa", async (req, res) => {
+    const latitud = req.body?.latitud;
+    const longitud = req.body?.longitud;
+    if (typeof latitud !== "number" || typeof longitud !== "number" || !Number.isFinite(latitud) || !Number.isFinite(longitud)) {
+      res.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "Coordenadas inválidas." } });
+      return;
+    }
+    try {
+      const direccion = await geocodificador.geocodificarInversa({ latitud, longitud });
+      res.status(200).json({ direccion, coordenada: { latitud, longitud } });
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : "Error";
       res.status(404).json({ error: { codigo: "DIRECCION_NO_ENCONTRADA", mensaje } });
@@ -140,6 +160,22 @@ test("demo web /demostracion/estimaciones calcula precio a partir de direcciones
     assert.equal(cuerpo.destino.latitud, -27.462);
     assert.ok(cuerpo.distancia_metros > 0);
     assert.ok(Number(cuerpo.precio_estimado) > 0);
+  } finally {
+    await cerrarServidor(server);
+  }
+});
+
+test("demo web /demostracion/geocodificar-inversa devuelve el nombre del lugar al arrastrar el pin", async () => {
+  const { base, server } = await iniciarServidor(crearAplicacionDemo());
+  try {
+    const res = await fetch(`${base}/demostracion/geocodificar-inversa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ latitud: -27.451, longitud: -58.986 })
+    });
+    assert.equal(res.status, 200);
+    const cuerpo = await res.json() as { direccion: string; coordenada: Coordenada };
+    assert.equal(cuerpo.direccion, "Plaza 25 de Mayo, Resistencia");
   } finally {
     await cerrarServidor(server);
   }
