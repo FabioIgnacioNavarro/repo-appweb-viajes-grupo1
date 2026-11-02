@@ -40,6 +40,7 @@ Decisiones adicionales registradas:
 31. API HTTP de `ms-viajes` sobre casos de uso.
 32. E2E reproducible con proveedores controlados.
 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
+51. Geocodificación y cálculo de rutas con Google Maps Platform.
 
 ## Rangos reservados para flujos paralelos
 
@@ -50,3 +51,5 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
   - 34. Persistencia de ms-viajes con SQL directo y puertos asíncronos.
 - **Flujo B (Flota, Tarea Pesada, Búsqueda Geo y Tiempo Real):** ADR 0040 a 0049.
 - **Flujo C (Seguridad, Observabilidad, Google Maps y Operación):** ADR 0050 a 0059.
+  - 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
+  - 51. Geocodificación y cálculo de rutas con Google Maps Platform.

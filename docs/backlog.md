@@ -48,7 +48,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | TIE-001 | WebSockets y tiempo real (Tema 20) | Alta | pendiente | Flujo B | Canal bidireccional para notificación de ofertas al chofer y seguimiento de viaje al pasajero con reconexión demostrable. |
 | OBS-001 | Observabilidad con OpenTelemetry y Jaeger (Tema 18) | Alta | terminado | Flujo C | ADR 0050 y `docs/demo-observabilidad.md`. SDK OpenTelemetry en servicios, propagación W3C traceparent y logs correlacionados, y servicio Jaeger en Compose. |
 | SEG-002 | Firebase Emulator Suite y RBAC (Tema 19) | Alta | pendiente | Flujo C | Contenedor de Firebase Emulator en Compose, validación JWKS con roles en claims, y comparación de token válido, vencido y sin permiso. |
-| GEO-001 | Google Maps Rutas y Geocodificación | Media | pendiente | Flujo C | Geocoding para aceptar direcciones textuales, Routes API para distancias/duración reales y fallback offline Haversine para tests. |
+| GEO-001 | Google Maps Rutas y Geocodificación | Media | en revisión | Flujo C | Closes #29. Puerto Geocodificador y adaptadores Google Maps / fallback determinista en ms-tarifas y demo web interactiva con búsqueda de direcciones y chips. ADR 0051. |
 
 ## Regla de actualización
 
