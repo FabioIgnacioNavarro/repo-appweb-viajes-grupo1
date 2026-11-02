@@ -6,3 +6,183 @@
 @media(max-width:650px){.encabezado{height:60px;padding:0 18px}.contenedor{padding:30px 14px}.presentacion{display:block}.presentacion h1{font-size:39px}.aviso-demo{max-width:none;margin-top:17px}.tablero{display:flex;flex-direction:column;overflow:visible}.panel{order:2}.mapa-panel{order:1;min-height:390px;border-radius:16px 16px 0 0}.tarjeta-recorrido{top:12px;left:12px;padding:10px 12px;gap:15px}.leyenda-mapa{right:10px;bottom:10px}.panel{padding:23px}.etiqueta-demo{font-size:9px}.pasos span{font-size:8px}}
 .tarjeta-precio{margin-top:10px;padding:13px 13px 11px;border:1px solid #dcebe0;border-radius:10px;background:linear-gradient(120deg,#f0f7f1,#f8faf8)}.precio-cabecera{display:flex;align-items:center;gap:10px}.precio-icono{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:#dcefe2;color:var(--verde);font-size:18px;font-weight:700}.precio-cabecera>div{display:grid;gap:3px}.precio-cabecera strong{font-family:Manrope,sans-serif;color:#175c41;font-size:23px;letter-spacing:-.5px}.tarjeta-precio p{margin:9px 0 4px;color:#54715f;font-size:10px;font-weight:600}.tarjeta-precio small{color:#849089;font-size:9px}
 .campo-seccion{margin:0;padding:0;border:0}.campo-seccion legend{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;font-weight:700}.campo-direccion{display:flex;gap:6px;margin-bottom:6px}.campo-direccion input{flex:1;height:36px;padding:0 10px;border:1px solid #e5e9e5;border-radius:7px;outline:none;color:#34443b;font:12px 'DM Sans',sans-serif}.campo-direccion input:focus{border-color:#64ad8c;box-shadow:0 0 0 3px #eaf5ee}.boton-geocodificar{height:36px;padding:0 10px;border:1px solid #dfe9e2;border-radius:7px;background:#edf5ef;color:#327554;font-size:11px;font-weight:600;cursor:pointer}.boton-geocodificar:hover{background:#e0efe4}.campo-coordenadas{display:flex;gap:8px}.campo-coordenadas label{display:flex;align-items:center;gap:4px;flex:1;color:#869089;font-size:10px}.campo-coordenadas input{width:100%;height:28px;padding:0 6px;border:1px solid #edf1ed;border-radius:5px;outline:none;color:#47584e;font:11px monospace}.chips-lugares{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:10px}.chip-titulo{color:#89938d;font-size:9px;font-weight:700;letter-spacing:.5px}.chip{padding:3px 8px;border:1px solid #dce8df;border-radius:12px;background:#f5faf6;color:#2e6d4c;font-size:10px;font-weight:600;cursor:pointer;transition:background .15s}.chip:hover{background:#e3f1e7}
+
+
+/* Pines profesionales de mapa y controles interactivos */
+.pin-leaflet-icono {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.pin-contenedor {
+  position: relative;
+  width: 34px;
+  height: 44px;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pin-contenedor:hover {
+  transform: translateY(-4px) scale(1.08);
+}
+.pin-contenedor:active {
+  cursor: grabbing;
+  transform: translateY(-6px) scale(1.12);
+}
+
+.pin-svg-wrapper {
+  position: relative;
+  z-index: 2;
+  width: 34px;
+  height: 44px;
+  display: block;
+}
+.pin-svg-wrapper svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pin-base-sombra {
+  position: absolute;
+  z-index: 1;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 6px;
+  background: radial-gradient(ellipse at center, rgba(15, 23, 19, 0.4) 0%, rgba(15, 23, 19, 0) 75%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Popups personalizados */
+.leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(17, 34, 25, 0.18) !important;
+  padding: 4px 6px !important;
+  border: 1px solid #e2eae4 !important;
+}
+.leaflet-popup-content {
+  margin: 10px 12px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  line-height: 1.35 !important;
+}
+.popup-marcador {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 160px;
+}
+.popup-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+}
+.badge-origen {
+  background: #e1f4eb;
+  color: #12724e;
+}
+.badge-destino {
+  background: #fde8e5;
+  color: #b52a1e;
+}
+.popup-nombre {
+  font-size: 13px;
+  color: #19241e;
+  font-weight: 700;
+  word-break: break-word;
+}
+.popup-coordenadas {
+  font-size: 10px;
+  color: #728277;
+  font-family: monospace;
+}
+.popup-guia {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed #e1e7e2;
+  font-size: 10px;
+  color: #8c9890;
+  font-style: italic;
+}
+
+/* Popup de selección al hacer clic en mapa */
+.popup-seleccion-mapa {
+  min-width: 190px;
+  padding: 2px;
+}
+.popup-seleccion-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.popup-seleccion-icono {
+  font-size: 18px;
+}
+.popup-seleccion-cabecera strong {
+  display: block;
+  font-size: 12px;
+  color: #1b2620;
+}
+.popup-seleccion-cabecera small {
+  display: block;
+  font-size: 10px;
+  color: #79877f;
+  font-family: monospace;
+}
+.popup-botones {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.btn-popup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d8e5dc;
+  border-radius: 7px;
+  background: #f6faf7;
+  color: #1a4d34;
+  font: 600 11px 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-popup:hover {
+  background: #e4f3e9;
+  border-color: #a7cfb7;
+  transform: translateY(-1px);
+}
+.pin-punto-mini {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.pin-punto-mini.origen {
+  background: #167957;
+  box-shadow: 0 0 0 3px #d6f0e2;
+}
+.pin-punto-mini.destino {
+  background: #e14b32;
+  box-shadow: 0 0 0 3px #fde2dc;
+}
+.leyenda-ayuda {
+  color: #7e8a83;
+  font-size: 10px;
+  margin-left: 4px;
+}
