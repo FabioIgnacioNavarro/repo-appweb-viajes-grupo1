@@ -59,3 +59,22 @@ Content-Type: application/json
 {}
 
 GET {{gateway}}/viajes
+Authorization: Bearer {{pasajero}}
+
+### Verificación de readiness de microservicios
+GET {{gateway}}/ready/viajes
+
+###
+GET {{gateway}}/ready/tarifas
+
+###
+GET {{gateway}}/ready/flota
+
+### Verificación de protección de rutas internas en Gateway (deben retornar 404 con error JSON uniforme)
+GET {{gateway}}/interno/demanda-por-zona?zona_id=resistencia
+Authorization: Bearer {{pasajero}}
+
+###
+GET {{gateway}}/estimaciones/est-123
+Authorization: Bearer {{pasajero}}
+
