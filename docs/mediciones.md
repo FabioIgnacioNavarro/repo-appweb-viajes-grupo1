@@ -152,4 +152,22 @@ La línea de base tiene ahora tres repeticiones válidas por escenario (reposo y
 
 ### Diagnóstico de memoria del proceso
 
-Las corridas anteriores registran RSS, pero no separan memoria del heap de Node y memoria externa. La siguiente corrida diagnóstica añade `heapUsed`, `external` y `arrayBuffers` a cada muestra de `ms-flota` y a los resúmenes p95/máximo del JSON. `arrayBuffers` forma parte de `external`; se informa aparte para identificar buffers, pero no debe sumarse de nuevo al total. Los informes previos no tienen estas columnas y no se deben comparar como si las hubieran medido.
+Las corridas anteriores registran RSS, pero no separan memoria del heap de Node y memoria externa. La instrumentación diagnóstica añade `heapUsed`, `external` y `arrayBuffers` a cada muestra de `ms-flota` y a los resúmenes p95/máximo del JSON. `arrayBuffers` forma parte de `external`; se informa aparte para identificar buffers, pero no debe sumarse de nuevo al total. Los informes previos no tienen estas columnas y no se deben comparar como si las hubieran medido.
+
+#### Corrida diagnóstica de carga con desglose de memoria — 2026-11-02
+
+- **Commit instrumentado:** `80247bb`; el cambio solo agrega muestras de memoria y resumen, no altera el flujo de ubicaciones ni la búsqueda.
+- **Informe local:** `b7b9f1b1-267c-4054-837e-ba91140de32e`.
+- **Configuración:** escenario carga, 500 choferes, 60 s de calentamiento, 300 s medidos, 60 s de recuperación y semilla 42.
+- **Solicitudes:** 75.000/75.000 actualizaciones, 300/300 búsquedas y 300/300 sondas por endpoint; todas respondieron correctamente y no hubo errores ni pérdidas por cola.
+- **Latencias p95/p99:** actualizaciones 15,20/117,12 ms; búsquedas 33,71/154,15 ms; `/health` 6,34/62,90 ms; `/ready/flota` 14,54/152,52 ms.
+- **Proceso:** event loop p99/máximo 30,47/35 ms; RSS máximo 155,61 MiB; heap usado p95/máximo 42,55/58,68 MiB; memoria externa 4,31/4,39 MiB; `ArrayBuffer` 0,77/0,85 MiB.
+
+| Memoria del proceso | Promedio min. 2 (MiB) | Promedio min. 5 (MiB) | Cambio |
+|---|---:|---:|---:|
+| RSS | 141,90 | 155,12 | +9,32 % |
+| Heap usado | 31,97 | 31,89 | -0,25 % |
+| Memoria externa | 3,95 | 3,95 | -0,07 % |
+| `ArrayBuffer` (subconjunto de externa) | 0,39 | 0,40 | +1,69 % (0,01 MiB) |
+
+Aproximadamente 95 s después de terminar la medición, una muestra posterior de proceso registró RSS 89,19 MiB, heap 19,85 MiB, externa 3,63 MiB y `ArrayBuffer` 0,09 MiB. Que el RSS aumente mientras heap y externa permanecen casi planos, y luego baje al cesar el tráfico, es compatible con un pico/transitorio de memoria del runtime; no prueba por sí solo que no exista una fuga. Esta corrida diagnóstica está por debajo del umbral RSS del 10 %, pero no sustituye las tres repeticiones de una variante final ni cambia el resultado de la repetición 3 de la línea de base, que sigue registrada con 12,77 %.
