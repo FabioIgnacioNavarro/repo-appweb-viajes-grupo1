@@ -81,6 +81,7 @@ export function crearCalculadorRuta(env: NodeJS.ProcessEnv = process.env): Calcu
 export {
   type Geocodificador,
   GeocodificadorGoogle,
+  GeocodificadorNominatim,
   GeocodificadorFalso,
   crearGeocodificador
 } from "./ms-tarifas/proveedores";

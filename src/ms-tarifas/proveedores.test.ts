@@ -18,6 +18,7 @@ import {
 import {
   GeocodificadorFalso,
   GeocodificadorGoogle,
+  GeocodificadorNominatim,
   crearGeocodificador,
   RutaGoogle
 } from "./proveedores";
@@ -127,6 +128,58 @@ test("GeocodificadorGoogle falla de forma segura ante error 500 del proveedor", 
   );
 });
 
+test("GeocodificadorNominatim resuelve dirección con OpenStreetMap y envía User-Agent", async () => {
+  let urlLlamada = "";
+  let userAgentEnviado = "";
+  const obtenerMock = async (url: string, init?: RequestInit) => {
+    urlLlamada = url;
+    userAgentEnviado = new Headers(init?.headers).get("User-Agent") ?? "";
+    return new Response(
+      JSON.stringify([
+        {
+          lat: "-27.4523939",
+          lon: "-58.9852937",
+          display_name: "150, Avenida 9 de Julio, Resistencia"
+        }
+      ]),
+      { status: 200 }
+    );
+  };
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch);
+  const coord = await geocodificador.geocodificar("Av 9 de Julio 150 Resistencia");
+
+  assert.equal(coord.latitud, -27.4523939);
+  assert.equal(coord.longitud, -58.9852937);
+  assert.match(urlLlamada, /nominatim\.openstreetmap\.org\/search/);
+  assert.match(urlLlamada, /format=json/);
+  assert.equal(userAgentEnviado, "test-agent/1.0");
+});
+
+test("GeocodificadorNominatim traduce lista vacía a DIRECCION_NO_ENCONTRADA", async () => {
+  const obtenerMock = async () =>
+    new Response(JSON.stringify([]), { status: 200 });
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch);
+
+  await assert.rejects(
+    () => geocodificador.geocodificar("calle-que-no-existe-en-el-planeta-1234"),
+    (err: ErrorTarifas) => err.codigo === "DIRECCION_NO_ENCONTRADA"
+  );
+});
+
+test("GeocodificadorNominatim falla de forma segura ante error 500", async () => {
+  const obtenerMock = async () =>
+    new Response("Internal Server Error", { status: 500 });
+
+  const geocodificador = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch);
+
+  await assert.rejects(
+    () => geocodificador.geocodificar("alguna calle"),
+    (err: ErrorTarifas) => err.codigo === "DEPENDENCIA_NO_DISPONIBLE"
+  );
+});
+
 test("RutaGoogle formatea la consulta y procesa la respuesta de Google Routes API", async () => {
   let headersEnviados: Headers | undefined;
   let bodyEnviado = "";
@@ -161,7 +214,7 @@ test("RutaGoogle formatea la consulta y procesa la respuesta de Google Routes AP
   assert.match(bodyEnviado, /TRAFFIC_AWARE/);
 });
 
-test("crearGeocodificador devuelve adaptador falso por defecto o con HAVERSINE", () => {
+test("crearGeocodificador devuelve adaptador falso, Google o Nominatim según env", () => {
   const geoHaversine = crearGeocodificador({ RUTA_PROVEEDOR: "HAVERSINE" });
   assert.ok(geoHaversine instanceof GeocodificadorFalso);
 
@@ -170,6 +223,12 @@ test("crearGeocodificador devuelve adaptador falso por defecto o con HAVERSINE",
 
   const geoGoogle = crearGeocodificador({ RUTA_PROVEEDOR: "GOOGLE", GOOGLE_MAPS_API_KEY: "clave-google" });
   assert.ok(geoGoogle instanceof GeocodificadorGoogle);
+
+  const geoNominatim = crearGeocodificador({ RUTA_PROVEEDOR: "OSRM" });
+  assert.ok(geoNominatim instanceof GeocodificadorNominatim);
+
+  const geoForzadoNominatim = crearGeocodificador({ GEOCODIFICADOR_PROVEEDOR: "NOMINATIM" });
+  assert.ok(geoForzadoNominatim instanceof GeocodificadorNominatim);
 });
 
 test("CrearEstimacion resuelve direcciones textuales usando el geocodificador provisto", async () => {

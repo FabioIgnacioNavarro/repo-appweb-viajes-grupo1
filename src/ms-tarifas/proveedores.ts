@@ -160,6 +160,76 @@ export class GeocodificadorGoogle implements Geocodificador {
   }
 }
 
+export class GeocodificadorNominatim implements Geocodificador {
+  constructor(
+    private readonly userAgent = "viajes-grupo1-tp/1.0 (contacto@universidad.edu.ar)",
+    private readonly timeoutMs = 2500,
+    private readonly obtener: Obtener = fetch
+  ) {}
+
+  async geocodificar(direccion: string): Promise<Coordenada> {
+    const texto = direccion.trim();
+    if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección a geocodificar no puede estar vacía.");
+
+    // Coordenadas explícitas numéricas: e.g. "-27.451, -58.986"
+    const regexCoord = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/;
+    const match = regexCoord.exec(texto);
+    if (match) {
+      const latitud = Number(match[1]);
+      const longitud = Number(match[2]);
+      if (Number.isFinite(latitud) && Number.isFinite(longitud) && latitud >= -90 && latitud <= 90 && longitud >= -180 && longitud <= 180) {
+        return { latitud, longitud };
+      }
+    }
+
+    const parametros = new URLSearchParams({
+      q: texto,
+      format: "json",
+      limit: "1"
+    });
+    const url = `https://nominatim.openstreetmap.org/search?${parametros}`;
+
+    let respuesta: Response;
+    try {
+      respuesta = await this.obtener(url, {
+        headers: { "User-Agent": this.userAgent },
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    } catch {
+      registrarFalla("nominatim_osm", "geocodificar", "timeout_o_red");
+      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "El servicio de geocodificación de OpenStreetMap no respondió a tiempo.");
+    }
+
+    if (!respuesta.ok) {
+      registrarFalla("nominatim_osm", "geocodificar", `http_${respuesta.status}`);
+      throw new ErrorTarifas(
+        respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO",
+        "El servicio de geocodificación de OpenStreetMap no pudo resolver la dirección."
+      );
+    }
+
+    let resultados: Array<{ lat?: string; lon?: string }>;
+    try {
+      resultados = await respuesta.json() as typeof resultados;
+    } catch {
+      registrarFalla("nominatim_osm", "geocodificar", "json_invalido");
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "El servicio de geocodificación devolvió una respuesta no válida.");
+    }
+
+    if (!Array.isArray(resultados) || resultados.length === 0) {
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
+    }
+
+    const latitud = Number(resultados[0]?.lat);
+    const longitud = Number(resultados[0]?.lon);
+    if (!Number.isFinite(latitud) || !Number.isFinite(longitud) || latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "El servicio de geocodificación devolvió coordenadas fuera de rango.");
+    }
+
+    return { latitud, longitud };
+  }
+}
+
 export class GeocodificadorFalso implements Geocodificador {
   private readonly semillas: Record<string, Coordenada> = {
     "plaza 25 de mayo": { latitud: -27.451, longitud: -58.986 },
@@ -221,14 +291,25 @@ export function crearGeocodificador(
   env: NodeJS.ProcessEnv = process.env,
   timeoutMs = Number(env.TIMEOUT_PROVEEDOR_MS ?? 1800)
 ): Geocodificador {
-  const proveedor = (env.RUTA_PROVEEDOR ?? "OSRM").toUpperCase();
+  const proveedorGeo = env.GEOCODIFICADOR_PROVEEDOR?.toUpperCase();
+  const proveedorRuta = (env.RUTA_PROVEEDOR ?? "OSRM").toUpperCase();
   const modo = env.PROVEEDORES_MODO?.toLowerCase();
-  if (modo === "falso" || proveedor === "HAVERSINE") {
+
+  // 1. Modo falso explícito para tests unitarios / offline
+  if (modo === "falso" || proveedorGeo === "FALSO" || (proveedorRuta === "HAVERSINE" && !proveedorGeo)) {
     return new GeocodificadorFalso();
   }
-  if (proveedor === "GOOGLE" && env.GOOGLE_MAPS_API_KEY) {
+
+  // 2. Google Maps si se especifica o si hay clave presente
+  if ((proveedorGeo === "GOOGLE" || (!proveedorGeo && proveedorRuta === "GOOGLE")) && env.GOOGLE_MAPS_API_KEY) {
     return new GeocodificadorGoogle(env.GOOGLE_MAPS_API_KEY, timeoutMs);
   }
+
+  // 3. Nominatim (OpenStreetMap) por defecto para resolución en vivo sin tarjetas
+  if (proveedorGeo === "NOMINATIM" || !proveedorGeo || proveedorRuta === "OSRM") {
+    return new GeocodificadorNominatim("viajes-grupo1-tp/1.0", timeoutMs);
+  }
+
   return new GeocodificadorFalso();
 }
 
