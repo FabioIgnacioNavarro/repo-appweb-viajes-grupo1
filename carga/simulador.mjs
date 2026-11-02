@@ -150,6 +150,7 @@ async function ejecutar() {
     informe.mediciones.procesoFlota = await leerMedicionesProcesoFlota(informe.fechas.medicionInicio, informe.fechas.medicionFin);
     if (informe.mediciones.procesoFlota.cantidad_ventanas === 0) informe.advertencias.push("No se capturaron ventanas de event loop/RSS dentro del período medido.");
     if (informe.mediciones.recursosFlota.length === 0) informe.advertencias.push("No se capturaron muestras de CPU/memoria del contenedor con docker stats.");
+    else if (!informe.mediciones.recursosFlota.some((muestra) => muestra.cpu_porcentaje !== null)) informe.advertencias.push("Docker entregó memoria del contenedor, pero no un porcentaje de CPU válido.");
     informe.estado = interrumpido ? "interrumpida" : "completada";
     informe.resultados = resumirInforme(informe);
     const archivo = await guardarInforme(informe);
@@ -368,9 +369,12 @@ function iniciarMuestreadorRecursos(informe) {
   proceso.stderr.on("data", (dato) => { errorSalida = `${errorSalida}${dato}`.slice(-2000); });
   lector.on("line", (linea) => {
     if (faseActual !== "medicion") return;
+    if (!linea.trim()) return;
     const [cpuTexto, memoriaTexto] = linea.split(";");
     const memoriaMiB = convertirMemoriaMiB(memoriaTexto ?? "");
-    informe.mediciones.recursosFlota.push({ registrado_en: new Date().toISOString(), cpu_porcentaje: parsearPorcentaje(cpuTexto), memoria_contenedor_mib: memoriaMiB });
+    const cpuPorcentaje = parsearPorcentaje(cpuTexto);
+    if (cpuPorcentaje === null && memoriaMiB === null) return;
+    informe.mediciones.recursosFlota.push({ registrado_en: new Date().toISOString(), cpu_porcentaje: cpuPorcentaje, memoria_contenedor_mib: memoriaMiB });
   });
   proceso.on("error", (error) => { errorSalida = error.message; });
   return {
@@ -524,7 +528,12 @@ function validarUrlLocal(valor) {
 function validarEntero(valor, nombre, minimo, maximo) {
   if (!Number.isInteger(valor) || valor < minimo || valor > maximo) throw new Error(`${nombre} debe ser un entero entre ${minimo} y ${maximo}.`);
 }
-function parsearPorcentaje(valor) { const numero = Number(String(valor ?? "").replace("%", "")); return Number.isFinite(numero) ? redondear(numero) : null; }
+export function parsearPorcentaje(valor) {
+  const coincidencia = String(valor ?? "").match(/[-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)/);
+  if (!coincidencia) return null;
+  const numero = Number(coincidencia[0].replace(",", "."));
+  return Number.isFinite(numero) ? redondear(numero) : null;
+}
 function redondear(valor) { return Number.isFinite(valor) ? Math.round(valor * 100) / 100 : null; }
 function redondearCoordenada(valor) { return Math.round(valor * 1_000_000) / 1_000_000; }
 function clasificarError(error) { return error?.name === "TimeoutError" || error?.name === "AbortError" ? "timeout" : "fallo_red"; }

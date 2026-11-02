@@ -6,7 +6,8 @@ import {
   convertirMemoriaMiB,
   crearGeneradorDeterminista,
   crearTokenFalso,
-  crearUbicacionInicial
+  crearUbicacionInicial,
+  parsearPorcentaje
 } from "./simulador.mjs";
 
 test("el modo prueba usa valores cortos y seguros por defecto", () => {
@@ -52,6 +53,13 @@ test("convierte memoria Docker a MiB", () => {
   assert.equal(convertirMemoriaMiB("1.5GiB / 8GiB"), 1536);
   assert.equal(convertirMemoriaMiB("512MiB / 8GiB"), 512);
   assert.equal(convertirMemoriaMiB("N/A"), null);
+});
+
+test("parsea CPU de Docker con punto o coma decimal e ignora valores vacíos", () => {
+  assert.equal(parsearPorcentaje("1.34%"), 1.34);
+  assert.equal(parsearPorcentaje("0,75%"), 0.75);
+  assert.equal(parsearPorcentaje("N/A"), null);
+  assert.equal(parsearPorcentaje(""), null);
 });
 
 test("genera un JWT falso compatible para cada actor de prueba", () => {
