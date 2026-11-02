@@ -6,8 +6,8 @@ iniciarObservabilidad("ms-tarifas");
 
 import { randomUUID } from "node:crypto";
 import { crearPoolTarifas, RepositorioEstimacionesPostgres, RepositorioReglasPostgres, RepositorioZonasPostgres } from "./postgres";
-import { CrearEstimacion } from "./dominio";
-import { FuenteClimaFalsa, FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, crearCalculadorRuta } from "./proveedores";
+import { CrearEstimacion, type PuntoUbicacion } from "./dominio";
+import { FuenteClimaFalsa, FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, crearCalculadorRuta, crearGeocodificador } from "./proveedores";
 import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import { exigirBaseInterna } from "../compartido/cliente-servicios";
@@ -24,9 +24,20 @@ const reintentos = Number(process.env.REINTENTOS_SERVICIO ?? "1");
 if (!Number.isInteger(timeoutServicio) || timeoutServicio < 1 || !Number.isInteger(timeoutProveedor) || timeoutProveedor < 1 || !Number.isInteger(reintentos) || reintentos < 0 || reintentos > 1) throw new Error("Los timeouts o reintentos configurados son inválidos.");
 const urlFlota = exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL");
 const urlViajes = exigirBaseInterna(process.env.MS_VIAJES_URL, "MS_VIAJES_URL");
-const crear = (pasajeroId: string, origen: { latitud: number; longitud: number }, destino: { latitud: number; longitud: number }, token: string) => {
+const crear = (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => {
   const clima = process.env.PROVEEDORES_MODO === "falso" ? new FuenteClimaFalsa() : new FuenteClimaOpenMeteo(timeoutProveedor);
-  return new CrearEstimacion(crearCalculadorRuta(process.env, timeoutProveedor), clima, new FuenteFlotaHttp(urlFlota, token, timeoutServicio, fetch, reintentos), new FuenteDemandaHttp(urlViajes, token, timeoutServicio, fetch, reintentos), new RepositorioZonasPostgres(pool), new RepositorioReglasPostgres(pool), estimaciones, { generar: randomUUID }).ejecutar(pasajeroId, origen, destino);
+  const geocodificador = crearGeocodificador(process.env, timeoutProveedor);
+  return new CrearEstimacion(
+    crearCalculadorRuta(process.env, timeoutProveedor),
+    clima,
+    new FuenteFlotaHttp(urlFlota, token, timeoutServicio, fetch, reintentos),
+    new FuenteDemandaHttp(urlViajes, token, timeoutServicio, fetch, reintentos),
+    new RepositorioZonasPostgres(pool),
+    new RepositorioReglasPostgres(pool),
+    estimaciones,
+    { generar: randomUUID },
+    geocodificador
+  ).ejecutar(pasajeroId, origen, destino);
 };
 const app = express();
 app.use(middlewareObservabilidad("ms-tarifas"));

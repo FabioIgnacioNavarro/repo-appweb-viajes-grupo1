@@ -66,6 +66,8 @@ export interface EstimacionTarifa {
 }
 
 export interface CalculadorRuta { calcular(origen: Coordenada, destino: Coordenada): Promise<RutaCalculada>; }
+export interface Geocodificador { geocodificar(direccion: string): Promise<Coordenada>; }
+export type PuntoUbicacion = Coordenada | { direccion: string };
 export interface FuenteClima { consultar(zona: ZonaTarifaria): Promise<ObservacionClima>; }
 export interface FuenteDisponibilidad { contarDisponibles(zona: ZonaTarifaria, origen: Coordenada): Promise<number>; }
 export interface FuenteDemanda { contarSolicitudesActivas(zona: ZonaTarifaria): Promise<number>; }
@@ -152,13 +154,32 @@ export class CrearEstimacion {
     private readonly zonas: RepositorioZonas,
     private readonly reglas: RepositorioReglas,
     private readonly estimaciones: RepositorioEstimaciones,
-    private readonly ids: GeneradorId
+    private readonly ids: GeneradorId,
+    private readonly geocodificador?: Geocodificador
   ) {}
 
-  async ejecutar(pasajeroId: string, origen: Coordenada, destino: Coordenada, ahora = new Date()): Promise<EstimacionTarifa> {
+  private async resolverPunto(punto: PuntoUbicacion): Promise<Coordenada> {
+    if ("latitud" in punto && "longitud" in punto && typeof punto.latitud === "number" && typeof punto.longitud === "number") {
+      validarCoordenada(punto);
+      return punto;
+    }
+    if ("direccion" in punto && typeof punto.direccion === "string") {
+      if (!this.geocodificador) {
+        throw new ErrorTarifas("GEOCODIFICADOR_NO_CONFIGURADO", "No se configuró un geocodificador para resolver direcciones en texto.");
+      }
+      const coord = await this.geocodificador.geocodificar(punto.direccion);
+      validarCoordenada(coord);
+      return coord;
+    }
+    throw new ErrorTarifas("COORDENADAS_INVALIDAS", "El punto de ubicación no es válido.");
+  }
+
+  async ejecutar(pasajeroId: string, origenPunto: PuntoUbicacion, destinoPunto: PuntoUbicacion, ahora = new Date()): Promise<EstimacionTarifa> {
     if (!pasajeroId) throw new ErrorTarifas("ACTOR_INVALIDO", "Falta el identificador del pasajero autenticado.");
-    validarCoordenada(origen);
-    validarCoordenada(destino);
+    const [origen, destino] = await Promise.all([
+      this.resolverPunto(origenPunto),
+      this.resolverPunto(destinoPunto)
+    ]);
     const [zona, regla, ruta] = await Promise.all([
       this.zonas.resolver(origen), this.reglas.obtenerActiva(), this.rutas.calcular(origen, destino)
     ]);

@@ -1,5 +1,18 @@
 import { distanceHaversineMetros } from "./utilidades";
-import { ErrorTarifas, type CalculadorRuta, type Coordenada, type FuenteClima, type FuenteDemanda, type FuenteDisponibilidad, type ObservacionClima, type RutaCalculada, type ZonaTarifaria } from "./dominio";
+import {
+  ErrorTarifas,
+  type CalculadorRuta,
+  type Coordenada,
+  type FuenteClima,
+  type FuenteDemanda,
+  type FuenteDisponibilidad,
+  type Geocodificador,
+  type ObservacionClima,
+  type RutaCalculada,
+  type ZonaTarifaria
+} from "./dominio";
+
+export type { Geocodificador };
 
 type Obtener = (url: string, opciones?: RequestInit) => Promise<Response>;
 function registrarFalla(servicio: string, operacion: string, resultado: string): void {
@@ -94,6 +107,129 @@ export function crearCalculadorRuta(env: NodeJS.ProcessEnv = process.env, timeou
   if (proveedor === "GOOGLE") return new RutaGoogle(env.GOOGLE_MAPS_API_KEY ?? "", timeoutMs);
   if (proveedor === "HAVERSINE") return new RutaHaversine();
   throw new Error("RUTA_PROVEEDOR debe ser OSRM, GOOGLE o HAVERSINE.");
+}
+
+export class GeocodificadorGoogle implements Geocodificador {
+  constructor(private readonly apiKey: string, private readonly timeoutMs = 1800, private readonly obtener: Obtener = fetch) {
+    if (!apiKey) throw new Error("GOOGLE_MAPS_API_KEY es obligatoria para Google Geocoding.");
+  }
+
+  async geocodificar(direccion: string): Promise<Coordenada> {
+    const texto = direccion.trim();
+    if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección a geocodificar no puede estar vacía.");
+    const parametros = new URLSearchParams({
+      address: texto,
+      key: this.apiKey,
+      language: "es",
+      region: "ar"
+    });
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?${parametros}`;
+    let respuesta: Response;
+    try {
+      respuesta = await this.obtener(url, { signal: AbortSignal.timeout(this.timeoutMs) });
+    } catch {
+      registrarFalla("google_geocoding", "geocodificar", "timeout_o_red");
+      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "Google Geocoding no respondió a tiempo.");
+    }
+    if (!respuesta.ok) {
+      registrarFalla("google_geocoding", "geocodificar", `http_${respuesta.status}`);
+      throw new ErrorTarifas(respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO", "Google Geocoding no pudo resolver la dirección.");
+    }
+    let cuerpo: {
+      status?: string;
+      results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
+    };
+    try {
+      cuerpo = await respuesta.json() as typeof cuerpo;
+    } catch {
+      registrarFalla("google_geocoding", "geocodificar", "json_invalido");
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Google Geocoding devolvió una respuesta inválida.");
+    }
+    if (cuerpo.status === "ZERO_RESULTS" || !cuerpo.results || cuerpo.results.length === 0) {
+      throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección: "${texto}".`);
+    }
+    if (cuerpo.status && cuerpo.status !== "OK") {
+      registrarFalla("google_geocoding", "geocodificar", cuerpo.status);
+      throw new ErrorTarifas("PROVEEDOR_GEO_RECHAZO", `Google Geocoding rechazó la consulta: ${cuerpo.status}.`);
+    }
+    const ubicacion = cuerpo.results[0]?.geometry?.location;
+    if (typeof ubicacion?.lat !== "number" || typeof ubicacion?.lng !== "number" || !Number.isFinite(ubicacion.lat) || !Number.isFinite(ubicacion.lng)) {
+      throw new ErrorTarifas("RESPUESTA_DEPENDENCIA_INVALIDA", "Google Geocoding no devolvió coordenadas válidas.");
+    }
+    return { latitud: ubicacion.lat, longitud: ubicacion.lng };
+  }
+}
+
+export class GeocodificadorFalso implements Geocodificador {
+  private readonly semillas: Record<string, Coordenada> = {
+    "plaza 25 de mayo": { latitud: -27.451, longitud: -58.986 },
+    "plaza 25 de mayo, resistencia": { latitud: -27.451, longitud: -58.986 },
+    "resistencia": { latitud: -27.451, longitud: -58.986 },
+    "terminal": { latitud: -27.462, longitud: -58.993 },
+    "terminal de omnibus": { latitud: -27.462, longitud: -58.993 },
+    "terminal de omnibus, resistencia": { latitud: -27.462, longitud: -58.993 },
+    "aeropuerto": { latitud: -27.448, longitud: -59.056 },
+    "aeropuerto resistencia": { latitud: -27.448, longitud: -59.056 },
+    "aeropuerto internacional de resistencia": { latitud: -27.448, longitud: -59.056 },
+    "casa de las culturas": { latitud: -27.452, longitud: -58.984 },
+    "parque de la democracia": { latitud: -27.433, longitud: -58.966 },
+    "shopping sarmiento": { latitud: -27.438, longitud: -58.972 },
+    "facultad de ingenieria unne": { latitud: -27.466, longitud: -58.979 },
+    "campus unne": { latitud: -27.466, longitud: -58.979 },
+    "unne campus resistencia": { latitud: -27.466, longitud: -58.979 }
+  };
+
+  constructor(semillasPersonalizadas?: Record<string, Coordenada>) {
+    if (semillasPersonalizadas) {
+      this.semillas = { ...this.semillas, ...semillasPersonalizadas };
+    }
+  }
+
+  async geocodificar(direccion: string): Promise<Coordenada> {
+    const texto = direccion.trim().toLowerCase();
+    if (!texto) throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección no puede estar vacía.");
+
+    // 1. Coordenadas explícitas numéricas
+    const regexCoord = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/;
+    const match = regexCoord.exec(texto);
+    if (match) {
+      const latitud = Number(match[1]);
+      const longitud = Number(match[2]);
+      if (Number.isFinite(latitud) && Number.isFinite(longitud) && latitud >= -90 && latitud <= 90 && longitud >= -180 && longitud <= 180) {
+        return { latitud, longitud };
+      }
+    }
+
+    // 2. Coincidencia exacta
+    if (this.semillas[texto]) {
+      return structuredClone(this.semillas[texto]);
+    }
+
+    // 3. Coincidencia por subcadena, priorizando las claves más largas y específicas
+    const entradas = Object.entries(this.semillas).sort((a, b) => b[0].length - a[0].length);
+    for (const [clave, coord] of entradas) {
+      if (texto.includes(clave)) {
+        return structuredClone(coord);
+      }
+    }
+
+    throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", `No se encontró la dirección de prueba: "${direccion}".`);
+  }
+}
+
+export function crearGeocodificador(
+  env: NodeJS.ProcessEnv = process.env,
+  timeoutMs = Number(env.TIMEOUT_PROVEEDOR_MS ?? 1800)
+): Geocodificador {
+  const proveedor = (env.RUTA_PROVEEDOR ?? "OSRM").toUpperCase();
+  const modo = env.PROVEEDORES_MODO?.toLowerCase();
+  if (modo === "falso" || proveedor === "HAVERSINE") {
+    return new GeocodificadorFalso();
+  }
+  if (proveedor === "GOOGLE" && env.GOOGLE_MAPS_API_KEY) {
+    return new GeocodificadorGoogle(env.GOOGLE_MAPS_API_KEY, timeoutMs);
+  }
+  return new GeocodificadorFalso();
 }
 
 export class FuenteClimaOpenMeteo implements FuenteClima {
