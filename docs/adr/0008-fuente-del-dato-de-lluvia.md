@@ -1,6 +1,6 @@
 # ADR 0008: Proponer Open-Meteo para consultar la lluvia
 
-- Estado: aceptado para el prototipo académico
+- Estado: Aceptado
 - Fecha: 2026-09-29
 - Participantes: Echeverría Maximiliano Joel, Borchichi Valentino
 
