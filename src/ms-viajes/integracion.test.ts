@@ -32,3 +32,13 @@ test("si flota cae, la operación falla cerrado y un reintento idempotente puede
   assert.equal(viajeReintentado.precioEstimado, "8086");
   assert.equal((await ofertas.listarPorViaje(viajeReintentado.id)).length, 1);
 });
+
+test("publica cada oferta nueva solo al chofer destinatario", async () => {
+  const viajes = new RepositorioViajesMemoria(); const ofertas = new RepositorioOfertasMemoria(); const ids = new GeneradorIdMemoria();
+  const publicaciones: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
+  const eventos = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { publicaciones.push({ usuario, evento, datos }); } };
+  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar() { return ["chofer-1", "chofer-2"]; } }, new CrearOfertasParaCandidatos(ofertas, ids), eventos);
+  await caso.ejecutar(actor, estimacion, "clave-eventos", "jwt-pasajero");
+  assert.deepEqual(publicaciones.map((p) => p.usuario), ["chofer-1", "chofer-2"]);
+  assert.ok(publicaciones.every((p) => p.evento === "OFERTA_NUEVA" && typeof p.datos.id_oferta === "string"));
+});

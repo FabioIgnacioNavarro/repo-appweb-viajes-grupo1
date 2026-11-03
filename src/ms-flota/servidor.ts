@@ -14,6 +14,7 @@ import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-servicios";
 import { RepositorioViajesActivosHttp } from "./viajes-http";
 import { iniciarMedicionProcesoFlota } from "./mediciones";
+import { NotificadorUbicacionViajesHttp } from "./notificador-viajes-http";
 
 const puerto = Number(process.env.PUERTO_MS_FLOTA ?? 3002);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_FLOTA debe ser un entero entre 1 y 65535.");
@@ -35,7 +36,7 @@ aplicacion.get("/ready", async (_pedido, respuesta) => {
 });
 const urlViajes = exigirBaseInterna(process.env.MS_VIAJES_URL, "MS_VIAJES_URL");
 const clienteInterno = new ClienteServiciosHttp({ timeoutMs: Number(process.env.TIMEOUT_SERVICIO_MS ?? 1500), reintentos: Number(process.env.REINTENTOS_SERVICIO ?? 1) });
-aplicacion.use(crearRouterFlota({ choferes, ubicaciones, viajes: new RepositorioViajesActivosMemoria(), crearRepositorioViajes: (jwt) => new RepositorioViajesActivosHttp(urlViajes, jwt, clienteInterno), validadorToken: validador, autorizador: new AutorizadorUbicacionBasico() }));
+aplicacion.use(crearRouterFlota({ choferes, ubicaciones, viajes: new RepositorioViajesActivosMemoria(), crearRepositorioViajes: (jwt) => new RepositorioViajesActivosHttp(urlViajes, jwt, clienteInterno), validadorToken: validador, autorizador: new AutorizadorUbicacionBasico(), publicadorUbicacionViaje: new NotificadorUbicacionViajesHttp(urlViajes, Number(process.env.TIMEOUT_SERVICIO_MS ?? "1500")) }));
 
 const servidor = aplicacion.listen(puerto, () => console.log(`ms-flota disponible en http://localhost:${puerto}`));
 async function cerrar(): Promise<void> { detenerMedicionProceso(); servidor.close(); await pool?.end(); }

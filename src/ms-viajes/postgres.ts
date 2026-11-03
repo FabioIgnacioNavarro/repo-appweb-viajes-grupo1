@@ -240,6 +240,14 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
     return resultado.rows[0] ? mapearViaje(resultado.rows[0]) : undefined;
   }
 
+  async obtenerActivoPorChofer(idChofer: string): Promise<Viaje | undefined> {
+    const resultado = await this.ejecutor.query<FilaViaje>(
+      "SELECT * FROM viajes.viaje WHERE chofer_usuario_id = $1 AND estado IN ('ASIGNADO', 'CHOFER_EN_CAMINO', 'EN_CURSO') LIMIT 1",
+      [idChofer]
+    );
+    return resultado.rows[0] ? mapearViaje(resultado.rows[0]) : undefined;
+  }
+
   async listar(): Promise<Viaje[]> {
     const resultado = await this.ejecutor.query<FilaViaje>(
       "SELECT * FROM viajes.viaje ORDER BY creado_en DESC"

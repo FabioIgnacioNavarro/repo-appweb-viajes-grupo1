@@ -55,6 +55,7 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
 - **Flujo B (Flota, Tarea Pesada, Búsqueda Geo y Tiempo Real):** ADR 0040 a 0049.
   - 40. Simulador local y repetible de carga de Flota.
   - 41. Mantener Haversine con prefiltrado geográfico en PostgreSQL, basado en la línea de base de 500 choferes.
+  - 42. WebSocket autenticado en `ms-viajes`, eventos por usuario y recuperación mediante GET; ubicaciones aproximadas del chofer desde `ms-flota`.
 - **Flujo C (Seguridad, Observabilidad, Google Maps y Operación):** ADR 0050 a 0059.
   - 50. Observabilidad distribuida con OpenTelemetry y Jaeger.
   - 51. Geocodificación y cálculo de rutas con Google Maps Platform.

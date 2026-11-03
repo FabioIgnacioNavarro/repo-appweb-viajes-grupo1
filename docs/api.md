@@ -51,6 +51,27 @@ Este documento consolida el contrato de la API HTTP de la plataforma para todos 
 | `GET` | `/ready/tarifas` | `ms-tarifas:3001/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/ready/flota` | `ms-flota:3002/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 
+### Canal de tiempo real
+
+`GET /tiempo-real` establece una conexión WebSocket con `ms-viajes` (Nginx reenvía el upgrade). El handshake requiere un JWT válido en `Authorization: Bearer <JWT>`. Los clientes de navegador, que no permiten encabezados personalizados en WebSocket, pueden presentar los subprotocolos `viajes.v1`, `autenticacion-jwt`, `<JWT>`; el servidor negocia únicamente `viajes.v1`, nunca devuelve el token. No se aceptan JWT en la URL. El servidor asocia la conexión al `id_usuario` del JWT y no permite elegir otro usuario o viaje en la URL.
+
+Los mensajes son JSON con la envoltura `{"evento":"...","datos":{...}}`:
+
+- `CANAL_LISTO`: confirma que el usuario autenticado quedó conectado.
+- `OFERTA_NUEVA`: se entrega únicamente al chofer destinatario. `datos` incluye `id_oferta`, `id_viaje`, `estado`, `enviada_en` y `expira_en`.
+- `OFERTA_VENCIDA`: se entrega al chofer cuando el servidor observa el vencimiento (al consultar o aceptar); incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`. El cliente usa `expira_en` para marcar el vencimiento local en el instante indicado y consulta el GET al reconectar.
+- `OFERTA_CANCELADA`: se entrega a los choferes con ofertas pendientes cuando el viaje se asigna a otro chofer o se cancela. Incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`.
+- `ESTADO_VIAJE_ACTUALIZADO`: se entrega al pasajero y al chofer asignado. `datos` incluye `id_viaje`, `estado`, `id_chofer` y `actualizado_en`.
+- `UBICACION_CHOFER_ACTUALIZADA`: se entrega al pasajero del viaje activo. Incluye `id_viaje`, `latitud`, `longitud` redondeadas a tres decimales y `actualizado_en`; no expone la posición precisa almacenada por Flota.
+
+El canal no conserva eventos ni reemplaza la API de consulta. Después de conectar o reconectar, el cliente restaura el estado real con `GET /viajes/:idViaje` o `GET /choferes/yo/ofertas` usando el mismo JWT y luego aplica los mensajes nuevos. El GET de ofertas materializa y notifica los vencimientos que observa. Si el token es inválido, el handshake termina con `401`. La notificación es de mejor esfuerzo y no cambia el resultado de una operación ya persistida.
+
+Ruta interna entre servicios, bloqueada por Nginx desde el exterior:
+
+#### `POST /interno/viajes/ubicacion-chofer`
+
+`ms-flota` llama esta ruta con el JWT original del chofer y la ubicación ya persistida. `ms-viajes` valida el rol, busca la asignación activa del chofer y solo si el viaje está `CHOFER_EN_CAMINO` o `EN_CURSO` emite al pasajero la ubicación aproximada (`202`). Sin viaje en seguimiento devuelve `204`; otros roles reciben `403`. Una falla de esta notificación no revierte la actualización en Flota.
+
 ---
 
 ## 3. Catálogo de Endpoints Públicos (API Gateway :8080)

@@ -3,8 +3,8 @@ import { createServer, type Server } from "node:http";
 import test from "node:test";
 import { strict as assert } from "node:assert";
 import {
-  AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConfirmarViaje,
-  ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, RechazarOferta,
+  AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarOfertasChofer, ConfirmarViaje,
+  ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type EstimacionVigente
 } from "./dominio";
@@ -131,5 +131,75 @@ test("las rutas internas exponen demanda por zona y solo los choferes ocupados s
     await pedido(contexto.base, `/choferes/yo/ofertas/${oferta.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
     const ocupados = await pedido(contexto.base, "/interno/choferes/ocupados?ids_choferes=chofer-1,otro-chofer", "pasajero");
     assert.deepEqual(await ocupados.json(), { ids_choferes_ocupados: ["chofer-1"] });
+  } finally { await cerrar(contexto.servidor); }
+});
+
+test("la ubicación interna solo se publica de forma aproximada al pasajero del chofer activo", async () => {
+  const contexto = await servidorDePrueba();
+  const publicaciones: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
+  const eventos = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { publicaciones.push({ usuario, evento, datos }); } };
+  contexto.deps.eventosTiempoReal = eventos;
+  contexto.deps.publicarEstado = new PublicarEstadoViaje(eventos);
+  contexto.deps.publicarUbicacion = new PublicarUbicacionChoferEnViaje(contexto.deps.viajes, eventos);
+  try {
+    const creado = await pedido(contexto.base, "/viajes", "pasajero", { method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "http-ubicacion" } });
+    const viaje = await creado.json() as { id_viaje: string };
+    const oferta = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, new GeneradorIdMemoria()).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
+    await pedido(contexto.base, `/choferes/yo/ofertas/${oferta.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
+    await pedido(contexto.base, `/viajes/${viaje.id_viaje}/llegada`, "chofer", { method: "POST", body: "{}" });
+
+    const denegada = await pedido(contexto.base, "/interno/viajes/ubicacion-chofer", "otroChofer", { method: "POST", body: JSON.stringify({ latitud: -27.4519, longitud: -58.9864 }) });
+    assert.equal(denegada.status, 204);
+    const pasajero = await pedido(contexto.base, "/interno/viajes/ubicacion-chofer", "pasajero", { method: "POST", body: JSON.stringify({ latitud: -27.4519, longitud: -58.9864 }) });
+    assert.equal(pasajero.status, 403);
+    const aceptada = await pedido(contexto.base, "/interno/viajes/ubicacion-chofer", "chofer", { method: "POST", body: JSON.stringify({ latitud: -27.4519, longitud: -58.9864, actualizado_at: "2026-11-02T17:00:00.000Z" }) });
+    assert.equal(aceptada.status, 202);
+    const ubicacion = publicaciones.find((p) => p.evento === "UBICACION_CHOFER_ACTUALIZADA");
+    assert.equal(ubicacion?.usuario, "pasajero-1");
+    assert.equal(ubicacion?.datos.latitud, -27.452);
+    assert.equal(ubicacion?.datos.longitud, -58.986);
+  } finally { await cerrar(contexto.servidor); }
+});
+
+test("al asignar o cancelar un viaje, las ofertas restantes reciben su notificación y estado final", async () => {
+  const contexto = await servidorDePrueba();
+  const publicaciones: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
+  const eventos = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { publicaciones.push({ usuario, evento, datos }); } };
+  contexto.deps.aceptar = new AceptarOferta(contexto.deps.ofertas, contexto.deps.viajes, new AsignadorAtomicoMemoria(), eventos);
+  contexto.deps.cancelar = new CancelarViaje(contexto.deps.viajes, new AsignadorAtomicoMemoria(), contexto.deps.ofertas, eventos);
+  try {
+    const creado = await pedido(contexto.base, "/viajes", "pasajero", { method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "http-ofertas-restantes" } });
+    const viaje = await creado.json() as { id_viaje: string };
+    const ids = new GeneradorIdMemoria();
+    const ofertaAceptada = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, ids).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000));
+    const ofertaRestante = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, ids).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viaje.id_viaje, "chofer-2", new Date(Date.now() + 60_000));
+    const respuesta = await pedido(contexto.base, `/choferes/yo/ofertas/${ofertaAceptada.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
+    assert.equal(respuesta.status, 200);
+    assert.equal((await contexto.deps.ofertas.obtener(ofertaRestante.id))?.estado, "NO_SELECCIONADA");
+    assert.ok(publicaciones.some((p) => p.usuario === "chofer-2" && p.evento === "OFERTA_CANCELADA" && p.datos.motivo === "viaje_asignado"));
+
+    const segundo = await pedido(contexto.base, "/viajes", "pasajero", { method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "http-viaje-cancelado" } });
+    const viajeCancelado = await segundo.json() as { id_viaje: string };
+    const ofertaCancelada = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, ids).ejecutar({ idUsuario: "soporte", rol: "SOPORTE" }, viajeCancelado.id_viaje, "chofer-2", new Date(Date.now() + 60_000));
+    const cancelacion = await pedido(contexto.base, `/viajes/${viajeCancelado.id_viaje}/cancelacion`, "pasajero", { method: "POST", body: JSON.stringify({ motivo: "prueba" }) });
+    assert.equal(cancelacion.status, 200);
+    assert.equal((await contexto.deps.ofertas.obtener(ofertaCancelada.id))?.estado, "CANCELADA");
+    assert.ok(publicaciones.some((p) => p.usuario === "chofer-2" && p.evento === "OFERTA_CANCELADA" && p.datos.motivo === "viaje_cancelado"));
+  } finally { await cerrar(contexto.servidor); }
+});
+
+test("al recuperar las ofertas, materializa y notifica los vencimientos observados", async () => {
+  const contexto = await servidorDePrueba();
+  const publicaciones: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
+  const eventos = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { publicaciones.push({ usuario, evento, datos }); } };
+  contexto.deps.consultarOfertas = new ConsultarOfertasChofer(contexto.deps.ofertas, eventos);
+  const enviada = new Date(Date.now() - 120_000);
+  const expirada = await contexto.deps.ofertas.guardar({ id: "oferta-vencida", viajeId: "viaje-vencido", choferId: "chofer-1", estado: "PENDIENTE", enviadaEm: enviada, expiraEm: new Date(enviada.getTime() + 60_000) });
+  try {
+    const respuesta = await pedido(contexto.base, "/choferes/yo/ofertas", "chofer");
+    const cuerpo = await respuesta.json() as { ofertas: Array<{ id_oferta: string; estado: string }> };
+    assert.equal(respuesta.status, 200);
+    assert.equal(cuerpo.ofertas.find((oferta) => oferta.id_oferta === expirada.id)?.estado, "vencida");
+    assert.ok(publicaciones.some((p) => p.usuario === "chofer-1" && p.evento === "OFERTA_VENCIDA"));
   } finally { await cerrar(contexto.servidor); }
 });

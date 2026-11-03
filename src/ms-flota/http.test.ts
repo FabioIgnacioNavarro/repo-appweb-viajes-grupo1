@@ -69,3 +69,19 @@ test("ms-flota aplica autorizacion por recurso al consultar chofer y ubicacion",
     assert.equal(cuerpoPermitido.ubicacion.latitud, -27.45);
   } finally { await terminar(server); }
 });
+
+test("ms-flota reenvía la ubicación persistida con JWT y no falla si el canal temporal no está disponible", async () => {
+  const ctx = datos();
+  const jwt = ctx.tokens.generar({ idUsuario: "chofer-disponible", rol: "CHOFER" });
+  const recibidos: unknown[] = [];
+  ctx.deps.publicadorUbicacionViaje = { async publicar(actor, ubicacion, token) { recibidos.push({ actor, ubicacion, token }); throw new Error("canal cerrado"); } };
+  const { base, server } = await iniciar(ctx.deps);
+  try {
+    const actualizado = new Date(Date.now() + 1000).toISOString();
+    const respuesta = await fetch(`${base}/choferes/yo/ubicacion`, { method: "POST", headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" }, body: JSON.stringify({ latitud: -27.451, longitud: -58.986, actualizado_at: actualizado }) });
+    assert.equal(respuesta.status, 200);
+    assert.equal(recibidos.length, 1);
+    assert.equal((recibidos[0] as { token: string }).token, jwt);
+    assert.equal((recibidos[0] as { actor: { idUsuario: string } }).actor.idUsuario, "chofer-disponible");
+  } finally { await terminar(server); }
+});

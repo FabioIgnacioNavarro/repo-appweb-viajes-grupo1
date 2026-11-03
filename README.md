@@ -112,13 +112,17 @@ npm.cmd run test:e2e
 
 | Servicio | Puerto Host | Descripción | Endpoints Clave |
 |---|---|---|---|
-| **`nginx` (API Gateway)** | `8080` | Entrada única pública con enrutamiento y blindaje de rutas internas. | `GET /health`<br>`GET /ready/*`<br>`POST /viajes/estimacion`<br>`POST /viajes` |
+| **`nginx` (API Gateway)** | `8080` | Entrada única pública con enrutamiento y blindaje de rutas internas. | `GET /health`<br>`GET /ready/*`<br>`GET /tiempo-real`<br>`POST /viajes/estimacion`<br>`POST /viajes` |
 | **`auth-emulator`** | `9099` | Emulador OIDC / Firebase Auth con claves RSA 2048 y tokens dinámicos. | `GET /.well-known/jwks.json`<br>`GET /auth/tokens-demo`<br>`POST /auth/token` |
 | **`jaeger`** | `16686` | Interfaz web de observabilidad distribuida y análisis de latencias. | `http://localhost:16686` (Web UI)<br>`http://localhost:4318` (OTLP) |
 | **`ms-viajes`** | *Interno :3000* | Ciclo de vida, asignación atómica concurrente, cobros e idempotencia. | `GET /ready`<br>`POST /viajes`<br>`GET /viajes/:id` |
 | **`ms-tarifas`** | *Interno :3001* | Cálculo de tarifa dinámica (BigInt), OSRM/Google/Haversine y Open-Meteo. | `GET /ready`<br>`POST /viajes/estimacion` |
 | **`ms-flota`** | *Interno :3002* | Choferes, disponibilidad, geocercanía e historial de ubicaciones GPS. | `GET /ready`<br>`GET /choferes/cercanos` |
 | **`postgres`** | *Interno :5432* | Base relacional con esquemas `flota`, `tarifa` y `viajes`. | Conexión con pooling y transacciones |
+
+### Canal WebSocket de viajes
+
+El gateway expone `ws://localhost:8080/tiempo-real` en desarrollo. El handshake requiere JWT: los clientes Node pueden usar `Authorization: Bearer <JWT>` y los navegadores pueden usar los subprotocolos `viajes.v1`, `autenticacion-jwt`, `<JWT>`. El servidor solo negocia `viajes.v1` y nunca recibe el token en la URL. Se envían ofertas al chofer destinatario, cambios de estado a los participantes y ubicación aproximada al pasajero. Al reconectar, recuperar el estado persistido con `GET /viajes/:idViaje` o `GET /choferes/yo/ofertas`.
 
 ---
 

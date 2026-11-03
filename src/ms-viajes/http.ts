@@ -4,7 +4,8 @@ import {
   ConsultarChoferesOcupados, ConsultarDemandaPorZona,
   ErrorDominio, FinalizarViaje, RechazarOferta,
   type ActorAutenticado, type EstimacionVigente, type RepositorioOfertas, type RepositorioViajes,
-  type Viaje, type Oferta
+  type Viaje, type Oferta, type PublicadorEventosTiempoReal, type PublicarEstadoViaje,
+  type PublicarUbicacionChoferEnViaje, type ConsultarOfertasChofer
 } from "./dominio";
 import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
 
@@ -27,6 +28,10 @@ export interface DependenciasViajes {
   confirmarConOfertas?: (actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, token: string) => Promise<Viaje>;
   consultarDemanda?: { ejecutar(zonaId: string): Promise<number> | number };
   consultarOcupacion?: { ejecutar(idsChoferes: string[]): Promise<string[]> | string[] };
+  eventosTiempoReal?: PublicadorEventosTiempoReal;
+  publicarEstado?: PublicarEstadoViaje;
+  publicarUbicacion?: PublicarUbicacionChoferEnViaje;
+  consultarOfertas?: ConsultarOfertasChofer;
 }
 
 declare global {
@@ -52,7 +57,7 @@ function errorHttp(error: unknown, respuesta: Response): void {
     ENTRADA_INVALIDA: 400, CLAVE_IDEMPOTENCIA_REQUERIDA: 400, IMPORTE_INVALIDO: 422,
     ESTIMACION_NO_ENCONTRADA: 404, ESTIMACION_VENCIDA: 409, OFERTA_VENCIDA: 409, OFERTA_NO_DISPONIBLE: 409,
     VIAJE_NO_DISPONIBLE: 409, VIAJE_NO_OFERTABLE: 409, VIAJE_TERMINAL: 409,
-    ASIGNACION_EN_CONFLICTO: 409, TRANSICION_INVALIDA: 422
+    ASIGNACION_EN_CONFLICTO: 409, TRANSICION_INVALIDA: 422, UBICACION_NO_AUTORIZADA: 403
   };
   if (error instanceof ErrorDominio) {
     respuesta.status(mapa[error.codigo] ?? 422).json({ error: { codigo: error.codigo, mensaje: error.message, detalles: {} } });
@@ -117,6 +122,20 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     respuesta.status(200).json({ ids_choferes_ocupados: ocupados });
   });
 
+  router.post("/interno/viajes/ubicacion-chofer", async (pedido, respuesta) => {
+    try {
+      const actor = actorDe(pedido);
+      const cuerpo = pedido.body as unknown;
+      if (!objeto(cuerpo) || typeof cuerpo.latitud !== "number" || !Number.isFinite(cuerpo.latitud) || cuerpo.latitud < -90 || cuerpo.latitud > 90 || typeof cuerpo.longitud !== "number" || !Number.isFinite(cuerpo.longitud) || cuerpo.longitud < -180 || cuerpo.longitud > 180) {
+        respuesta.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "La ubicación recibida no es válida.", detalles: {} } }); return;
+      }
+      const actualizado = typeof cuerpo.actualizado_at === "string" && !Number.isNaN(Date.parse(cuerpo.actualizado_at)) ? cuerpo.actualizado_at : new Date().toISOString();
+      const emitida = deps.publicarUbicacion ? await deps.publicarUbicacion.ejecutar(actor, { latitud: cuerpo.latitud, longitud: cuerpo.longitud, actualizadoEn: actualizado }) : false;
+      if (!emitida) { respuesta.status(204).end(); return; }
+      respuesta.status(202).json({ estado: "notificacion_aceptada" });
+    } catch (error) { errorHttp(error, respuesta); }
+  });
+
   router.post("/viajes", async (pedido, respuesta) => {
     try {
       const cuerpo = pedido.body as unknown;
@@ -127,6 +146,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
       const viaje = deps.confirmarConOfertas
         ? await deps.confirmarConOfertas(actorDe(pedido), estimacion, clave, pedido.tokenExterno!)
         : await deps.confirmar.ejecutar(actorDe(pedido), estimacion, clave);
+      deps.publicarEstado?.ejecutar(viaje);
       respuesta.status(201).json(viajeDto(viaje));
     } catch (error) { errorHttp(error, respuesta); }
   });
@@ -159,6 +179,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
       const cuerpo = pedido.body as unknown;
       const motivo = objeto(cuerpo) && typeof cuerpo.motivo === "string" ? cuerpo.motivo : "sin motivo informado";
       const viaje = await deps.cancelar.ejecutar(actorDe(pedido), pedido.params.idViaje, motivo);
+      deps.publicarEstado?.ejecutar(viaje);
       respuesta.status(200).json(viajeDto(viaje));
     } catch (error) { errorHttp(error, respuesta); }
   });
@@ -166,6 +187,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.post("/viajes/:idViaje/llegada", async (pedido, respuesta) => {
     try {
       const viaje = await deps.avanzar.ejecutar(actorDe(pedido), pedido.params.idViaje, "CHOFER_EN_CAMINO");
+      deps.publicarEstado?.ejecutar(viaje);
       respuesta.status(200).json(viajeDto(viaje));
     } catch (error) { errorHttp(error, respuesta); }
   });
@@ -173,6 +195,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.post("/viajes/:idViaje/inicio", async (pedido, respuesta) => {
     try {
       const viaje = await deps.avanzar.ejecutar(actorDe(pedido), pedido.params.idViaje, "EN_CURSO");
+      deps.publicarEstado?.ejecutar(viaje);
       respuesta.status(200).json(viajeDto(viaje));
     } catch (error) { errorHttp(error, respuesta); }
   });
@@ -180,6 +203,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.post("/viajes/:idViaje/finalizacion", async (pedido, respuesta) => {
     try {
       const resultado = await deps.finalizar.ejecutar(actorDe(pedido), pedido.params.idViaje);
+      deps.publicarEstado?.ejecutar(resultado.viaje);
       respuesta.status(200).json({ viaje: viajeDto(resultado.viaje), cobro: { id_cobro: resultado.cobro.id, importe: resultado.cobro.importe, moneda: resultado.cobro.moneda, estado: resultado.cobro.estado.toLowerCase() } });
     } catch (error) { errorHttp(error, respuesta); }
   });
@@ -188,7 +212,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     try {
       const actor = actorDe(pedido);
       if (actor.rol !== "CHOFER") throw new ErrorDominio("ROL_NO_AUTORIZADO", "Solo un chofer puede consultar sus ofertas.");
-      const lista = await deps.ofertas.listarPorChofer(actor.idUsuario);
+      const lista = deps.consultarOfertas ? await deps.consultarOfertas.ejecutar(actor) : await deps.ofertas.listarPorChofer(actor.idUsuario);
       respuesta.status(200).json({ ofertas: lista.map(ofertaDto) });
     } catch (error) { errorHttp(error, respuesta); }
   });
@@ -196,6 +220,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.post("/choferes/yo/ofertas/:idOferta/aceptacion", async (pedido, respuesta) => {
     try {
       const viaje = await deps.aceptar.ejecutar(actorDe(pedido), pedido.params.idOferta);
+      deps.publicarEstado?.ejecutar(viaje);
       respuesta.status(200).json(viajeDto(viaje));
     } catch (error) { errorHttp(error, respuesta); }
   });
