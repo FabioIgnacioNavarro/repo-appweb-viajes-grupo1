@@ -14,7 +14,7 @@ export default defineConfig({
     ["list"]
   ],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     launchOptions: {
@@ -30,14 +30,22 @@ export default defineConfig({
       }
     }
   ],
-  /* Levanta automáticamente el servidor web de la demo si no está corriendo */
-  webServer: {
-    command: "npm.cmd run demo:web",
-    url: "http://127.0.0.1:3000/health",
-    reuseExistingServer: !process.env.CI,
-    timeout: 30 * 1000,
-    env: {
-      RUTA_PROVEEDOR: "HAVERSINE"
+  /* Levanta automáticamente el servidor web de desarrollo (React + Vite) y el servidor legacy si no están corriendo */
+  webServer: [
+    {
+      command: "npm.cmd run dev:web -- --host 127.0.0.1 --port 5173",
+      url: "http://127.0.0.1:5173",
+      reuseExistingServer: !process.env.CI,
+      timeout: 30 * 1000
+    },
+    {
+      command: "npm.cmd run demo:web",
+      url: "http://127.0.0.1:3000/health",
+      reuseExistingServer: !process.env.CI,
+      timeout: 30 * 1000,
+      env: {
+        RUTA_PROVEEDOR: "HAVERSINE"
+      }
     }
-  }
+  ]
 });
