@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@source "../index.html";
+@source "./**/*.{ts,tsx}";
+@source "../../src/**/*.{ts,tsx}";
+
 @layer base {
   body {
     background-color: #f8fafc;
