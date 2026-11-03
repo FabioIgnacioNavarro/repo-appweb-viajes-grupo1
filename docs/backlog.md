@@ -2,6 +2,8 @@
 
 Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `terminado`.
 
+Sprint activo: [docs/sprint-01.md](sprint-01.md) (3 al 9 de noviembre).
+
 ## Asignación de flujos de trabajo
 
 Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
@@ -24,7 +26,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | ARC-002 | Completar ADR de persistencia | Alta | terminado | Flujo A | ADR 0034 define SQL directo con pg, importes BIGINT exactos y puertos asíncronos. |
 | ARC-003 | Elegir mecanismo de asignación concurrente | Alta | terminado | Flujo A | ADR 0033, índice parcial ux_viaje_chofer_activo y test de 50 aceptaciones concurrentes en ms-viajes/postgres.test.ts. |
 | ARC-004 | Elegir geolocalización | Alta | terminado | Flujo B | PR #36 mergeado. ADR 0041 compara PostgreSQL con Haversine, PostGIS y geohash; justifica la opción actual con tres mediciones reproducibles de 500 choferes. |
-| ARC-005 | Elegir canal de tiempo real | Media | en revisión | Flujo B | Closes #19. ADR 0042 compara polling, SSE y WebSocket; documenta autenticación, autorización, eventos, reconexión y límites de escalado. |
+| ARC-005 | Elegir canal de tiempo real | Media | terminado | Flujo B | Closes #19. ADR 0042 compara polling, SSE y WebSocket; documenta autenticación, autorización, eventos, reconexión y límites de escalado. |
 | API-001 | Consolidar contrato HTTP | Alta | terminado | Flujo C | Closes #20. Contrato consolidado en docs/api.md y docs/contratos.md, sobre uniforme de error, códigos de estado alineados, bloqueo de rutas internas en Nginx y prueba en src/e2e.test.ts. |
 | SEC-001 | Diseñar autorización por recurso | Alta | terminado | Flujo C | Hay pruebas de acceso permitido y denegado para viajes y ubicaciones. |
 | CON-001 | Definir caso de cancelación simultánea | Alta | terminado | Flujo A | Especificado en ADR 0033 y testeado de forma determinista en postgres.test.ts y dominio.test.ts. |
@@ -45,10 +47,26 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | OPS-002 | Completar gateway, JWT y Compose | Alta | terminado | Flujo C | Compose arranca PostgreSQL, los tres procesos y Nginx con healthchecks, DNS interno y proveedores controlados para E2E. |
 | OPS-003 | Ejecutar flujo E2E reproducible | Alta | terminado | Común | `npm run test:e2e` y `requests/flujo-e2e.http` cubren estimación, confirmación, ofertas, asignación, estados y cobro. |
 | VIA-002 | Publicar API HTTP de ms-viajes | Alta | terminado | Flujo A | Router Express delgado, JWT por puerto, DTOs, errores uniformes, idempotencia y tests HTTP. |
-| TIE-001 | WebSockets y tiempo real (Tema 20) | Alta | en revisión | Flujo B | Closes #27. `ws` en ms-viajes, ofertas/estados por usuario, cancelación y vencimiento de ofertas, ubicación aproximada, JWT en handshake, autorización por viaje, reconexión con GET y tests automatizados. |
+| TIE-001 | WebSockets y tiempo real (Tema 20) | Alta | terminado | Flujo B | Closes #27. `ws` en ms-viajes, ofertas/estados por usuario, cancelación y vencimiento de ofertas, ubicación aproximada, JWT en handshake, autorización por viaje, reconexión con GET y tests automatizados. |
 | OBS-001 | Observabilidad con OpenTelemetry y Jaeger (Tema 18) | Alta | terminado | Flujo C | ADR 0050 y `docs/demo-observabilidad.md`. SDK OpenTelemetry en servicios, propagación W3C traceparent y logs correlacionados, y servicio Jaeger en Compose. |
 | SEG-002 | Firebase Emulator Suite y RBAC (Tema 19) | Alta | terminado | Flujo C | Closes #28. ADR 0054 y `requests/seguridad-rbac.http`. Emulador JWKS offline en Compose/TypeScript, validación criptográfica asimétrica RS256, RBAC en claims y verificación de 3 escenarios (200/401/403). |
 | GEO-001 | Google Maps Rutas y Geocodificación | Media | terminado | Flujo C | Closes #29. Puerto Geocodificador (directa en cascada por cercanía e inversa) y adaptadores Google Maps / Nominatim (OpenStreetMap) / fallback determinista en ms-tarifas y demo web interactiva. ADR 0051, ADR 0052 y ADR 0053. |
+
+| WEB-001 | Núcleo del front: shell, router, cliente API y sesión | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Día 1). Closes #39. Núcleo del front (router, sesión, cliente API y WebSocket) y ADR 0055. Bloquea WEB-004 y WEB-006. Plan en docs/sprint-01.md. |
+| OPS-004 | Nginx sirve el front desde el gateway | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Días 1-2). Closes #40. Nginx entrega el front en el mismo origen que la API, con WebSocket y rutas internas bloqueadas. Plan en docs/sprint-01.md. |
+| WEB-002 | Login por rol con el emulador de identidad | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Días 1-2). Closes #41. Login por rol con el emulador de identidad, guardas por rol y manejo de token vencido. Plan en docs/sprint-01.md. |
+| WEB-003 | Sistema de diseño responsive y accesibilidad | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Días 2-3). Closes #42. Sistema de diseño responsive (360, 768 y 1024 px) y accesibilidad básica. Plan en docs/sprint-01.md. |
+| API-002 | Endpoints de Operador/Admin: listado, auditoría de tarifa y regla de demanda | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Días 2-4). Closes #43. Listado de viajes, auditoría de tarifa y regla de demanda versionada para Operador/Admin. Plan en docs/sprint-01.md. |
+| WEB-008 | Panel de Operador y Administrador | Media | pendiente | Flujo C | Sprint 1 (Fabio, Días 4-6). Closes #44. Panel de Operador y Administrador con auditoría de precio y edición de la regla de demanda. Plan en docs/sprint-01.md. |
+| SEG-003 | Entorno para ataque cruzado y hardening del front | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Días 5-7). Closes #45. Entorno reproducible para el ataque cruzado, hardening del front y registro de hallazgos. Plan en docs/sprint-01.md. |
+| TEST-001 | E2E Playwright por rol y viewports | Alta | pendiente | Flujo C | Sprint 1 (Fabio, Días 5-7). Closes #46. E2E Playwright por rol y viewports, incluida la reconexión del tiempo real. Plan en docs/sprint-01.md. |
+| WEB-004 | Vista del pasajero: estimación con precio dinámico, confirmación y cancelación | Alta | pendiente | Flujo A | Sprint 1 (Joel, Días 2-5). Closes #47. Vista del pasajero con multiplicador visible, precio congelado, idempotencia y cancelación. Plan en docs/sprint-01.md. |
+| WEB-005 | Pagos: estado del cobro, recibo, falla y reintento | Alta | pendiente | Flujo A | Sprint 1 (Joel, Días 5-6). Closes #48. Estado del cobro, recibo, falla simulada y reintento idempotente. Plan en docs/sprint-01.md. |
+| WEB-006 | Vista del chofer: disponibilidad, ofertas y flujo del viaje | Alta | pendiente | Flujo B | Sprint 1 (Valentino, Días 1-4). Closes #49. Vista del chofer con disponibilidad, ofertas con vencimiento y avance de estados. Plan en docs/sprint-01.md. |
+| WEB-007 | Seguimiento en vivo con WebSocket y reconexión | Alta | pendiente | Flujo B | Sprint 1 (Valentino, Días 3-5). Closes #50. Seguimiento en vivo con WebSocket, reconexión y chofer simulado para la demo. Plan en docs/sprint-01.md. |
+| MED-002 | Mediciones finales de carga: 3 repeticiones por escenario | Alta | pendiente | Flujo B | Sprint 1 (Valentino, Días 3-6). Closes #51. Tres repeticiones por escenario con comparación antes y después de optimizar. Plan en docs/sprint-01.md. |
+| FAL-001 | Pruebas de falla de dependencias y recuperación | Media | pendiente | Flujo B | Sprint 1 (Valentino, Días 6-7). Closes #52. Pruebas de servicio caído, timeout y recuperación con trazas en Jaeger. Plan en docs/sprint-01.md. |
+| DOC-001 | Informe, guion de demo y verificación de clon limpio | Alta | pendiente | Flujo A | Sprint 1 (Joel, Día 7). Closes #53. Informe, guion de demo y verificación de clon limpio por otra persona. Plan en docs/sprint-01.md. |
 
 ## Regla de actualización
 
