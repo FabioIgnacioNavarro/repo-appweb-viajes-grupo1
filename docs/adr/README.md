@@ -44,6 +44,7 @@ Decisiones adicionales registradas:
 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
 53. Geocodificación en cascada por cercanía y geocodificación inversa.
 54. Emulador de identidad externa OIDC / JWKS y control de acceso RBAC por recurso.
+55. Stack del front-end (React, TypeScript y Tailwind CSS con Vite) y arquitectura modular por roles.
 
 ## Rangos reservados para flujos paralelos
 
@@ -62,3 +63,4 @@ Para evitar conflictos de numeración durante el desarrollo en paralelo de los f
   - 52. Geocodificación abierta con Nominatim (OpenStreetMap) como alternativa sin tarjeta.
   - 53. Geocodificación en cascada por cercanía y geocodificación inversa.
   - 54. Emulador de identidad externa OIDC / JWKS y control de acceso RBAC por recurso.
+55. Stack del front-end (React, TypeScript y Tailwind CSS con Vite) y arquitectura modular por roles.

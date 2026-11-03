@@ -1,41 +1,107 @@
-# Demo web del recorrido
+# Aplicación Web y Demo del Recorrido
 
-## Propósito
+Este documento describe la arquitectura, ejecución y estructura de la aplicación web del proyecto, formalizada en el [ADR 0055](adr/0055-stack-del-front.md).
 
-Dar una representación visual sencilla del flujo de viaje de la demo de terminal: cargar origen y
-destino, consultar el recorrido por calles y mostrar sus estados. Es una ayuda de presentación y no
-forma parte del producto backend exigido por el trabajo práctico.
+---
 
-## Alcance
+## 1. Arquitectura del Front-End (Sprint 1)
 
-- Coordenadas de origen y destino editables, con valores iniciales de ejemplo en Resistencia.
-- Ruta, distancia, duración y precio estimado calculados por el dominio con el proveedor configurado,
-  mostrados sobre un mapa Leaflet con teselas de OpenStreetMap.
-- Vigencia de tres minutos para la estimación; se puede actualizar recalculando el recorrido.
-- Simulación manual de los estados `SOLICITADO`, `ASIGNADO`, `EN_CURSO` y `FINALIZADO`.
-- Servidor Express local para servir los archivos de la página.
+Para permitir que los tres integrantes del equipo desarrollen vistas y flujos en paralelo sin colisiones de código ni de estilos, el frontend se estructura como una **Single Page Application (SPA) modular** construida con **React 19, TypeScript y Tailwind CSS v4**, empaquetada con **Vite** y servida estáticamente desde Nginx en el API Gateway (`http://localhost:8080/`).
 
-La página solicita la estimación al servidor Express local, que usa el mismo caso de uso y proveedor
-de rutas configurado que la demo de terminal. El precio es orientativo y refleja la fórmula actual
-de tarifa base, distancia y duración; los ajustes dinámicos por demanda, disponibilidad, clima y
-franja horaria aún no están implementados. No confirma tarifas, no autentica usuarios y no persiste
-viajes. Los botones de estados son una simulación visual independiente de la demo de terminal.
+### Estructura de Carpetas
 
-## Ejecución
+```text
+web/
+├── index.html                   # Entry-point HTML de la aplicación
+├── tsconfig.json                # Configuración TypeScript del front
+├── legacy-demo/                 # Demo original en Vanilla JS (preservada)
+└── src/
+    ├── main.tsx                 # Montaje de React DOM
+    ├── App.tsx                  # Enrutador principal y Shell de layout
+    ├── index.css                # Directivas Tailwind CSS v4 (@import "tailwindcss")
+    ├── nucleo/                  # Módulos transversales compartidos (Flujo C - Fabio)
+    │   ├── tipos.ts             # Tipos y contratos alineados con docs/api.md y docs/contratos.md
+    │   ├── sesion.ts            # Almacén de sesión en memoria / sessionStorage y decodificación JWT
+    │   ├── api.ts               # Cliente HTTP fetch con Bearer token, Idempotencia y sobre de error
+    │   ├── ws.ts                # Cliente WebSocket con reconexión exponencial y eventos tipados
+    │   └── router.tsx           # Router por hash con guardas de acceso por rol
+    ├── componentes/
+    │   └── comunes/
+    │       └── Shell.tsx        # Navbar, estado en vivo de WebSocket y control de sesión
+    └── vistas/                  # Zonas aisladas asignadas a cada desarrollador
+        ├── login/               # Pantalla de acceso con perfiles demo de prueba (Fabio)
+        ├── pasajero/            # Estimación, Variante A y Pagos (Joel - WEB-004 y WEB-005)
+        ├── chofer/              # Disponibilidad, ofertas y avance de viaje (Valentino - WEB-006 y WEB-007)
+        ├── operador/            # Supervisión de viajes y auditoría de precio (Fabio - WEB-008)
+        ├── admin/               # Configuración de reglas de demanda por zona (Fabio - WEB-008)
+        └── no_autorizado/       # Pantalla 403 Forbidden para accesos denegados
+```
 
-Con Node.js 22 instalado, ejecutar `npm install` y luego `npm run demo:web`. Abrir
-`http://localhost:3000`. Para cambiar el puerto, definir `PUERTO_DEMO_WEB` con un puerto entre 1 y
-65535.
+---
 
-El mapa y las rutas requieren internet cuando el proveedor sea OSRM o Google. La página usa el
-proveedor seleccionado mediante `RUTA_PROVEEDOR` y la URL de OSRM configurable con `OSRM_BASE_URL`;
-las teselas provienen de OpenStreetMap. Los servicios públicos no se deben usar para cargas de
-producción. Los datos cartográficos deben mostrar la atribución visible a OpenStreetMap.
+## 2. Guía para Desarrolladores (Cómo trabajar en cada Flujo)
 
-## Criterio de aceptación
+### Cómo consumir el Núcleo (`web/src/nucleo/`)
+Todos los desarrolladores pueden importar utilidades transversales directamente:
 
-En un navegador, se ingresan dos pares de coordenadas válidos, se obtiene una ruta dibujada entre
-ambos puntos con distancia, duración y precio en pesos enteros, y la vigencia de tres minutos se
-indica en la pantalla. Los controles permiten recorrer los cuatro estados de prueba. Ante
-coordenadas inválidas o error del proveedor, la página muestra un mensaje comprensible y permite
-volver a intentar.
+```tsx
+import { clienteApi } from "@/nucleo/api";
+import { clienteTiempoReal } from "@/nucleo/ws";
+import { obtenerSesion } from "@/nucleo/sesion";
+import { Estimacion, Viaje } from "@/nucleo/tipos";
+
+// 1. Peticiones HTTP autenticadas (inyectan Bearer y traducen errores automáticamente)
+const estimacion = await clienteApi.post<Estimacion>("/estimaciones", {
+  origen: { latitud: -27.451, longitud: -58.986 },
+  destino: { latitud: -27.465, longitud: -58.995 }
+});
+
+// 2. Operaciones críticas con idempotencia
+const viaje = await clienteApi.post<Viaje>("/viajes", {
+  idEstimacion: estimacion.id
+}, { claveIdempotencia: "clave-unica-123" });
+
+// 3. Suscripción a eventos en tiempo real (WebSocket - Tema 20)
+useEffect(() => {
+  const desuscribir = clienteTiempoReal.on("OFERTA_NUEVA", (evento) => {
+    console.log("Nueva oferta recibida:", evento.datos);
+  });
+  return desuscribir;
+}, []);
+```
+
+### Reglas de Estilo Responsive con Tailwind CSS
+- **Mobile-First:** Toda pantalla debe verse correctamente en **360 px** (móvil estándar), **768 px** (tablet) y **1024 px** (escritorio).
+- Usar clases utilitarias de Tailwind: `flex flex-col sm:flex-row`, `w-full sm:w-auto`, `p-4 sm:p-6`.
+
+---
+
+## 3. Comandos de Ejecución y Compilación
+
+- **Servidor de desarrollo frontend:**
+  ```powershell
+  npm.cmd run dev:web
+  ```
+  Inicia Vite en `http://localhost:5173` con proxy automático hacia el backend y API Gateway.
+
+- **Compilación de producción:**
+  ```powershell
+  npm.cmd run build:web
+  ```
+  Genera el bundle optimizado en `dist/web` en menos de 1 segundo.
+
+- **Pruebas unitarias del núcleo web:**
+  ```powershell
+  npm.cmd test
+  ```
+  Compila tanto backend como frontend y ejecuta todas las pruebas unitarias (incluyendo `web-nucleo.test.ts`).
+
+---
+
+## 4. Demo histórica en Vanilla JS (Legacy)
+
+La versión anterior construida con Leaflet nativo y Express sin bundler se conserva en la carpeta `web/legacy-demo/` y puede ejecutarse con:
+```powershell
+npm.cmd run demo:web
+```
+Disponible en `http://localhost:3000`.
