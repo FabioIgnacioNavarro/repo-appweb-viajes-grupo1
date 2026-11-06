@@ -14,14 +14,14 @@ import {
   type RepositorioReglas,
   type RepositorioZonas,
   type ZonaTarifaria
-} from "./dominio";
+} from "../../src/ms-tarifas/dominio";
 import {
   GeocodificadorFalso,
   GeocodificadorGoogle,
   GeocodificadorNominatim,
   crearGeocodificador,
   RutaGoogle
-} from "./proveedores";
+} from "../../src/ms-tarifas/proveedores";
 
 const zona: ZonaTarifaria = {
   id: "resistencia",

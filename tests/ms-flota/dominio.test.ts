@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { AutorizadorUbicacionBasico, BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioViajesActivosMemoria, type ActorAutenticado, type Chofer } from "./dominio";
+import { AutorizadorUbicacionBasico, BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioViajesActivosMemoria, type ActorAutenticado, type Chofer } from "../../src/ms-flota/dominio";
 
 const ahora = new Date("2026-10-15T12:00:00.000Z");
 const actor: ActorAutenticado = { idUsuario: "usuario-chofer-1", rol: "CHOFER" };

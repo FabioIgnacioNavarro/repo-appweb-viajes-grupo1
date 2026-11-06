@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Pool } from "pg";
-import { RepositorioChoferesPostgres, RepositorioUbicacionesPostgres } from "./postgres";
+import { RepositorioChoferesPostgres, RepositorioUbicacionesPostgres } from "../../src/ms-flota/postgres";
 
 const disponible = Boolean(process.env.DATABASE_URL);
 

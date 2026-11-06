@@ -9,9 +9,9 @@ import {
   RepositorioEstimacionesMemoria,
   type ReglaTarifa,
   type ZonaTarifaria
-} from "./dominio";
-import { crearRouterTarifas, type DependenciasTarifas } from "./http";
-import type { ActorJWT } from "../compartido/jwt";
+} from "../../src/ms-tarifas/dominio";
+import { crearRouterTarifas, type DependenciasTarifas } from "../../src/ms-tarifas/http";
+import type { ActorJWT } from "../../src/compartido/jwt";
 
 const zona: ZonaTarifaria = {
   id: "resistencia",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { convertirMemoriaProcesoMiB, iniciarMedicionProcesoFlota } from "./mediciones";
+import { convertirMemoriaProcesoMiB, iniciarMedicionProcesoFlota } from "../../src/ms-flota/mediciones";
 
 test("la medición de proceso queda apagada por defecto", () => {
   let registros = 0;
