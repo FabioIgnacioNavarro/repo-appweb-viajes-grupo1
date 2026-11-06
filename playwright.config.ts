@@ -4,7 +4,7 @@ import { defineConfig, devices } from "@playwright/test";
  * Configuración de Playwright para repo-appweb-viajes-grupo1
  */
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: "./tests/playwright",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

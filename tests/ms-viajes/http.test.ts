@@ -7,9 +7,9 @@ import {
   ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type EstimacionVigente
-} from "./dominio";
-import { crearRouterViajes, ValidadorTokenFalso, type DependenciasViajes } from "./http";
-import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
+} from "../../src/ms-viajes/dominio";
+import { crearRouterViajes, ValidadorTokenFalso, type DependenciasViajes } from "../../src/ms-viajes/http";
+import { ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
 
 const ahoraPrueba = new Date();
 const estimacion: EstimacionVigente = {

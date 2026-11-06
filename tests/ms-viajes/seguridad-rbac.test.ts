@@ -2,9 +2,9 @@ import test from "node:test";
 import { strict as assert } from "node:assert";
 import express from "express";
 import { createServer, type Server } from "node:http";
-import { ValidadorJwtJwks } from "../compartido/jwt";
-import { crearAplicacionEmulador } from "../emulador-auth/servidor";
-import { emitirTokenJwt, ACTORES_DEMO } from "../emulador-auth/claves";
+import { ValidadorJwtJwks } from "../../src/compartido/jwt";
+import { crearAplicacionEmulador } from "../../src/emulador-auth/servidor";
+import { emitirTokenJwt, ACTORES_DEMO } from "../../src/emulador-auth/claves";
 import {
   AceptarOferta,
   AsignadorAtomicoMemoria,
@@ -24,8 +24,8 @@ import {
   type EstimacionVigente,
   type Oferta,
   type Viaje
-} from "./dominio";
-import { crearRouterViajes, type DependenciasViajes } from "./http";
+} from "../../src/ms-viajes/dominio";
+import { crearRouterViajes, type DependenciasViajes } from "../../src/ms-viajes/http";
 
 interface EntornoPruebaRbac {
   authBase: string;

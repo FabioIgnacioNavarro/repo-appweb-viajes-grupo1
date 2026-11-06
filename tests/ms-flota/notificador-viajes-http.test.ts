@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { NotificadorUbicacionViajesHttp } from "./notificador-viajes-http";
+import { NotificadorUbicacionViajesHttp } from "../../src/ms-flota/notificador-viajes-http";
 
 test("el adaptador interno reenvía ubicación ya guardada con JWT y timeout acotado", async () => {
   let urlRecibida = "";

@@ -7,7 +7,7 @@ import {
   inyectarContextoW3C,
   extraerContextoW3C,
   middlewareObservabilidad
-} from "./observabilidad";
+} from "../../src/compartido/observabilidad";
 import type { Request, Response } from "express";
 
 test("observabilidad: inicializa sin errores incluso sin Jaeger presente", () => {

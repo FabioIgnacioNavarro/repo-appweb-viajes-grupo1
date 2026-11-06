@@ -5,9 +5,9 @@ import {
   type CalculadorRuta, type FuenteClima, type FuenteDemanda, type FuenteDisponibilidad,
   type ObservacionClima, type ReglaTarifa, type RepositorioReglas, type RepositorioZonas,
   type RutaCalculada, type ZonaTarifaria
-} from "./dominio";
-import { FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, RutaHaversine, RutaOsrm } from "./proveedores";
-import { conSpan, iniciarObservabilidad } from "../compartido/observabilidad";
+} from "../../src/ms-tarifas/dominio";
+import { FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, RutaHaversine, RutaOsrm } from "../../src/ms-tarifas/proveedores";
+import { conSpan, iniciarObservabilidad } from "../../src/compartido/observabilidad";
 
 const zona: ZonaTarifaria = { id: "resistencia", nombre: "Resistencia", centro: { latitud: -27.45, longitud: -58.98 }, radioMetros: 15_000, zonaHoraria: "America/Argentina/Buenos_Aires" };
 const regla: ReglaTarifa = {

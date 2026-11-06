@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { ClienteServiciosHttp, ErrorDependenciaHttp } from "../compartido/cliente-servicios";
-import { ClienteFlotaHttp, ClienteTarifasHttp } from "./clientes-http";
+import { ClienteServiciosHttp, ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
+import { ClienteFlotaHttp, ClienteTarifasHttp } from "../../src/ms-viajes/clientes-http";
 
 test("ms-viajes recibe una estimación de tarifas y reenvía el JWT", async () => {
   let authorization = "";

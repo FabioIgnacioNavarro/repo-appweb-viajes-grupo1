@@ -13,7 +13,7 @@ import {
   type EstimacionVigente,
   type Oferta,
   type Viaje
-} from "./dominio";
+} from "../../src/ms-viajes/dominio";
 import {
   AsignadorAtomicoPostgres,
   ConsultarChoferesOcupadosPostgres,
@@ -22,7 +22,7 @@ import {
   RepositorioIdempotenciaPostgres,
   RepositorioOfertasPostgres,
   RepositorioViajesPostgres
-} from "./postgres";
+} from "../../src/ms-viajes/postgres";
 
 const disponible = Boolean(process.env.DATABASE_URL);
 const PREFIJO = "test-postgres-";

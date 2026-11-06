@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ValidadorJwtFalso } from "./jwt-falso";
+import { ValidadorJwtFalso } from "../../src/compartido/jwt-falso";
 
 test("JWT falso válido representa un actor de prueba", async () => {
   const validador = new ValidadorJwtFalso();

@@ -9,7 +9,7 @@ import {
   crearUbicacionInicial,
   parsearPorcentaje,
   resumirMemoriaProcesoFlota
-} from "./simulador.mjs";
+} from "../../carga/simulador.mjs";
 
 test("el modo prueba usa valores cortos y seguros por defecto", () => {
   assert.deepEqual(analizarArgumentos(["--modo", "prueba"]), {
