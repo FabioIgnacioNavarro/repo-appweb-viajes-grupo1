@@ -5,7 +5,7 @@ import {
   ConfirmarViaje, CrearOferta, ConsultarViaje, ErrorDominio, EstimacionVigente, FinalizarViaje,
   GeneradorIdMemoria, RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria,
   RepositorioOfertasMemoria, RepositorioViajesMemoria, type Oferta
-} from "./dominio";
+} from "../../src/ms-viajes/dominio";
 
 const pasajero: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
 const estimacion = (vigenteHasta = new Date(Date.now() + 180_000)): EstimacionVigente => ({

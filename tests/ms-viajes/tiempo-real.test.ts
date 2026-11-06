@@ -3,8 +3,8 @@ import { createServer, type Server } from "node:http";
 import { once } from "node:events";
 import test from "node:test";
 import { WebSocket } from "ws";
-import { PublicarEstadoViaje, type ActorAutenticado, type Viaje } from "./dominio";
-import { AdaptadorWebSocketTiempoReal } from "./tiempo-real";
+import { PublicarEstadoViaje, type ActorAutenticado, type Viaje } from "../../src/ms-viajes/dominio";
+import { AdaptadorWebSocketTiempoReal } from "../../src/ms-viajes/tiempo-real";
 
 async function iniciar(): Promise<{ url: string; http: Server; ws: AdaptadorWebSocketTiempoReal; estadoPersistido: { actual: string } }> {
   const estadoPersistido = { actual: "asignado" };

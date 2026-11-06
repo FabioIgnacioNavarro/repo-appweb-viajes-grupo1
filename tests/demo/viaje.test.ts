@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { ejecutarViajeDeDemo, ejecutarViajeDeDemoConRuta, RepositorioViajesMemoria } from "./viaje";
+import { ejecutarViajeDeDemo, ejecutarViajeDeDemoConRuta, RepositorioViajesMemoria } from "../../src/viaje";
 
 test("completa un viaje de demo para pasajero con chofer genérico", () => {
   const repositorio = new RepositorioViajesMemoria();

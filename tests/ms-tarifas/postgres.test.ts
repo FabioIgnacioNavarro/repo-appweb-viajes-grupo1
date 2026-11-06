@@ -6,8 +6,8 @@ import {
   RepositorioEstimacionesPostgres,
   RepositorioReglasPostgres,
   RepositorioZonasPostgres
-} from "./postgres";
-import type { EstimacionTarifa } from "./dominio";
+} from "../../src/ms-tarifas/postgres";
+import type { EstimacionTarifa } from "../../src/ms-tarifas/dominio";
 
 test("RepositorioReglasPostgres mapea importes BIGINT a bigint nativo y lanza REGLA_NO_CONFIGURADA si no hay regla activa", async () => {
   const poolConFila = {

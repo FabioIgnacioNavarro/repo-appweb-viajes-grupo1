@@ -2,9 +2,9 @@ import express from "express";
 import { createServer, type Server } from "node:http";
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { ValidadorJwtFalso } from "../compartido/jwt-falso";
-import { AutorizadorUbicacionBasico, ErrorFlota, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioViajesActivosMemoria, type Chofer } from "./dominio";
-import { crearRouterFlota, type DependenciasFlota } from "./http";
+import { ValidadorJwtFalso } from "../../src/compartido/jwt-falso";
+import { AutorizadorUbicacionBasico, ErrorFlota, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioViajesActivosMemoria, type Chofer } from "../../src/ms-flota/dominio";
+import { crearRouterFlota, type DependenciasFlota } from "../../src/ms-flota/http";
 
 async function iniciar(deps: DependenciasFlota): Promise<{ base: string; server: Server }> {
   const app = express(); app.use(crearRouterFlota(deps));

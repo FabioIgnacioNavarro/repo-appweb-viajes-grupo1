@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import { createServer, type Server } from "node:http";
 import test from "node:test";
-import { ValidadorJwtJwks } from "./jwt";
-import { crearAplicacionEmulador } from "../emulador-auth/servidor";
-import { emitirTokenJwt } from "../emulador-auth/claves";
+import { ValidadorJwtJwks } from "../../src/compartido/jwt";
+import { crearAplicacionEmulador } from "../../src/emulador-auth/servidor";
+import { emitirTokenJwt } from "../../src/emulador-auth/claves";
 
 async function iniciarServidorEmulador(): Promise<{ base: string; server: Server }> {
   const app = crearAplicacionEmulador();

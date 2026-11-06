@@ -10,14 +10,14 @@ import {
   tieneRol,
   obtenerToken,
   suscribirSesion,
-} from "./sesion";
+} from "../../../src/compartido/web-nucleo/sesion";
 import {
   clienteApi,
   peticionHttp,
   generarClaveIdempotencia,
   ErrorHttpApi,
-} from "./api";
-import { ClienteWebSocket } from "./ws";
+} from "../../../src/compartido/web-nucleo/api";
+import { ClienteWebSocket } from "../../../src/compartido/web-nucleo/ws";
 
 test("sesion: decodifica payload JWT en formato falso y estándar", () => {
   const payload = {

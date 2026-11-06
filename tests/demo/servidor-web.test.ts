@@ -2,8 +2,8 @@ import express from "express";
 import { createServer, type Server } from "node:http";
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { GeocodificadorFalso, RutaHaversine } from "./rutas";
-import { crearEstimacionConRuta, type Coordenada } from "./viaje";
+import { GeocodificadorFalso, RutaHaversine } from "../../src/rutas";
+import { crearEstimacionConRuta, type Coordenada } from "../../src/viaje";
 
 function crearAplicacionDemo() {
   const app = express();

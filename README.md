@@ -96,7 +96,7 @@ Docker Compose inicializa automáticamente:
 
 ### 4. Ejecutar la suite completa de pruebas
 ```powershell
-# Ejecuta todas las pruebas unitarias y de integración offline (94 tests)
+# Ejecuta todas las pruebas unitarias y de integración offline (115 tests)
 npm.cmd test
 ```
 

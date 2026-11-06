@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
-import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria, RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente } from "./dominio";
-import { ConfirmarViajeYBuscarChoferes } from "./integracion";
+import { ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
+import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria, RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente } from "../../src/ms-viajes/dominio";
+import { ConfirmarViajeYBuscarChoferes } from "../../src/ms-viajes/integracion";
 
 const actor: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
 const estimacion: EstimacionVigente = { id: "estimacion-1", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 }, precioEstimado: "8086", moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: { zona_id: "centro" }, creadaEn: new Date(), vigenteHasta: new Date(Date.now() + 180_000) };

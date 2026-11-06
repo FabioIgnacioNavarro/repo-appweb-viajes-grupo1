@@ -30,7 +30,7 @@ Para avanzar de forma simultánea minimizando el riesgo de colisiones entre agen
 1. **Una rama por cambio o PR:** Cada tarea o funcionalidad avanza en una rama aislada que nace desde `main` actualizado.
 2. **Commits frecuentes y explicados:** Cada una o dos iteraciones se realiza un commit con mensaje descriptivo y conventional commits (`feat`, `fix`, `test`, `docs`, `chore`). Cada cambio y decisión debe explicarse didácticamente al usuario.
 3. **Paso a paso ordenado:** Una vez notificado el merge de la PR en `main`, recién ahí se sincroniza el repositorio local y se crea la siguiente rama.
-4. **Independencia de tests:** El comando `npm test` descubre automáticamente `dist/**/*.test.js`, por lo que no es necesario modificar `package.json` al incorporar nuevos archivos de prueba.
+4. **Independencia de tests:** Todos los tests se ubican en la carpeta raíz `tests/` organizados por subsistema (`tests/ms-viajes/`, `tests/ms-flota/`, `tests/ms-tarifas/`, `tests/compartido/`, `tests/demo/`, `tests/e2e/`, `tests/playwright/`, `tests/carga/`). El comando `npm test` compila mediante `tsconfig.tests.json` a `dist-tests/` y ejecuta `dist-tests/tests/**/*.test.js`, manteniendo `src/` exclusivamente para código de producción.
 
 ## Durante la implementación
 

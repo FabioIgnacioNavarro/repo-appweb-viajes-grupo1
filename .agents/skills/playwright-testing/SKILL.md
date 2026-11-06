@@ -15,8 +15,8 @@ Esta skill define el estándar y el flujo de trabajo para generar pruebas automa
 flowchart TD
     A["Solicitud del usuario"] --> B["Cargar contexto y consultar references/selectores.md"]
     B --> C["Elegir plantilla: templates/ui-spec o templates/api-spec"]
-    C --> D["Escribir archivo de test en e2e/<nombre>.spec.ts"]
-    D --> E["Compilar y ejecutar: npx.cmd playwright test e2e/<nombre>.spec.ts"]
+    C --> D["Escribir archivo de test en tests/playwright/<nombre>.spec.ts"]
+    D --> E["Compilar y ejecutar: npx.cmd playwright test tests/playwright/<nombre>.spec.ts"]
     E --> F{"¿El test pasó?"}
     F -- Sí --> G["Confirmar éxito y presentar reporte resumido"]
     F -- No --> H["Inspeccionar mensaje de error / traza / DOM"]
@@ -71,7 +71,7 @@ En este entorno (PowerShell en Windows), siempre invocar Playwright a través de
 
 ```powershell
 # Ejecutar un archivo de test específico
-npx.cmd playwright test e2e/<nombre>.spec.ts
+npx.cmd playwright test tests/playwright/<nombre>.spec.ts
 
 # Ejecutar todos los tests de Playwright
 npx.cmd playwright test
