@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import { crearCalculadorRuta, crearGeocodificador } from "./rutas";
 import { type Coordenada, type Estimacion, crearEstimacionConRuta } from "./viaje";
@@ -26,7 +27,8 @@ if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) {
 }
 
 const aplicacion = express();
-const carpetaWeb = path.resolve(process.cwd(), "web");
+const carpetaLegacy = path.resolve(process.cwd(), "web/legacy-demo");
+const carpetaWeb = fs.existsSync(carpetaLegacy) ? carpetaLegacy : path.resolve(process.cwd(), "web");
 const calculadorRuta = crearCalculadorRuta();
 const geocodificador = crearGeocodificador();
 const estimacionesVigentes = new Map<string, Estimacion>();
