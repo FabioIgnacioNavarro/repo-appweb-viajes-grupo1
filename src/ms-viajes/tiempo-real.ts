@@ -12,20 +12,29 @@ export class AdaptadorWebSocketTiempoReal implements PublicadorEventosTiempoReal
   private readonly servidorWs = new WebSocketServer({
     noServer: true,
     maxPayload: 1024,
-    handleProtocols: (protocolos) => protocolos.has("viajes.v1") ? "viajes.v1" : false
+    handleProtocols: (protocolos) => {
+      if (protocolos.has("viajes.v1")) return "viajes.v1";
+      if (protocolos.has("viajes-jwt")) return "viajes-jwt";
+      return false;
+    }
   });
   private readonly conexiones = new Map<string, Set<WebSocket>>();
   private readonly actoresPorPedido = new WeakMap<IncomingMessage, ActorAutenticado>();
   private readonly manejarUpgrade = (pedido: IncomingMessage, socket: Socket, encabezado: Buffer): void => {
     let ruta: URL;
     try { ruta = new URL(pedido.url ?? "/", "http://localhost"); } catch { socket.destroy(); return; }
-    if (ruta.pathname !== "/tiempo-real") { socket.destroy(); return; }
+    if (ruta.pathname !== "/tiempo-real" && ruta.pathname !== "/ws") { socket.destroy(); return; }
     const autorizacion = pedido.headers.authorization;
     const tokenBearer = typeof autorizacion === "string" && autorizacion.startsWith("Bearer ") ? autorizacion.slice(7) : "";
     const protocolos = typeof pedido.headers["sec-websocket-protocol"] === "string"
       ? pedido.headers["sec-websocket-protocol"].split(",").map((protocolo) => protocolo.trim())
       : [];
-    const tokenProtocolo = protocolos[0] === "viajes.v1" && protocolos[1] === "autenticacion-jwt" ? protocolos[2] : "";
+    let tokenProtocolo = "";
+    if (protocolos[0] === "viajes.v1" && protocolos[1] === "autenticacion-jwt") {
+      tokenProtocolo = protocolos[2] ?? "";
+    } else if (protocolos[0] === "viajes-jwt" && protocolos[1]) {
+      tokenProtocolo = protocolos[1] ?? "";
+    }
     const token = tokenBearer || tokenProtocolo;
     if (!token) { this.rechazar(socket, 401, "Unauthorized"); return; }
     void this.validador.validar(token).then((actor) => {
@@ -45,6 +54,16 @@ export class AdaptadorWebSocketTiempoReal implements PublicadorEventosTiempoReal
       if (!grupo) { grupo = new Set(); this.conexiones.set(actor.idUsuario, grupo); }
       grupo.add(conexion);
       conexion.send(JSON.stringify({ evento: "CANAL_LISTO", datos: { id_usuario: actor.idUsuario } }));
+      conexion.on("message", (mensajeRaw) => {
+        try {
+          const parseado = JSON.parse(mensajeRaw.toString()) as { accion?: string };
+          if (parseado.accion === "PING") {
+            conexion.send(JSON.stringify({ evento: "PONG", datos: { timestamp: new Date().toISOString() } }));
+          }
+        } catch {
+          // Ignorar mensajes no JSON o de prueba
+        }
+      });
       conexion.on("close", () => {
         grupo?.delete(conexion);
         if (grupo?.size === 0) this.conexiones.delete(actor.idUsuario);

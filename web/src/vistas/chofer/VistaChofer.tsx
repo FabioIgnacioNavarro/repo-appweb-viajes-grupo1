@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { clienteApi, ErrorHttpApi } from "../../nucleo/api";
 import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
+import { IndicadorConexionTiempoReal, SeguimientoMapaEnVivo } from "../../componentes/seguimiento";
 
 export interface CoordenadaChofer {
   latitud: number;
@@ -194,18 +195,21 @@ export const VistaChofer: React.FC = () => {
       }
 
       if (respOfertas?.ofertas) {
-        setOfertas(
-          respOfertas.ofertas.map((of) => {
-            const v = mapaViajes.get(of.id_viaje);
-            return {
-              ...of,
-              origen: of.origen ?? v?.origen,
-              destino: of.destino ?? v?.destino,
-              precio_estimado: of.precio_estimado ?? v?.precio_estimado,
-              moneda: of.moneda ?? v?.moneda ?? "ARS",
-            };
-          })
-        );
+        const delServidor = respOfertas.ofertas.map((of) => {
+          const v = mapaViajes.get(of.id_viaje);
+          return {
+            ...of,
+            origen: of.origen ?? v?.origen,
+            destino: of.destino ?? v?.destino,
+            precio_estimado: of.precio_estimado ?? v?.precio_estimado,
+            moneda: of.moneda ?? v?.moneda ?? "ARS",
+          };
+        });
+        setOfertas((prev) => {
+          const idsServidor = new Set(delServidor.map((o) => o.id_oferta));
+          const ofertasWsEnVuelo = prev.filter((o) => !idsServidor.has(o.id_oferta));
+          return [...delServidor, ...ofertasWsEnVuelo];
+        });
       }
     } catch {
       // Modo offline o sin backend activo: mantiene estado en memoria
@@ -235,6 +239,7 @@ export const VistaChofer: React.FC = () => {
 
   // Suscripción a eventos WebSocket y reconexión
   useEffect(() => {
+    clienteTiempoReal.conectar();
     const desuscribirEstado = clienteTiempoReal.alCambiarEstado(setEstadoWs);
     const desuscribirReconexion = clienteTiempoReal.alReconectar(() => {
       void sincronizarEstadoServidor();
@@ -774,6 +779,9 @@ export const VistaChofer: React.FC = () => {
         </div>
       )}
 
+      {/* Monitor modular de WebSocket y resiliencia de red (WEB-007 / Tema 20) */}
+      <IndicadorConexionTiempoReal />
+
       {/* Grid Principal Responsive (360px 1 col -> 768px 2 cols -> 1024px+ 3 cols) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Columna 1: Bandeja de Ofertas en Tiempo Real */}
@@ -970,10 +978,11 @@ export const VistaChofer: React.FC = () => {
             </div>
 
             {viajeActivo ? (
-              <div
-                data-testid="detalle-viaje-asignado"
-                className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"
-              >
+              <>
+                <div
+                  data-testid="detalle-viaje-asignado"
+                  className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"
+                >
                 <div>
                   <span className="text-slate-500 font-semibold block">ID de Viaje</span>
                   <span className="font-mono font-bold text-slate-900">{viajeActivo.id_viaje}</span>
@@ -999,6 +1008,26 @@ export const VistaChofer: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              {/* Seguimiento en vivo por WebSocket con mapa y reconexión canónica */}
+              <div className="pt-2">
+                <SeguimientoMapaEnVivo
+                  idViaje={viajeActivo.id_viaje}
+                  viajeInicial={{
+                    id_viaje: viajeActivo.id_viaje,
+                    estado: viajeActivo.estado,
+                    origen: viajeActivo.origen,
+                    destino: viajeActivo.destino,
+                    precio_estimado: viajeActivo.precio_estimado,
+                    precio_final: viajeActivo.precio_final,
+                    moneda: viajeActivo.moneda,
+                  }}
+                  onCambioEstado={(nuevo) => {
+                    setViajeActivo((prev) => (prev ? { ...prev, estado: nuevo } : prev));
+                  }}
+                />
+              </div>
+            </>
             ) : (
               <div className="p-5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500">
                 No tenés un viaje activo en este momento. Aceptá una oferta de la bandeja para asignarte un recorrido.
