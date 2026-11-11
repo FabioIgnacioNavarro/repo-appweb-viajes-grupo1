@@ -165,6 +165,9 @@ async function manejarEstimacion(pedido: express.Request, respuesta: express.Res
 aplicacion.post("/viajes/estimacion", manejarEstimacion);
 aplicacion.post("/demostracion/estimaciones", manejarEstimacion);
 aplicacion.use(express.static(carpetaWeb));
+if (fs.existsSync(carpetaLegacy)) {
+  aplicacion.use("/legacy-demo", express.static(carpetaLegacy));
+}
 aplicacion.listen(puerto, () => {
   console.log(`Demo web disponible en http://localhost:${puerto}`);
 });

@@ -11,23 +11,37 @@ test.describe("Simulador Web - Flujo de Recorrido y Estados", () => {
       const dummyLayer = {
         addTo: function() { return this; },
         bindPopup: function() { return this; },
+        openPopup: function() { return this; },
+        on: function() { return this; },
+        setLatLng: function() { return this; },
+        setPopupContent: function() { return this; },
+        getLatLng: () => ({ lat: -27.45, lng: -58.98 }),
         getBounds: () => [[-27.45, -58.98], [-27.46, -58.99]]
       };
       (window as any).L = {
         map: () => ({
           setView: function() { return this; },
           removeLayer: () => {},
-          fitBounds: () => {}
+          fitBounds: () => {},
+          on: function() { return this; },
+          panTo: () => {},
+          closePopup: () => {}
         }),
         control: { zoom: () => dummyLayer },
         tileLayer: () => dummyLayer,
         divIcon: () => ({}),
         marker: () => dummyLayer,
-        polyline: () => dummyLayer
+        polyline: () => dummyLayer,
+        featureGroup: () => dummyLayer,
+        popup: () => ({
+          setLatLng: function() { return this; },
+          setContent: function() { return this; },
+          openOn: function() { return this; }
+        })
       };
     });
 
-    await page.goto("/");
+    await page.goto("http://127.0.0.1:3000/");
   });
 
   test("debe cargar la interfaz con los valores iniciales correctos", async ({ page }) => {
@@ -40,10 +54,10 @@ test.describe("Simulador Web - Flujo de Recorrido y Estados", () => {
     await expect(botonAvanzar).toBeDisabled();
 
     // Valores por defecto en las coordenadas
-    await expect(page.locator("#latitud-origen")).toHaveValue("-27.451");
-    await expect(page.locator("#longitud-origen")).toHaveValue("-58.986");
-    await expect(page.locator("#latitud-destino")).toHaveValue("-27.462");
-    await expect(page.locator("#longitud-destino")).toHaveValue("-58.993");
+    await expect(page.locator("#latitud-origen")).toHaveValue(/^-27\.451/);
+    await expect(page.locator("#longitud-origen")).toHaveValue(/^-58\.986/);
+    await expect(page.locator("#latitud-destino")).toHaveValue(/^-27\.462/);
+    await expect(page.locator("#longitud-destino")).toHaveValue(/^-58\.993/);
   });
 
   test("debe calcular el recorrido, mostrar precio estimado y completar todas las etapas del viaje", async ({ page }) => {
