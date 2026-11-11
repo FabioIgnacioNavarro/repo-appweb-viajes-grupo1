@@ -4,7 +4,7 @@ Cada decisión relevante se registra en un archivo numerado. Todo ADR debe inclu
 
 ADRs mínimos previstos:
 
-1. Sistema de módulos: CommonJS o ESM.
+1. Sistema de módulos: CommonJS en backend (Node 22) y ESM empaquetado con Vite en frontend (React 19).
 2. Persistencia y acceso a datos: PostgreSQL y SQL/query builder/ORM.
 3. Autenticación y autorización por recurso.
 4. Resolución de la doble asignación viaje-chofer.

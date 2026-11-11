@@ -22,7 +22,7 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | DOM-006 | Registrar evidencia de cálculo dinámico | Alta | terminado | Flujo A | factores_precio JSONB persiste en viajes.viaje el snapshot auditable de la estimación confirmada. |
 | DOM-007 | Elegir fuente del dato de lluvia | Alta | terminado | Flujo C | Closes #15. ADR 0008 aceptado; adaptador Open-Meteo con caché de 15 min por zona, doble falso y rechazo de observaciones vencidas (`CLIMA_DESACTUALIZADO`). |
 | DOM-002 | Cerrar estados y transiciones del viaje | Alta | en progreso | Flujo A | Cada transición válida e inválida está documentada y testeada. |
-| ARC-001 | Completar ADR de módulos | Alta | en progreso | Común | La decisión CommonJS/ESM queda aceptada y reproducida desde clon limpio. |
+| ARC-001 | Completar ADR de módulos | Alta | en revisión | Flujo B | ADR 0001 aceptado; documenta convivencia de CommonJS en backend (Node 22) y ESM en frontend (Vite/React 19, ADR 0055). Closes #17. |
 | ARC-002 | Completar ADR de persistencia | Alta | terminado | Flujo A | ADR 0034 define SQL directo con pg, importes BIGINT exactos y puertos asíncronos. |
 | ARC-003 | Elegir mecanismo de asignación concurrente | Alta | terminado | Flujo A | ADR 0033, índice parcial ux_viaje_chofer_activo y test de 50 aceptaciones concurrentes en ms-viajes/postgres.test.ts. |
 | ARC-004 | Elegir geolocalización | Alta | terminado | Flujo B | PR #36 mergeado. ADR 0041 compara PostgreSQL con Haversine, PostGIS y geohash; justifica la opción actual con tres mediciones reproducibles de 500 choferes. |
