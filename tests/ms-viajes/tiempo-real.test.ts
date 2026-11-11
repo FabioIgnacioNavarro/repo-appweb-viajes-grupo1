@@ -112,3 +112,44 @@ test("recibe ofertas y estados, y al reconectar recupera el estado persistido me
     ctx.http.close();
   }
 });
+
+test("admite subprotocolo viajes-jwt, ruta /ws y responde PING con PONG", async () => {
+  const ctx = await iniciar();
+  const urlWs = ctx.url.replace("/tiempo-real", "/ws");
+  const conexion = new WebSocket(urlWs, ["viajes-jwt", "jwt-chofer"]);
+  const mensajes: Array<{ evento: string; datos?: Record<string, unknown> }> = [];
+  let onMensaje: (() => void) | undefined;
+  conexion.on("message", (datos) => {
+    mensajes.push(JSON.parse(datos.toString()) as { evento: string; datos?: Record<string, unknown> });
+    onMensaje?.();
+  });
+
+  const esperarMensaje = async (evento: string): Promise<{ evento: string; datos?: Record<string, unknown> }> => {
+    const limite = Date.now() + 2000;
+    while (!mensajes.some((m) => m.evento === evento)) {
+      if (Date.now() >= limite) throw new Error(`Timeout esperando evento ${evento}`);
+      await new Promise<void>((resolver) => {
+        onMensaje = resolver;
+        setTimeout(resolver, 20);
+      });
+    }
+    return mensajes.find((m) => m.evento === evento)!;
+  };
+
+  try {
+    await once(conexion, "open");
+    assert.equal(conexion.protocol, "viajes-jwt");
+
+    const listo = await esperarMensaje("CANAL_LISTO");
+    assert.equal(listo.evento, "CANAL_LISTO");
+
+    conexion.send(JSON.stringify({ accion: "PING" }));
+    const pong = await esperarMensaje("PONG");
+    assert.equal(pong.evento, "PONG");
+    assert.ok(pong.datos?.timestamp);
+  } finally {
+    conexion.terminate();
+    await ctx.ws.cerrar();
+    ctx.http.close();
+  }
+});
