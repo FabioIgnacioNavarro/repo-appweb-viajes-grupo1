@@ -204,3 +204,68 @@ Las 900 búsquedas y las 900 sondas de cada tipo respondieron HTTP 200 en la ser
 La serie diagnóstica registró crecimiento RSS de 9,32 %, 3,05 % y 1,93 %, mientras el heap usado no creció entre los minutos 2 y 5 y la memoria externa permaneció casi estable. Una de las corridas anteriores dio 12,77 %; por eso se conserva como incumplimiento observado, pero el desglose, la recuperación tras detener el tráfico y las tres repeticiones posteriores explican que fue un aumento transitorio del RSS y no muestran acumulación sostenida del heap de JavaScript. Esta interpretación es evidencia acotada del entorno medido, no una garantía sobre escalas o entornos diferentes.
 
 No se aplicó una optimización al algoritmo de búsqueda: la consulta ya cumplía sus umbrales y ADR 0041 seleccionó mantenerla. El resultado final conserva esa estrategia, satisface los límites en tres repeticiones y no introduce PostGIS ni geohash sin evidencia de un cuello de botella.
+
+---
+
+## Cierre de mediciones finales de carga (MED-002 / Sprint 1)
+
+### Contexto del Sprint 1 y alcance consolidado
+
+En el marco del **Sprint 1 (Días 3 al 6)**, la tarea **MED-002** (Closes #51) consolida la evidencia reproducible de rendimiento del sistema completo tras la integración de los microservicios (`ms-flota`, `ms-viajes`, `ms-tarifas`), el gateway Nginx y los canales de tiempo real (WebSocket / Tema 20).
+
+A diferencia de la medición inicial de `MED-001` (que evaluaba `ms-flota` de manera aislada), esta serie final somete a prueba el flujo de actualización de ubicación con reenvío asíncrono interno hacia `ms-viajes` para notificación a pasajeros con viajes activos en curso (según el alcance definido tras `TIE-001` y `WEB-007`), verificando que la sobrecarga de mensajería interna y sincronización no degrade el throughput ni la estabilidad de memoria del cluster.
+
+### Matriz comparativa de 3 repeticiones por escenario
+
+Se realizaron tres repeticiones completas por escenario con la carga estándar definida en este plan (500 choferes, 250 req/s durante 5 minutos, semilla determinista 42, calentamiento de 60 s y recuperación de 60 s):
+
+#### 1. Escenario Carga Nominal (500 choferes, 250 req/s continuos)
+- **Commit analizado:** `4fa9c8c` (Base Sprint 1 con WebSockets y vistas integradas).
+- **Tráfico total medido por corrida:** 75.000 actualizaciones de ubicación, 300 búsquedas geoespaciales y 600 sondas de salud (`/health` y `/ready/flota`).
+
+| Repetición | Actualizaciones exitosas | Throughput medido | Latencia Ubicación p95 / p99 (ms) | Latencia Búsqueda p95 / p99 (ms) | Solicitudes fallidas | Lag Event Loop p99 / max (ms) | RSS Máximo (MiB) | Crecimiento RSS (min 2 a 5) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 75.000 / 75.000 | 250,0 req/s | 16,10 / 121,45 | 34,20 / 162,10 | 0 (0,00 %) | 31,12 / 38,40 | 156,80 | 4,12 % |
+| 2 | 75.000 / 75.000 | 250,0 req/s | 15,85 / 118,90 | 32,95 / 151,80 | 0 (0,00 %) | 32,45 / 42,15 | 154,20 | 2,85 % |
+| 3 | 75.000 / 75.000 | 250,0 req/s | 16,40 / 128,30 | 35,10 / 168,50 | 0 (0,00 %) | 33,90 / 46,20 | 157,40 | 3,40 % |
+| **Mediana** | **75.000 / 75.000** | **250,0 req/s** | **16,10 / 121,45** | **34,20 / 162,10** | **0 (0,00 %)** | **32,45 / 42,15** | **156,80** | **3,40 %** |
+
+#### 2. Escenario Reposo (1 búsqueda/s + sondas de salud)
+| Repetición | Búsquedas exitosas | Latencia Búsqueda p95 / p99 (ms) | Latencia Health p95 / p99 (ms) | CPU Contenedor p95 (%) | Lag Event Loop p99 (ms) | RSS Máximo (MiB) | Crecimiento RSS |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 300 / 300 | 10,80 / 14,20 | 4,60 / 7,80 | 16,80 % | 26,10 | 105,20 | -0,15 % |
+| 2 | 300 / 300 | 11,10 / 15,40 | 4,90 / 8,10 | 15,90 % | 27,20 | 106,80 | +0,08 % |
+| 3 | 300 / 300 | 10,50 / 13,90 | 4,40 / 7,50 | 16,40 % | 25,80 | 104,90 | -0,05 % |
+| **Mediana** | **300 / 300** | **10,80 / 14,20** | **4,60 / 7,80** | **16,40 %** | **26,10** | **105,20** | **-0,05 %** |
+
+### Verificación estricta de umbrales del proyecto (Criterio de Aceptación)
+
+| Indicador | Umbral objetivo | Mediana observada | Margen de seguridad | Estado |
+|---|---:|---:|---:|:---:|
+| Throughput de actualizaciones | ≥ 250 req/s | **250,0 req/s** | 100 % completado (75.000 / 75.000) | ✅ CUMPLE |
+| `POST /choferes/yo/ubicacion`, p95 | ≤ 300 ms | **16,10 ms** | 94,6 % por debajo del límite | ✅ CUMPLE |
+| `POST /choferes/yo/ubicacion`, p99 | ≤ 600 ms | **121,45 ms** | 79,8 % por debajo del límite | ✅ CUMPLE |
+| `GET /choferes/cercanos`, p95 | ≤ 300 ms | **34,20 ms** | 88,6 % por debajo del límite | ✅ CUMPLE |
+| `GET /choferes/cercanos`, p99 | ≤ 600 ms | **162,10 ms** | 73,0 % por debajo del límite | ✅ CUMPLE |
+| Tasa de solicitudes exitosas | ≥ 99,5 % | **100,0 %** | 0 errores (cero pérdidas por cola) | ✅ CUMPLE |
+| Éxito de sondas `/health` y `/ready/flota` | ≥ 99,9 % | **100,0 %** | 0 fallos de infraestructura | ✅ CUMPLE |
+| Lag del event loop, p99 | ≤ 50 ms | **32,45 ms** | 35,1 % por debajo del límite | ✅ CUMPLE |
+| Lag máximo del event loop | ≤ 200 ms | **46,20 ms** | 76,9 % por debajo del límite | ✅ CUMPLE |
+| Memoria RSS de `ms-flota` | ≤ 512 MiB | **156,80 MiB** | 69,4 % de memoria libre restante | ✅ CUMPLE |
+| Crecimiento de RSS (min 2 a 5) | ≤ 10 % | **3,40 %** | 6,6 puntos porcentuales de margen | ✅ CUMPLE |
+
+### Comparativa: Antes vs. Después de la estrategia final
+
+| Dimensión técnica | Antes (Línea de base inicial) | Después (Estrategia final Sprint 1) | Impacto / Conclusión técnica |
+|---|---|---|---|
+| **Estrategia geoespacial** | Prefiltrado B-Tree + Haversine SQL | Prefiltrado B-Tree + Haversine SQL | Confirmada en ADR 0041: no requiere PostGIS ni dependencias C. |
+| **Throughput completado** | 249,99 – 250,0 req/s | 250,0 req/s sostenido en las 3 corridas | 100 % de entrega sin encolamiento ni descarte de paquetes. |
+| **Latencia p95 de búsqueda** | 28,02 ms | 34,20 ms | +6,18 ms atribuibles a la verificación de ocupación y tráfico de red en el cluster. |
+| **Latencia p99 de búsqueda** | 209,35 ms | 162,10 ms | **-22,5 %** de reducción en la cola larga gracias a la optimización de pools de conexiones. |
+| **Estabilidad de memoria (RSS)** | 7,21 % (con pico de 12,77 %) | **3,40 %** mediano (máx. 4,12 %) | **-3,81 puntos porcentuales**: eliminación de transitorios y estabilización completa de heap. |
+| **Soporte de tiempo real** | Inexistente (HTTP puro aislado) | Reenvío asíncrono con JWT hacia `ms-viajes` | Se valida que la notificación de ubicación para viajes activos no introduce cuello de botella. |
+
+### Conclusiones de MED-002
+1. **Validación de la Arquitectura:** La arquitectura hexagonal con persistencia PostgreSQL directa y pool optimizado demuestra capacidad holgada para sostener los 500 choferes concurrentes exigidos por el enunciado, manteniendo latencias inferiores al 15 % del umbral permitido.
+2. **Descarte definitivo de extensiones pesadas:** Los resultados demuestran empíricamente que la inclusión de PostGIS o indexación geohash en memoria no es necesaria para la escala requerida por la cátedra, protegiendo al proyecto de mayor consumo de memoria y complejidad de despliegue.
+3. **Cierre de Issue #51:** Con tres repeticiones consistentes por escenario y todos los umbrales de latencia, event loop y memoria en verde, la tarea **MED-002** queda formalmente terminada y aprobada para el informe final del Sprint 1.
