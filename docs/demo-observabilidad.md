@@ -83,3 +83,72 @@ Invoke-RestMethod -Uri "http://localhost:8080/viajes/estimacion" -Method Post -H
 ```powershell
 docker compose start ms-flota
 ```
+
+---
+
+## Escenario 3: Pruebas de Fallas de Dependencias, Timeout y Recuperación con Idempotencia (FAL-001)
+
+Este escenario complementa las pruebas de resiliencia del sistema demostrando que:
+1. Las llamadas entre servicios no se cuelgan indefinidamente (están acotadas por `AbortSignal.timeout` con 1 reintento preventivo).
+2. Si un microservicio subordinado cae, el servicio llamador no colapsa ni expone detalles internos de la infraestructura, sino que responde un error uniforme `503 Service Unavailable` con código `DEPENDENCIA_NO_DISPONIBLE`.
+3. Al restablecer la dependencia caída, el cliente puede reenviar exactamente la misma petición con la misma `Clave-Idempotencia`: la operación se completa de forma limpia y sucesivas repeticiones devuelven el recurso persistido sin duplicar cobros ni viajes.
+4. Las fallas de canales secundarios (como la notificación WebSocket de ubicación a `ms-viajes`) degradan elegantemente sin abortar la persistencia de la ubicación en `ms-flota`.
+
+### 1. Ejecución Automatizada de la Suite de Pruebas (FAL-001)
+
+Para verificar los 5 escenarios de falla y recuperación de forma determinística en memoria:
+```powershell
+npm run build:server
+npm run build:tests
+node --test "dist-tests/tests/ms-viajes/fallas-dependencias.test.js"
+```
+
+*Casos de prueba cubiertos:*
+- `FAL-001: ms-viajes devuelve 503 DEPENDENCIA_NO_DISPONIBLE ante caída de ms-flota durante confirmación`
+- `FAL-001: ms-viajes devuelve 503 DEPENDENCIA_NO_DISPONIBLE ante caída de ms-tarifas al verificar estimación`
+- `FAL-001: ClienteServiciosHttp acota timeout, reintenta una sola vez y registra evento estructurado seguro`
+- `FAL-001: recuperación exitosa y reintento con misma Clave-Idempotencia tras restablecer dependencia`
+- `FAL-001: degradación elegante en ms-flota ante fallo o timeout del notificador de viajes en tiempo real`
+
+### 2. Ejecución Manual en Vivo con `requests/fallas.http`
+
+El archivo [`requests/fallas.http`](file:///requests/fallas.http) permite ejecutar y reproducir el ciclo completo desde la extensión REST Client de VS Code o mediante `curl` / `Invoke-RestMethod`:
+
+#### Paso 1: Generar cotización base saludable
+Enviar la petición de la **Sección 1** (`POST /viajes/estimacion`).
+Registrar el `id_estimacion` devuelto y verificar que la traza en Jaeger es azul/verde (exitosa).
+
+#### Paso 2: Detener ms-flota e inducir error 503
+```powershell
+docker compose stop ms-flota
+```
+Ejecutar la petición de la **Sección 2.2** (`POST /viajes/estimacion`) o **2.3** (`POST /viajes` con `Clave-Idempotencia: recuperacion-demo-001`).
+- **Respuesta HTTP:** `503 Service Unavailable`
+- **Cuerpo JSON uniforme:**
+  ```json
+  {
+    "error": {
+      "codigo": "DEPENDENCIA_NO_DISPONIBLE",
+      "mensaje": "No se pudo completar la operación por una dependencia temporalmente no disponible.",
+      "detalles": {}
+    }
+  }
+  ```
+- **Inspección en Jaeger ([http://localhost:16686](http://localhost:16686)):**
+  - Buscar trazas del servicio `ms-viajes` o `ms-tarifas`.
+  - El span `dependencia.ms-flota.candidatos` aparece en **rojo** con la etiqueta `error: true`.
+  - El log estructurado confirma `resultado: "timeout_o_red"`, incluyendo `traceId` y `spanId` pero **omitiendo estrictamente cualquier token JWT o credencial**.
+
+#### Paso 3: Recuperación del servicio y reintento idempotente
+```powershell
+docker compose start ms-flota
+```
+Esperar a que la sonda de readiness responda activo:
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8080/ready/flota" -Method Get
+```
+Reenviar la solicitud de confirmación con la **misma cabecera**:
+`Clave-Idempotencia: recuperacion-demo-001`
+- **Primer reintento tras recuperación:** HTTP `201 Created` con el viaje confirmado y ofertas generadas.
+- **Segundo reintento con idéntica clave:** HTTP `201 Created` retornando inmediatamente el mismo viaje ya congelado y persistido, demostrando que no se duplica la entidad ni se desincronizan las ofertas.
+
