@@ -1,0 +1,200 @@
+# ==============================================================================
+# FAL-001: Pruebas de Falla de Dependencias, Timeout y Recuperación con Jaeger
+# Cátedra Programación IV - Tema Especial 18 (Observabilidad) y Resiliencia
+# ==============================================================================
+# Este archivo contiene peticiones reproducibles para demostrar:
+# 1. Escenario 1: Caída de ms-flota (503 DEPENDENCIA_NO_DISPONIBLE y traza con error en Jaeger).
+# 2. Escenario 2: Caída de ms-tarifas (503 DEPENDENCIA_NO_DISPONIBLE al intentar confirmar).
+# 3. Escenario 3: Degradación elegante de tiempo real (notificación interna falla asíncronamente sin voltear ms-flota).
+# 4. Escenario 4: Recuperación de servicios y reintento idempotente con Clave-Idempotencia.
+# 5. Escenario 5: Inspección de trazas correlacionadas en la API de Jaeger.
+# ==============================================================================
+
+@gateway = http://localhost:8080
+@jaeger = http://localhost:16686
+@pasajero = falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwicm9sIjoiUEFTQUpFUk8ifQ
+@chofer = falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwicm9sIjoiQ0hPRkVSIn0
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 0: Verificación del Estado Saludable Inicial
+### ----------------------------------------------------------------------------
+
+### 0.1 Health check del Gateway (Nginx)
+GET {{gateway}}/health
+
+### 0.2 Readiness de ms-flota (PostgreSQL activo)
+GET {{gateway}}/ready/flota
+
+### 0.3 Readiness de ms-tarifas
+GET {{gateway}}/ready/tarifas
+
+### 0.4 Interfaz de Jaeger UI activa
+GET {{jaeger}}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 1: Flujo Normal Exitoso (Línea de Base para Comparar en Jaeger)
+### ----------------------------------------------------------------------------
+
+### 1.1 Activar disponibilidad del chofer en ms-flota
+PATCH {{gateway}}/choferes/yo/disponibilidad
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{
+  "disponibilidad": true
+}
+
+### 1.2 Reportar posición del chofer en el centro de Resistencia
+POST {{gateway}}/choferes/yo/ubicacion
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{
+  "latitud": -27.4512,
+  "longitud": -58.9866
+}
+
+### 1.3 Pasajero solicita cotización de viaje
+# @name cotizacionBase
+POST {{gateway}}/viajes/estimacion
+Authorization: Bearer {{pasajero}}
+Content-Type: application/json
+
+{
+  "origen": { "latitud": -27.4512, "longitud": -58.9866 },
+  "destino": { "latitud": -27.4598, "longitud": -58.9789 }
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 2: Escenario de Falla 1 — Caída de ms-flota (Inducción de 503)
+### ----------------------------------------------------------------------------
+# PASO PREVIO EN TERMINAL:
+# docker compose stop ms-flota
+
+### 2.1 Verificar que la sonda /ready/flota detecta la caída inmediatamente
+GET {{gateway}}/ready/flota
+
+### 2.2 Pasajero intenta estimar viaje con ms-flota caído
+# Esperado: 503 Service Unavailable
+# Contrato: {"error":{"codigo":"DEPENDENCIA_NO_DISPONIBLE", ...}}
+# Jaeger: Traza en rojo con tag error: true en span 'dependencia.ms-flota.candidatos'
+POST {{gateway}}/viajes/estimacion
+Authorization: Bearer {{pasajero}}
+Content-Type: application/json
+
+{
+  "origen": { "latitud": -27.4512, "longitud": -58.9866 },
+  "destino": { "latitud": -27.4598, "longitud": -58.9789 }
+}
+
+### 2.3 Pasajero intenta confirmar viaje previo cuando ms-flota no responde
+# Esperado: 503 Service Unavailable
+# Falla de forma cerrada (fail-closed): no crea ofertas incompletas ni asigna choferes inexistentes.
+POST {{gateway}}/viajes
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: fallo-flota-001
+Content-Type: application/json
+
+{
+  "id_estimacion": "estimacion-demo-previa"
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 3: Escenario de Falla 2 — Caída de ms-tarifas
+### ----------------------------------------------------------------------------
+# PASOS EN TERMINAL:
+# docker compose start ms-flota
+# docker compose stop ms-tarifas
+
+### 3.1 Verificar que ms-tarifas está no disponible
+GET {{gateway}}/ready/tarifas
+
+### 3.2 Pasajero intenta confirmar viaje pero ms-viajes no puede validar la tarifa con ms-tarifas
+# Esperado: 503 Service Unavailable con codigo DEPENDENCIA_NO_DISPONIBLE
+POST {{gateway}}/viajes
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: fallo-tarifas-001
+Content-Type: application/json
+
+{
+  "id_estimacion": "estimacion-demo-previa"
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 4: Escenario de Falla 3 — Degradación Elegante de Tiempo Real
+### ----------------------------------------------------------------------------
+# Contexto: Chofer reporta su posición GPS.
+# Si el canal HTTP interno hacia ms-viajes (notificación de tiempo real) está caído o lento:
+# Comportamiento esperado: La ubicación SE PERSISTE correctamente en PostgreSQL (200 OK)
+# y la notificación a ms-viajes falla de forma asíncrona segura sin voltear el endpoint de flota.
+
+POST {{gateway}}/choferes/yo/ubicacion
+Authorization: Bearer {{chofer}}
+Content-Type: application/json
+
+{
+  "latitud": -27.4528,
+  "longitud": -58.9841
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 5: Recuperación y Continuidad con Idempotencia
+### ----------------------------------------------------------------------------
+# PASO EN TERMINAL:
+# docker compose start ms-tarifas
+# docker compose start ms-flota
+
+### 5.1 Verificar que todos los servicios recuperaron su readiness
+GET {{gateway}}/health
+
+### 5.2 Obtener nueva cotización válida tras la recuperación
+# @name cotizacionRecuperada
+POST {{gateway}}/viajes/estimacion
+Authorization: Bearer {{pasajero}}
+Content-Type: application/json
+
+{
+  "origen": { "latitud": -27.4512, "longitud": -58.9866 },
+  "destino": { "latitud": -27.4598, "longitud": -58.9789 }
+}
+
+### 5.3 Reintento idempotente con la misma Clave-Idempotencia
+# Tras recuperar las dependencias, el reintento procesa y congela el precio sin duplicar viajes.
+POST {{gateway}}/viajes
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: recuperacion-idempotente-001
+Content-Type: application/json
+
+{
+  "id_estimacion": "{{cotizacionRecuperada.response.body.id_estimacion}}"
+}
+
+### 5.4 Repetición exacta de la misma petición idempotente (segundo envío)
+# Debe responder 200 OK devolviendo exactamente el mismo id_viaje y precio congelado
+POST {{gateway}}/viajes
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: recuperacion-idempotente-001
+Content-Type: application/json
+
+{
+  "id_estimacion": "{{cotizacionRecuperada.response.body.id_estimacion}}"
+}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 6: Consulta de Trazas de Error en Jaeger API
+### ----------------------------------------------------------------------------
+
+### 6.1 Listar servicios registrados en Jaeger
+GET {{jaeger}}/api/services
+
+### 6.2 Buscar trazas con errores en ms-tarifas (tag error=true)
+GET {{jaeger}}/api/traces?service=ms-tarifas&limit=5
+
+### 6.3 Buscar trazas con errores en ms-viajes (tag error=true)
+GET {{jaeger}}/api/traces?service=ms-viajes&limit=5
