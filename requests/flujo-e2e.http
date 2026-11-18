@@ -58,6 +58,30 @@ Content-Type: application/json
 
 {}
 
+# Copiar el id_viaje devuelto en la confirmación. El primer cobro simulado debe quedar fallido.
+GET {{gateway}}/viajes/PEGAR_ID_VIAJE/cobro
+Authorization: Bearer {{pasajero}}
+
+### Reintentar el mismo cobro con una clave; conserva el id_cobro y el importe.
+POST {{gateway}}/viajes/PEGAR_ID_VIAJE/cobro/reintento
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: pago-demo-001
+Content-Type: application/json
+
+{}
+
+### Repetir la clave devuelve el mismo resultado del intento.
+POST {{gateway}}/viajes/PEGAR_ID_VIAJE/cobro/reintento
+Authorization: Bearer {{pasajero}}
+Clave-Idempotencia: pago-demo-001
+Content-Type: application/json
+
+{}
+
+### Confirmar el estado final del recibo.
+GET {{gateway}}/viajes/PEGAR_ID_VIAJE/cobro
+Authorization: Bearer {{pasajero}}
+
 GET {{gateway}}/viajes
 Authorization: Bearer {{pasajero}}
 

@@ -16,17 +16,19 @@ Esta carpeta reúne el diseño y la evidencia del trabajo práctico. Se completa
 - [Ataque cruzado](ataque.md): plantilla para registrar intentos y hallazgos.
 - [Temas especiales de cátedra](temas-catedra.md): justificación de temas elegidos (18, 19, 20) y descartados (1 - Redis).
 - [Demostración de Observabilidad](demo-observabilidad.md): guía paso a paso para la demo de trazas distribuidas y errores en Jaeger (Tema 18).
+- [Informe técnico](informe.md): arquitectura, decisiones, mediciones registradas, seguridad y limitaciones conocidas.
+- [Guion de demostración](guion-demo.md): preparación, tiempos y secuencia para presentar los flujos del proyecto.
 - [ADRs](adr/): decisiones técnicas y alternativas descartadas.
 
 ## Estado de definición
 
 - Variante obligatoria del grupo: A — precio dinámico por demanda.
-- Persistencia: PostgreSQL es la opción preliminar porque el enunciado exige una base relacional.
-- Módulos: CommonJS, pendiente de registrar la decisión final.
+- Persistencia: PostgreSQL como fuente de verdad; `ms-viajes` y `ms-tarifas` usan SQL directo y puertos asíncronos.
+- Módulos: CommonJS en el backend y ESM empaquetado con Vite en la interfaz web (ADR 0001 y ADR 0055).
 - Lenguaje: TypeScript.
-- Tiempo real: WebSocket o Server-Sent Events, pendiente de comparar y decidir.
-- Búsqueda geográfica: pendiente de comparar PostGIS, geohash y estructura en memoria.
-- Precio dinámico: vigencia de 3 minutos y franjas horarias decididas; fórmula, pesos, límites y fuente de lluvia pendientes.
+- Tiempo real: WebSockets autenticados en `ms-viajes`, con eventos por usuario y recuperación del estado mediante HTTP (ADR 0042).
+- Búsqueda geográfica: prefiltrado en PostgreSQL y distancia Haversine para la escala de 500 choferes medida (ADR 0041).
+- Precio dinámico: regla configurable y versionada, vigencia de 3 minutos, lluvia de Open-Meteo y factores auditables (ADR 0008 y ADR 0021).
 
 ## Criterio de avance
 
