@@ -5,6 +5,7 @@ import {
   type ActorAutenticado,
   type AsignadorAtomico,
   type Cobro,
+  type EstadoCobro,
   type Coordenada,
   type EstadoOferta,
   type EstadoViaje,
@@ -64,6 +65,7 @@ type FilaCobro = {
   importe: string;
   moneda: string;
   estado: string;
+  intentos: number;
   creado_en: Date;
 };
 
@@ -135,7 +137,8 @@ function mapearCobro(fila: FilaCobro): Cobro {
     viajeId: fila.viaje_id,
     importe: fila.importe,
     moneda: "ARS",
-    estado: "CONFIRMADO",
+    estado: fila.estado as EstadoCobro,
+    intentos: fila.intentos,
     creadoEn: new Date(fila.creado_en)
   };
 }
@@ -354,11 +357,13 @@ export class RepositorioCobrosPostgres implements RepositorioCobros {
 
   async guardar(cobro: Cobro): Promise<Cobro> {
     const resultado = await this.ejecutor.query<FilaCobro>(
-      `INSERT INTO viajes.cobro (id, viaje_id, importe, moneda, estado, creado_en)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (viaje_id) DO UPDATE SET estado = EXCLUDED.estado
+      `INSERT INTO viajes.cobro AS cobro_actual (id, viaje_id, importe, moneda, estado, intentos, creado_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (viaje_id) DO UPDATE SET
+         estado = CASE WHEN cobro_actual.estado = 'CONFIRMADO' THEN 'CONFIRMADO' ELSE EXCLUDED.estado END,
+         intentos = GREATEST(cobro_actual.intentos, EXCLUDED.intentos)
        RETURNING *`,
-      [cobro.id, cobro.viajeId, cobro.importe, cobro.moneda, cobro.estado, cobro.creadoEn]
+      [cobro.id, cobro.viajeId, cobro.importe, cobro.moneda, cobro.estado, cobro.intentos, cobro.creadoEn]
     );
     return mapearCobro(resultado.rows[0]);
   }
@@ -375,10 +380,10 @@ export class RepositorioCobrosPostgres implements RepositorioCobros {
 export class RepositorioIdempotenciaPostgres implements RepositorioIdempotencia {
   constructor(private readonly ejecutor: EjecutorSql) {}
 
-  async obtener(actorId: string, clave: string): Promise<unknown | undefined> {
+  async obtener(actorId: string, clave: string, operacion = "confirmar_viaje"): Promise<unknown | undefined> {
     const resultado = await this.ejecutor.query<FilaIdempotencia>(
-      "SELECT resultado FROM viajes.idempotencia WHERE actor_id = $1 AND clave = $2 AND expira_en > CURRENT_TIMESTAMP",
-      [actorId, clave]
+      "SELECT resultado FROM viajes.idempotencia WHERE actor_id = $1 AND operacion = $2 AND clave = $3 AND expira_en > CURRENT_TIMESTAMP",
+      [actorId, operacion, clave]
     );
     const data = resultado.rows[0]?.resultado;
     if (data && typeof data === "object") {
@@ -387,16 +392,17 @@ export class RepositorioIdempotenciaPostgres implements RepositorioIdempotencia 
       if (typeof v.iniciadoEm === "string") v.iniciadoEm = new Date(v.iniciadoEm);
       if (typeof v.finalizadoEm === "string") v.finalizadoEm = new Date(v.finalizadoEm);
       if (typeof v.canceladoEm === "string") v.canceladoEm = new Date(v.canceladoEm);
+      if (typeof v.creadoEn === "string") v.creadoEn = new Date(v.creadoEn);
     }
     return data;
   }
 
-  async guardar(actorId: string, clave: string, resultado: unknown): Promise<void> {
+  async guardar(actorId: string, clave: string, resultado: unknown, operacion = "confirmar_viaje"): Promise<void> {
     await this.ejecutor.query(
       `INSERT INTO viajes.idempotencia (actor_id, operacion, clave, huella_solicitud, resultado, creado_en, expira_en)
-       VALUES ($1, 'confirmar_viaje', $2, 'huella', $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
+       VALUES ($1, $2, $3, 'huella', $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '24 hours')
        ON CONFLICT (actor_id, operacion, clave) DO UPDATE SET resultado = EXCLUDED.resultado`,
-      [actorId, clave, JSON.stringify(resultado)]
+      [actorId, operacion, clave, JSON.stringify(resultado)]
     );
   }
 }

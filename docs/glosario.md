@@ -18,7 +18,7 @@ Este archivo define los términos oficiales. Los agentes deben reutilizar estos 
 | Ubicación histórica | Registro de posiciones de un Chofer o Pasajero, conservado según la política de retención. |
 | Estimación | Precio y duración calculados antes de confirmar el viaje. |
 | Tarifa final | Precio calculado por el servidor al finalizar el viaje. |
-| Cobro | Registro del intento o resultado de cobrar la tarifa final. |
+| Cobro | Registro único por viaje que conserva el importe final y el resultado del intento de pago. Estados: pendiente, fallido o confirmado. |
 | Idempotencia | Propiedad por la cual repetir una intención con la misma clave no repite el efecto. |
 | Recurso propio | Recurso que pertenece al usuario autenticado o que este puede operar por su rol. |
 | Variante | Funcionalidad obligatoria adicional asignada al grupo. Para este grupo es A: precio dinámico por demanda. |
@@ -28,5 +28,7 @@ Este archivo define los términos oficiales. Los agentes deben reutilizar estos 
 Los nombres de rutas, parámetros, variables y campos de la aplicación se escriben en español. Los estados se escriben en mayúsculas en el dominio y en `snake_case` en JSON:
 
 `SOLICITADO`, `ASIGNADO`, `CHOFER_EN_CAMINO`, `EN_CURSO`, `FINALIZADO`, `CANCELADO_POR_PASAJERO`, `CANCELADO_POR_CHOFER`, `CANCELADO_POR_OPERADOR`, `SIN_CHOFERES_DISPONIBLES`.
+
+Los estados del cobro son `PENDIENTE`, `FALLIDO` y `CONFIRMADO`; en JSON se exponen como `pendiente`, `fallido` y `confirmado`.
 
 Si aparece un término nuevo que pueda afectar contratos o reglas de negocio, debe agregarse aquí antes de ser usado como concepto público.

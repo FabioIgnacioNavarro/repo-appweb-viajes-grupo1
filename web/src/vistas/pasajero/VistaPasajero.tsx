@@ -43,6 +43,16 @@ interface DatosViajes {
   viajes: ViajeDto[];
 }
 
+interface CobroDto {
+  id_cobro: string;
+  id_viaje: string;
+  importe: string;
+  moneda: "ARS";
+  estado: "pendiente" | "fallido" | "confirmado";
+  intentos: number;
+  creado_en: string;
+}
+
 interface ErrorVisible {
   codigo: string;
   mensaje: string;
@@ -166,11 +176,13 @@ export const VistaPasajero: React.FC = () => {
   const [destino, setDestino] = useState("Av. Sarmiento y Ruta 16, Resistencia");
   const [estimacion, setEstimacion] = useState<EstimacionDto | null>(null);
   const [viaje, setViaje] = useState<ViajeDto | null>(null);
+  const [cobro, setCobro] = useState<CobroDto | null>(null);
   const [ahora, setAhora] = useState(Date.now());
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<ErrorVisible | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const claveConfirmacion = useRef<string | null>(null);
+  const claveReintentoCobro = useRef<{ viajeId: string; valor: string } | null>(null);
   const bloqueoEnvio = useRef(false);
   const viajeActualRef = useRef<ViajeDto | null>(null);
 
@@ -181,10 +193,24 @@ export const VistaPasajero: React.FC = () => {
   const sincronizarViajeActivo = useCallback(async () => {
     try {
       const respuesta = await clienteApi.get<DatosViajes>("/viajes");
-      const activo = respuesta.viajes
+      const ordenados = respuesta.viajes
+        .sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en));
+      const activo = ordenados
         .filter((elemento) => ESTADOS_ACTIVOS.has(elemento.estado.toLowerCase()))
-        .sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en))[0];
-      setViaje(activo ?? null);
+        [0];
+      const ultimoFinalizado = ordenados.find((elemento) => elemento.estado.toLowerCase() === "finalizado");
+      const viajeMostrable = activo ?? ultimoFinalizado ?? null;
+      setViaje(viajeMostrable);
+      if (viajeMostrable?.estado.toLowerCase() === "finalizado") {
+        try {
+          const recibo = await clienteApi.get<CobroDto>(`/viajes/${encodeURIComponent(viajeMostrable.id_viaje)}/cobro`);
+          setCobro(recibo);
+        } catch {
+          setCobro(null);
+        }
+      } else {
+        setCobro(null);
+      }
     } catch {
       // La vista conserva el estado visible si el backend no está disponible temporalmente.
     }
@@ -208,6 +234,7 @@ export const VistaPasajero: React.FC = () => {
       if (!datos?.id_viaje || !datos.estado) return;
       if (viajeActualRef.current?.id_viaje === datos.id_viaje) {
         setViaje((actual) => actual ? { ...actual, estado: datos.estado! } : actual);
+        if (datos.estado.toLowerCase() === "finalizado") void sincronizarViajeActivo();
       } else {
         void sincronizarViajeActivo();
       }
@@ -251,6 +278,8 @@ export const VistaPasajero: React.FC = () => {
       });
       setEstimacion(respuesta);
       claveConfirmacion.current = null;
+      claveReintentoCobro.current = null;
+      setCobro(null);
       setViaje(null);
       setAviso("Precio calculado. Se mantiene vigente durante tres minutos.");
     } catch (causa) {
@@ -303,6 +332,34 @@ export const VistaPasajero: React.FC = () => {
     } catch (causa) {
       setError(errorVisible(causa, "CANCELACION_NO_DISPONIBLE", "No se pudo cancelar el viaje. Actualizá el estado e intentá nuevamente."));
       await sincronizarViajeActivo();
+    } finally {
+      bloqueoEnvio.current = false;
+      setProcesando(false);
+    }
+  };
+
+  const reintentarCobro = async () => {
+    if (!viaje || !cobro || cobro.estado !== "fallido" || bloqueoEnvio.current) return;
+    bloqueoEnvio.current = true;
+    setProcesando(true);
+    setError(null);
+    setAviso(null);
+    const previo = claveReintentoCobro.current;
+    const clave = previo?.viajeId === viaje.id_viaje ? previo.valor : generarClaveIdempotencia();
+    claveReintentoCobro.current = { viajeId: viaje.id_viaje, valor: clave };
+    try {
+      const actualizado = await clienteApi.post<CobroDto>(
+        `/viajes/${encodeURIComponent(viaje.id_viaje)}/cobro/reintento`,
+        {},
+        { claveIdempotencia: clave }
+      );
+      setCobro(actualizado);
+      claveReintentoCobro.current = null;
+      setAviso(actualizado.estado === "confirmado"
+        ? "El pago se confirmó. El recibo conserva el precio final del viaje."
+        : "El intento volvió a fallar. Podés volver a intentarlo; no se generará otro cobro.");
+    } catch (causa) {
+      setError(errorVisible(causa, "COBRO_NO_DISPONIBLE", "No se pudo consultar el resultado del pago. Reintentá con seguridad."));
     } finally {
       bloqueoEnvio.current = false;
       setProcesando(false);
@@ -390,9 +447,9 @@ export const VistaPasajero: React.FC = () => {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 id="titulo-viaje-activo" className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    {estadoViaje === "sin_choferes_disponibles" ? "Sin chofer disponible" : "Viaje confirmado"}
+                    {estadoViaje === "sin_choferes_disponibles" ? "Sin chofer disponible" : estadoViaje === "finalizado" ? "Viaje finalizado" : "Viaje confirmado"}
                   </h2>
-                  <p className="mt-1 text-2xl font-extrabold text-slate-900">{importePesos(viaje.precio_estimado)}</p>
+                  <p className="mt-1 text-2xl font-extrabold text-slate-900">{importePesos(viaje.precio_final ?? viaje.precio_estimado)}</p>
                 </div>
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">{etiquetaEstado(viaje.estado)}</span>
               </div>
@@ -400,6 +457,34 @@ export const VistaPasajero: React.FC = () => {
               <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
                 {procesando ? "Procesando…" : puedeCancelar ? "Cancelar viaje" : etiquetaEstado(viaje.estado)}
               </button>
+            </section>
+          )}
+
+          {cobro && viaje && cobro.id_viaje === viaje.id_viaje && (
+            <section className={`space-y-3 rounded-2xl border p-5 shadow-sm ${cobro.estado === "confirmado" ? "border-emerald-200 bg-emerald-50" : cobro.estado === "fallido" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`} aria-labelledby="titulo-recibo-cobro">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 id="titulo-recibo-cobro" className="text-xs font-bold uppercase tracking-wide text-slate-600">Recibo del viaje</h2>
+                  <p className="mt-1 text-xs font-semibold text-slate-700">Cobro #{cobro.id_cobro}</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${cobro.estado === "confirmado" ? "bg-emerald-100 text-emerald-800" : cobro.estado === "fallido" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>
+                  {cobro.estado === "confirmado" ? "Pago confirmado" : cobro.estado === "fallido" ? "Pago fallido" : "Pago pendiente"}
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold text-slate-900">{importePesos(cobro.importe)}</p>
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-white/80 bg-white/80 p-3"><dt className="text-slate-500">Intentos</dt><dd className="mt-1 font-semibold text-slate-800">{cobro.intentos}</dd></div>
+                <div className="rounded-lg border border-white/80 bg-white/80 p-3"><dt className="text-slate-500">Fecha</dt><dd className="mt-1 font-semibold text-slate-800">{new Date(cobro.creado_en).toLocaleString("es-AR")}</dd></div>
+              </dl>
+              {cobro.estado === "fallido" && (
+                <>
+                  <p className="text-xs text-rose-800">El viaje se completó, pero el pago no se confirmó. Podés reintentar; el importe y el cobro se mantienen únicos.</p>
+                  <button type="button" onClick={() => void reintentarCobro()} disabled={procesando} className="w-full rounded-xl bg-rose-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    {procesando ? "Reintentando pago…" : "Reintentar pago"}
+                  </button>
+                </>
+              )}
+              {cobro.estado === "confirmado" && <p className="text-xs font-semibold text-emerald-800">El cobro quedó confirmado por el importe final congelado al cerrar el viaje.</p>}
             </section>
           )}
         </section>

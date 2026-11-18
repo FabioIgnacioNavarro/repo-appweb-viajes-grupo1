@@ -49,7 +49,7 @@ export interface CobroChoferDto {
   id_cobro: string;
   importe: string;
   moneda: string;
-  estado: string;
+  estado: "pendiente" | "fallido" | "confirmado";
 }
 
 export const RUTA_SIMULADA_RESISTENCIA: Array<{ latitud: number; longitud: number; etiqueta: string }> = [
@@ -651,7 +651,9 @@ export const VistaChofer: React.FC = () => {
       );
       setViajeActivo(resultado.viaje);
       setUltimoCobro(resultado.cobro);
-      setMensajeExito(`Viaje finalizado. Cobro ${resultado.cobro.id_cobro} confirmado.`);
+      setMensajeExito(resultado.cobro.estado === "confirmado"
+        ? `Viaje finalizado. Cobro ${resultado.cobro.id_cobro} confirmado.`
+        : `Viaje finalizado. El cobro ${resultado.cobro.id_cobro} quedó ${resultado.cobro.estado}.`);
     } catch (err) {
       if (err instanceof ErrorHttpApi && err.status === 0) {
         const finalizado: ViajeChoferDto = {
@@ -1039,17 +1041,17 @@ export const VistaChofer: React.FC = () => {
               <div
                 id="resumen-cobro-chofer"
                 data-testid="resumen-cobro-chofer"
-                className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-950"
+                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${ultimoCobro.estado === "confirmado" ? "bg-emerald-50 border-emerald-200 text-emerald-950" : ultimoCobro.estado === "fallido" ? "bg-rose-50 border-rose-200 text-rose-950" : "bg-amber-50 border-amber-200 text-amber-950"}`}
               >
                 <div>
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-700 block">
+                  <span className={`font-bold uppercase tracking-wider text-[10px] block ${ultimoCobro.estado === "confirmado" ? "text-emerald-700" : ultimoCobro.estado === "fallido" ? "text-rose-700" : "text-amber-700"}`}>
                     Recibo de Cobro Generado
                   </span>
                   <span className="font-semibold">
                     Cobro #{ultimoCobro.id_cobro} — Estado: {ultimoCobro.estado.toUpperCase()}
                   </span>
                 </div>
-                <span className="text-base font-extrabold text-emerald-800">
+                <span className={`text-base font-extrabold ${ultimoCobro.estado === "confirmado" ? "text-emerald-800" : ultimoCobro.estado === "fallido" ? "text-rose-800" : "text-amber-800"}`}>
                   {formatearImporteArs(ultimoCobro.importe)}
                 </span>
               </div>

@@ -110,13 +110,21 @@ export interface Oferta {
   respondidaEm?: Date;
 }
 
+export type EstadoCobro = "PENDIENTE" | "FALLIDO" | "CONFIRMADO";
+
 export interface Cobro {
   id: string;
   viajeId: string;
   importe: string;
   moneda: "ARS";
-  estado: "CONFIRMADO";
+  estado: EstadoCobro;
+  intentos: number;
   creadoEn: Date;
+}
+
+/** Puerto de salida para simular o integrar el procesamiento de un cobro. */
+export interface PasarelaPagos {
+  procesar(cobro: Cobro, claveIdempotencia: string): Promise<"FALLIDO" | "CONFIRMADO">;
 }
 
 export interface RepositorioViajes {
@@ -140,8 +148,8 @@ export interface RepositorioCobros {
 }
 
 export interface RepositorioIdempotencia {
-  obtener(actorId: string, clave: string): Promise<unknown | undefined>;
-  guardar(actorId: string, clave: string, resultado: unknown): Promise<void>;
+  obtener(actorId: string, clave: string, operacion?: string): Promise<unknown | undefined>;
+  guardar(actorId: string, clave: string, resultado: unknown, operacion?: string): Promise<void>;
 }
 
 /** Repositorios con bloqueos explícitos disponibles solo dentro de una transacción local. */
@@ -327,7 +335,11 @@ export class RepositorioCobrosMemoria implements RepositorioCobros {
   private readonly datos = new Map<string, Cobro>();
 
   async guardar(cobro: Cobro): Promise<Cobro> {
-    const copia = structuredClone(cobro);
+    const existente = this.datos.get(cobro.viajeId);
+    if (existente?.estado === "CONFIRMADO") return structuredClone(existente);
+    const copia = structuredClone(existente
+      ? { ...cobro, id: existente.id, creadoEn: existente.creadoEn, intentos: Math.max(existente.intentos, cobro.intentos) }
+      : cobro);
     this.datos.set(cobro.viajeId, copia);
     return structuredClone(copia);
   }
@@ -341,12 +353,12 @@ export class RepositorioCobrosMemoria implements RepositorioCobros {
 export class RepositorioIdempotenciaMemoria implements RepositorioIdempotencia {
   private readonly datos = new Map<string, unknown>();
 
-  async obtener(actorId: string, clave: string): Promise<unknown | undefined> {
-    return structuredClone(this.datos.get(`${actorId}:${clave}`));
+  async obtener(actorId: string, clave: string, operacion = "confirmar_viaje"): Promise<unknown | undefined> {
+    return structuredClone(this.datos.get(`${actorId}:${operacion}:${clave}`));
   }
 
-  async guardar(actorId: string, clave: string, resultado: unknown): Promise<void> {
-    this.datos.set(`${actorId}:${clave}`, structuredClone(resultado));
+  async guardar(actorId: string, clave: string, resultado: unknown, operacion = "confirmar_viaje"): Promise<void> {
+    this.datos.set(`${actorId}:${operacion}:${clave}`, structuredClone(resultado));
   }
 }
 
@@ -678,7 +690,13 @@ export class AvanzarViaje {
 }
 
 export class FinalizarViaje {
-  constructor(private readonly viajes: RepositorioViajes, private readonly cobros: RepositorioCobros, private readonly asignador: AsignadorAtomico, private readonly ids: GeneradorId) {}
+  constructor(
+    private readonly viajes: RepositorioViajes,
+    private readonly cobros: RepositorioCobros,
+    private readonly asignador: AsignadorAtomico,
+    private readonly ids: GeneradorId,
+    private readonly pasarela?: PasarelaPagos
+  ) {}
 
   async ejecutar(actor: ActorAutenticado, viajeId: string, ahora = new Date()): Promise<{ viaje: Viaje; cobro: Cobro }> {
     exigirRol(actor, "CHOFER");
@@ -689,7 +707,66 @@ export class FinalizarViaje {
     exigirTransicionViaje(viaje.estado, "FINALIZADO");
     const viajeFinalizado = await this.viajes.guardar({ ...viaje, estado: "FINALIZADO", precioFinal: viaje.precioEstimado, finalizadoEm: new Date(ahora) });
     await this.asignador.liberar(viaje.id, actor.idUsuario);
-    const cobro = await this.cobros.guardar({ id: this.ids.generar("cobro"), viajeId: viaje.id, importe: viaje.precioEstimado, moneda: "ARS", estado: "CONFIRMADO", creadoEn: new Date(ahora) });
+    const cobroPendiente = await this.cobros.guardar({
+      id: this.ids.generar("cobro"), viajeId: viaje.id, importe: viaje.precioEstimado,
+      moneda: "ARS", estado: "PENDIENTE", intentos: 0, creadoEn: new Date(ahora)
+    });
+    const estado = this.pasarela
+      ? await this.pasarela.procesar(cobroPendiente, `finalizacion:${cobroPendiente.id}`)
+      : "CONFIRMADO";
+    const cobro = await this.cobros.guardar({ ...cobroPendiente, estado, intentos: cobroPendiente.intentos + 1 });
     return { viaje: viajeFinalizado, cobro };
+  }
+}
+
+/** Consulta un recibo solo para los participantes del viaje o soporte. */
+export class ConsultarCobro {
+  constructor(private readonly viajes: RepositorioViajes, private readonly cobros: RepositorioCobros) {}
+
+  async ejecutar(actor: ActorAutenticado, viajeId: string): Promise<Cobro> {
+    const viaje = exigirViaje(await this.viajes.obtener(viajeId));
+    const autorizado = (actor.rol === "PASAJERO" && viaje.pasajeroId === actor.idUsuario)
+      || (actor.rol === "CHOFER" && viaje.choferId === actor.idUsuario)
+      || actor.rol === "SOPORTE";
+    if (!autorizado) throw new ErrorDominio("COBRO_NO_AUTORIZADO", "El actor no puede consultar este cobro.");
+    const cobro = await this.cobros.obtenerPorViaje(viaje.id);
+    if (!cobro) throw new ErrorDominio("COBRO_NO_ENCONTRADO", "El viaje todavía no tiene un cobro.");
+    return cobro;
+  }
+}
+
+/** Reintenta únicamente cobros fallidos y guarda la respuesta por actor, operación y clave. */
+export class ReintentarCobro {
+  constructor(
+    private readonly viajes: RepositorioViajes,
+    private readonly cobros: RepositorioCobros,
+    private readonly idempotencia: RepositorioIdempotencia,
+    private readonly pasarela: PasarelaPagos
+  ) {}
+
+  async ejecutar(actor: ActorAutenticado, viajeId: string, clave: string): Promise<Cobro> {
+    const viaje = exigirViaje(await this.viajes.obtener(viajeId));
+    const autorizado = (actor.rol === "PASAJERO" && viaje.pasajeroId === actor.idUsuario)
+      || actor.rol === "SOPORTE";
+    if (!autorizado) throw new ErrorDominio("COBRO_NO_AUTORIZADO", "Solo el pasajero titular o soporte puede reintentar este cobro.");
+    if (!clave || clave.length > 200) throw new ErrorDominio("CLAVE_IDEMPOTENCIA_REQUERIDA", "El reintento requiere una clave de idempotencia válida.");
+    if (viaje.estado !== "FINALIZADO") throw new ErrorDominio("COBRO_NO_REINTENTABLE", "El viaje debe estar finalizado para procesar el cobro.");
+
+    const claveOperacion = `${viaje.id}:${clave}`;
+    const anterior = await this.idempotencia.obtener(actor.idUsuario, claveOperacion, "reintentar_cobro") as Cobro | undefined;
+    if (anterior) return anterior;
+
+    const cobro = await this.cobros.obtenerPorViaje(viaje.id);
+    if (!cobro) throw new ErrorDominio("COBRO_NO_ENCONTRADO", "El viaje todavía no tiene un cobro.");
+    if (cobro.estado === "PENDIENTE") throw new ErrorDominio("COBRO_NO_REINTENTABLE", "El cobro todavía está en proceso.");
+    if (cobro.estado === "CONFIRMADO") {
+      await this.idempotencia.guardar(actor.idUsuario, claveOperacion, cobro, "reintentar_cobro");
+      return cobro;
+    }
+
+    const estado = await this.pasarela.procesar(cobro, `reintento:${actor.idUsuario}:${viaje.id}:${clave}`);
+    const actualizado = await this.cobros.guardar({ ...cobro, estado, intentos: cobro.intentos + 1 });
+    await this.idempotencia.guardar(actor.idUsuario, claveOperacion, actualizado, "reintentar_cobro");
+    return actualizado;
   }
 }

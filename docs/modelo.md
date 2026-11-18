@@ -290,6 +290,24 @@ Restricción recomendada:
 UNIQUE(viaje_id, chofer_usuario_id)
 ```
 
+### `cobro`
+
+Cada viaje finalizado tiene como máximo un cobro. La fila conserva el precio final congelado del viaje; los reintentos actualizan el resultado de esa misma fila y nunca crean un segundo cobro.
+
+```text
+cobro
+-----
+id PK
+viaje_id FK -> viaje.id UNIQUE
+importe BIGINT
+moneda = ARS
+estado: PENDIENTE | FALLIDO | CONFIRMADO
+intentos INTEGER
+creado_en
+```
+
+La primera falla se simula en el adaptador de pagos falso. El pasajero titular, el chofer asignado o soporte pueden consultar el recibo; el pasajero titular o soporte pueden reintentar un cobro fallido con una clave de idempotencia. Un reintento repetido con la misma clave devuelve el mismo resultado. Un cobro confirmado no vuelve a intentarse ni cambia de importe.
+
 ## Precio dinámico
 
 ### `configuracion_tarifa`
@@ -441,7 +459,9 @@ tener una necesidad de persistencia espacial y una medición de carga.
 10. La tarifa se calcula en el servidor.
 11. El precio y el multiplicador confirmados no cambian si cambia la demanda durante el viaje.
 12. La misma intención con la misma `Clave-Idempotencia` produce un único efecto.
-13. Un cobro finalizado no se ejecuta dos veces por reintentos.
+13. Un viaje finalizado tiene una única fila de cobro, aunque se repita la finalización.
+14. Un reintento de cobro conserva el mismo identificador e importe; la clave de idempotencia no repite el efecto.
+15. Un cobro confirmado no vuelve a ejecutarse.
 
 ## Concurrencia que debe resolverse
 

@@ -3,13 +3,14 @@ import { createServer, type Server } from "node:http";
 import test from "node:test";
 import { strict as assert } from "node:assert";
 import {
-  AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarOfertasChofer, ConfirmarViaje,
+  AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarCobro, ConsultarOfertasChofer, ConfirmarViaje,
   ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOferta, FinalizarViaje, GeneradorIdMemoria, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
-  RepositorioViajesMemoria, ListarViajesOperador, ConsultarAuditoriaTarifa, type EstimacionVigente
+  RepositorioViajesMemoria, ListarViajesOperador, ConsultarAuditoriaTarifa, ReintentarCobro, type EstimacionVigente
 } from "../../src/ms-viajes/dominio";
 import { crearRouterViajes, ValidadorTokenFalso, type DependenciasViajes } from "../../src/ms-viajes/http";
 import { ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
+import { PasarelaPagosFalsa } from "../../src/ms-viajes/pasarela-pagos-falsa";
 
 const ahoraPrueba = new Date();
 const estimacion: EstimacionVigente = {
@@ -28,6 +29,7 @@ async function servidorDePrueba(): Promise<{ base: string; servidor: Server; dep
   const estimaciones = new Map([[estimacion.id, estimacion]]);
   const idempotencia = new RepositorioIdempotenciaMemoria();
   const asignador = new AsignadorAtomicoMemoria();
+  const pasarela = new PasarelaPagosFalsa();
   const deps: DependenciasViajes = {
     viajes, ofertas,
     listarViajesOperador: new ListarViajesOperador(viajes),
@@ -37,7 +39,9 @@ async function servidorDePrueba(): Promise<{ base: string; servidor: Server; dep
     rechazar: new RechazarOferta(ofertas),
     cancelar: new CancelarViaje(viajes, asignador),
     avanzar: new AvanzarViaje(viajes),
-    finalizar: new FinalizarViaje(viajes, cobros, asignador, ids),
+    finalizar: new FinalizarViaje(viajes, cobros, asignador, ids, pasarela),
+    consultarCobro: new ConsultarCobro(viajes, cobros),
+    reintentarCobro: new ReintentarCobro(viajes, cobros, idempotencia, pasarela),
     consultar: new ConsultarViaje(viajes),
     validadorToken: new ValidadorTokenFalso({
       pasajero: { idUsuario: "pasajero-1", rol: "PASAJERO" },
@@ -173,6 +177,58 @@ test("la API acepta una oferta solo por su chofer y traduce una transicion inval
     const llegadaRepetida = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/llegada`, "chofer", { method: "POST", body: "{}" });
     assert.equal(llegadaRepetida.status, 409);
     assert.equal((await llegadaRepetida.json() as { error: { codigo: string } }).error.codigo, "TRANSICION_ESTADO_INVALIDA");
+  } finally { await cerrar(contexto.servidor); }
+});
+
+test("WEB-005: la API expone recibo protegido y reintento idempotente sin duplicar el cobro", async () => {
+  const contexto = await servidorDePrueba();
+  try {
+    const creada = await pedido(contexto.base, "/viajes", "pasajero", {
+      method: "POST", body: JSON.stringify({ id_estimacion: estimacion.id }), headers: { "Clave-Idempotencia": "web005-http" }
+    });
+    const viaje = await creada.json() as { id_viaje: string; precio_estimado: string };
+    const oferta = await new CrearOferta(contexto.deps.ofertas, contexto.deps.viajes, new GeneradorIdMemoria()).ejecutar(
+      { idUsuario: "soporte-1", rol: "SOPORTE" }, viaje.id_viaje, "chofer-1", new Date(Date.now() + 60_000)
+    );
+    await pedido(contexto.base, `/choferes/yo/ofertas/${oferta.id}/aceptacion`, "chofer", { method: "POST", body: "{}" });
+    await pedido(contexto.base, `/viajes/${viaje.id_viaje}/llegada`, "chofer", { method: "POST", body: "{}" });
+    await pedido(contexto.base, `/viajes/${viaje.id_viaje}/inicio`, "chofer", { method: "POST", body: "{}" });
+
+    const finalizaciones = await Promise.all([
+      pedido(contexto.base, `/viajes/${viaje.id_viaje}/finalizacion`, "chofer", { method: "POST", body: "{}" }),
+      pedido(contexto.base, `/viajes/${viaje.id_viaje}/finalizacion`, "chofer", { method: "POST", body: "{}" })
+    ]);
+    const cobrosConcurrentes = await Promise.all(finalizaciones.map(async (respuesta) => {
+      assert.equal(respuesta.status, 200);
+      return (await respuesta.json() as { cobro: { id_cobro: string; importe: string; estado: string; intentos: number } }).cobro;
+    }));
+    const cobroFallido = cobrosConcurrentes[0];
+    assert.equal(cobrosConcurrentes[1].id_cobro, cobroFallido.id_cobro);
+    assert.equal(cobroFallido.estado, "fallido");
+    assert.equal(cobroFallido.intentos, 1);
+    assert.equal(cobroFallido.importe, viaje.precio_estimado);
+
+    const pasajeroRecibo = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro`, "pasajero");
+    const choferRecibo = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro`, "chofer");
+    const pasajeroAjeno = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro`, "pasajeroDos");
+    assert.equal(pasajeroRecibo.status, 200);
+    assert.equal(choferRecibo.status, 200);
+    assert.equal((await pasajeroRecibo.json() as { id_cobro: string }).id_cobro, cobroFallido.id_cobro);
+    assert.equal(pasajeroAjeno.status, 403);
+
+    const opciones = { method: "POST", body: "{}", headers: { "Clave-Idempotencia": "pago-web005-http" } };
+    const reintento = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro/reintento`, "pasajero", opciones);
+    const repetido = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro/reintento`, "pasajero", opciones);
+    const cobroConfirmado = await reintento.json() as { id_cobro: string; importe: string; estado: string; intentos: number };
+    const cobroRepetido = await repetido.json() as { id_cobro: string; importe: string; estado: string; intentos: number };
+    assert.equal(reintento.status, 200);
+    assert.equal(cobroConfirmado.estado, "confirmado");
+    assert.equal(cobroConfirmado.id_cobro, cobroFallido.id_cobro);
+    assert.equal(cobroConfirmado.importe, viaje.precio_estimado);
+    assert.deepEqual(cobroRepetido, cobroConfirmado);
+
+    const finalizacionRepetida = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/finalizacion`, "chofer", { method: "POST", body: "{}" });
+    assert.equal((await finalizacionRepetida.json() as { cobro: { id_cobro: string; estado: string } }).cobro.id_cobro, cobroFallido.id_cobro);
   } finally { await cerrar(contexto.servidor); }
 });
 

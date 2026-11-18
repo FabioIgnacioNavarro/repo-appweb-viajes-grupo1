@@ -8,8 +8,8 @@ iniciarObservabilidad("ms-viajes");
 import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
-  AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarOfertasChofer, ConfirmarViaje,
-  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, ListarViajesOperador, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
+  AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarCobro, ConsultarOfertasChofer, ConfirmarViaje,
+  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, ListarViajesOperador, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta, ReintentarCobro,
   MarcarViajeSinChoferesDisponibles,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
@@ -30,6 +30,7 @@ import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-s
 import { ClienteFlotaHttp, ClienteTarifasHttp } from "./clientes-http";
 import { ConfirmarViajeYBuscarChoferes } from "./integracion";
 import { AdaptadorWebSocketTiempoReal } from "./tiempo-real";
+import { PasarelaPagosFalsa } from "./pasarela-pagos-falsa";
 
 const puerto = Number(process.env.PUERTO_MS_VIAJES ?? 3000);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_VIAJES debe ser un entero entre 1 y 65535.");
@@ -50,6 +51,7 @@ const idempotencia = pool ? new RepositorioIdempotenciaPostgres(pool) : new Repo
 const asignador = pool ? new AsignadorAtomicoPostgres(pool) : new AsignadorAtomicoMemoria();
 const transaccionViajes = pool ? new TransaccionesViajesPostgres(pool) : undefined;
 const ids = new GeneradorIdMemoria();
+const pasarelaPagos = new PasarelaPagosFalsa();
 
 const timeoutServicio = Number(process.env.TIMEOUT_SERVICIO_MS ?? "1500");
 const reintentosServicio = Number(process.env.REINTENTOS_SERVICIO ?? "1");
@@ -73,7 +75,9 @@ const dependencias = {
   rechazar: new RechazarOferta(ofertas),
   cancelar: new CancelarViaje(viajes, asignador, ofertas, eventosTiempoReal),
   avanzar: new AvanzarViaje(viajes),
-  finalizar: new FinalizarViaje(viajes, cobros, asignador, ids),
+  finalizar: new FinalizarViaje(viajes, cobros, asignador, ids, pasarelaPagos),
+  consultarCobro: new ConsultarCobro(viajes, cobros),
+  reintentarCobro: new ReintentarCobro(viajes, cobros, idempotencia, pasarelaPagos),
   consultar: new ConsultarViaje(viajes),
   listarViajesOperador: new ListarViajesOperador(viajes),
   auditoriaTarifa: new ConsultarAuditoriaTarifa(viajes),

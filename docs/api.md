@@ -172,7 +172,25 @@ El chofer inicia el recorrido con el pasajero a bordo.
 #### `POST /viajes/:idViaje/finalizacion`
 El chofer finaliza el viaje, fijando el precio final y generando el cobro único.
 - **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona a `FINALIZADO`.
-- **Respuesta (`200 OK`):** `{ "viaje": { ... }, "cobro": { ... } }`.
+- **Respuesta (`200 OK`):** `{ "viaje": { ... }, "cobro": { "id_cobro": "...", "id_viaje": "...", "importe": "8086", "moneda": "ARS", "estado": "fallido", "intentos": 1, "creado_en": "2026-11-18T12:00:00.000Z" } }`.
+- El adaptador falso devuelve un primer fallo reproducible (`fallido`) y permite demostrar luego un reintento exitoso. El viaje queda `finalizado` y el importe del cobro coincide con `precio_final`.
+
+#### `GET /viajes/:idViaje/cobro`
+Consulta el recibo asociado al viaje sin volver a procesar el pago.
+- **Autorización:** Pasajero titular, chofer asignado o `SOPORTE`.
+- **Respuesta (`200 OK`):** `{ "id_cobro": "...", "id_viaje": "...", "importe": "8086", "moneda": "ARS", "estado": "fallido", "intentos": 1, "creado_en": "2026-11-18T12:00:00.000Z" }`.
+- **No encontrado (`404`):** `VIAJE_NO_ENCONTRADO` si el viaje no existe; `COBRO_NO_ENCONTRADO` si todavía no generó un cobro.
+- **No autorizado (`403`):** `COBRO_NO_AUTORIZADO` para otros usuarios.
+
+#### `POST /viajes/:idViaje/cobro/reintento`
+Reintenta un cobro fallido del viaje finalizado.
+- **Autorización:** Pasajero titular o `SOPORTE`. El chofer puede consultar el recibo, pero no iniciar un nuevo intento de pago.
+- **Encabezados:** `Clave-Idempotencia: <string>` obligatorio.
+- **Cuerpo:** vacío (`{}` también es válido).
+- **Respuesta (`200 OK`):** objeto Cobro actualizado. Si se repite la misma clave, se devuelve el resultado de ese intento; no se procesa otro pago.
+- Un cobro `confirmado` se devuelve sin ejecutar un nuevo intento. Un cobro pendiente no se puede reintentar (`409 COBRO_NO_REINTENTABLE`).
+- **Entrada inválida (`400`):** falta `Clave-Idempotencia`.
+- **Conflicto (`409`):** `COBRO_NO_REINTENTABLE` cuando el cobro todavía no está fallido o el viaje no está finalizado.
 
 #### `GET /choferes/yo/ofertas`
 Lista las ofertas vigentes enviadas al chofer autenticado.
@@ -242,7 +260,9 @@ Las siguientes rutas **no deben ser accesibles desde el exterior**. El API Gatew
 | **`403`** | Forbidden | `OFERTA_NO_AUTORIZADA` | Intento de responder oferta dirigida a otro chofer. |
 | **`403`** | Forbidden | `UBICACION_NO_AUTORIZADA` | Intento de consultar coordenadas privadas de chofer sin viaje asignado. |
 | **`403`** | Forbidden | `ESTIMACION_NO_AUTORIZADA` | Intento de consultar estimación solicitada por otro pasajero. |
+| **`403`** | Forbidden | `COBRO_NO_AUTORIZADO` | El actor no es el pasajero titular, chofer asignado ni soporte del viaje. |
 | **`404`** | Not Found | `VIAJE_NO_ENCONTRADO` | El identificador de viaje no existe en el sistema. |
+| **`404`** | Not Found | `COBRO_NO_ENCONTRADO` | El viaje existe, pero todavía no tiene un cobro generado. |
 | **`404`** | Not Found | `OFERTA_NO_ENCONTRADA` | La oferta solicitada no existe. |
 | **`404`** | Not Found | `CHOFER_NO_ENCONTRADO` | El chofer no está registrado. |
 | **`404`** | Not Found | `ESTIMACION_NO_ENCONTRADA` | La estimación solicitada no existe. |
@@ -253,6 +273,7 @@ Las siguientes rutas **no deben ser accesibles desde el exterior**. El API Gatew
 | **`409`** | Conflict | `ASIGNACION_EN_CONFLICTO` | Carrera concurrente: otro chofer ganó la asignación o el chofer ya tiene viaje activo. |
 | **`409`** | Conflict | `CHOFER_NO_HABILITADO` | Chofer con carnet no validado o inhabilitado administrativamente. |
 | **`409`** | Conflict | `TRANSICION_ESTADO_INVALIDA` | Transición no permitida por la máquina de estados o intento de cambiar un estado terminal. |
+| **`409`** | Conflict | `COBRO_NO_REINTENTABLE` | El viaje no finalizó o el cobro no está en estado `fallido`. |
 | **`422`** | Unprocessable Entity | `IMPORTE_INVALIDO` / `REGLA_INVALIDA` | Parámetros matemáticos o de regla fuera de rango permitido. |
 | **`422`** | Unprocessable Entity | `ZONA_NO_ENCONTRADA` | Coordenadas fuera de cobertura de las zonas tarifarias activas. |
 | **`503`** | Service Unavailable | `DEPENDENCIA_NO_DISPONIBLE` | Falla o timeout al consultar PostgreSQL, OSRM, Google Routes, Open-Meteo o microservicio hermano. |
