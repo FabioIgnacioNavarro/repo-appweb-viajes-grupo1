@@ -5,57 +5,71 @@ Plataforma backend de viajes en tiempo real construida bajo **Arquitectura Hexag
 Incluye la **Variante Obligatoria A (Precio dinámico por demanda auditado)** y los temas especiales de cátedra:
 - **Tema 18:** Observabilidad distribuida con OpenTelemetry, SDK OTLP, propagación de contexto W3C `traceparent` y servidor Jaeger.
 - **Tema 19:** Emulador de Identidad JWKS, emisión asimétrica RS256, roles RBAC y control de acceso por recurso.
+- **Tema 20:** Comunicación en tiempo real mediante WebSockets autenticados, autorización por viaje y recuperación del estado por HTTP.
 
 ---
 
 ## 🚀 Secuencia de Clon Limpio (Paso a Paso)
 
-Para reproducir el entorno desde un clon limpio de forma 100% determinista:
+Para levantar el proyecto con la configuración local de desarrollo. El archivo `.env.example` contiene valores locales de ejemplo, no una clave de Google Maps. Copialo a `.env` si querés mantener explícita la configuración; el archivo `.env` resultante es local y no se versiona. Compose también define valores predeterminados para las variables opcionales.
 
-### 1. Clonar y configurar variables de entorno
+### 1. Clonar e instalar dependencias
 ```powershell
 git clone https://github.com/FabioIgnacioNavarro/repo-appweb-viajes-grupo1.git
 cd repo-appweb-viajes-grupo1
-
-# Crear archivo de configuración local a partir de la plantilla
 Copy-Item .env.example .env
 ```
 
-El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL
-los ejecuta al crear un volumen de datos vacío. Si el volumen ya existía cuando se agregó un esquema,
-el script nuevo no se ejecuta automáticamente. En ese caso, aplicalo explícitamente; por ejemplo, para
-`ms-viajes` en PowerShell:
-
-```powershell
-Get-Content src/ms-viajes/schema.sql | docker compose exec -T postgres psql -U viajes -d viajes
-```
-
-La conexión desde el host usa el puerto `5434`; dentro del contenedor PostgreSQL sigue usando `5432`.
-En PowerShell, si la redirección `<` no está habilitada por la versión instalada, puede aplicarse el
-esquema desde Git Bash o ejecutarse el comando equivalente con `Get-Content src/ms-flota/schema.sql |
-docker compose exec -T postgres psql -U viajes -d viajes`.
-El readiness consulta efectivamente PostgreSQL mediante `SELECT 1`.
-
-Para probar endpoints protegidos sin Firebase, usar un entorno que no sea producción y activar el proveedor
-falso con `JWT_MODO=falso`. En PowerShell:
-
-```text
-$env:JWT_MODO='falso'; $env:NODE_ENV='development'; npm.cmd run flota
 ### 2. Instalar dependencias y compilar TypeScript
 ```powershell
-npm.cmd install
+npm.cmd ci
 npm.cmd run build
 ```
 
-### 3. Levantar la plataforma completa en Docker Compose
+### 3. Validar y levantar la plataforma completa en Docker Compose
 ```powershell
-docker compose config
+docker compose config --quiet
 docker compose up --build -d
+docker compose ps
 ```
 
-El token tiene la forma
-`falso.<payload-base64url>`. Acepta `PASAJERO`, `CHOFER`, `SOPORTE` y `ADMINISTRADOR`; no firma tokens y
-se rechaza explícitamente cuando `NODE_ENV=production`.
+Compose inicializa automáticamente los esquemas de los tres servicios y carga un chofer sintético de prueba. Esperá a que `postgres`, el emulador de identidad, los tres microservicios y el gateway figuren saludables. Luego comprobá el acceso público:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/health
+Invoke-RestMethod http://localhost:8080/ready/viajes
+Invoke-RestMethod http://localhost:8080/ready/tarifas
+Invoke-RestMethod http://localhost:8080/ready/flota
+```
+
+El emulador ofrece actores sintéticos para la demo. Los tokens del proveedor falso solo se aceptan en desarrollo; no usar ese modo en producción.
+
+### 4. Ejecutar pruebas y flujo E2E
+```powershell
+npm.cmd test
+$env:E2E_BASE_URL = "http://localhost:8080"
+npm.cmd run test:e2e
+```
+
+La suite completa incluye pruebas unitarias y de integración. Las pruebas que requieren PostgreSQL o el gateway se ejecutan cuando sus dependencias están disponibles.
+
+### 5. Ejecutar la demo reproducible por HTTP
+
+En VS Code, abrí `requests/flujo-e2e.http` con la extensión REST Client y ejecutá sus solicitudes en orden. El archivo indica cuándo copiar los identificadores que devuelve cada paso. Para la guía con tiempos, roles, precio dinámico, WebSocket, cobro, falla y seguridad, seguí [`docs/guion-demo.md`](docs/guion-demo.md).
+
+### Interfaz web local
+
+La interfaz se sirve aparte del gateway. En una segunda terminal ejecutá:
+
+```powershell
+npm.cmd run dev:web
+```
+
+Abrí `http://localhost:5173`; Vite reenvía las llamadas de API al gateway local. Para entrar con identidades compatibles con los datos sintéticos sembrados por Compose, usá la opción de token manual y los actores documentados en `requests/flujo-e2e.http`.
+
+El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL los ejecuta al crear un volumen vacío. Un volumen existente no vuelve a ejecutar scripts nuevos. En ese caso, aplicar las migraciones/esquemas correspondientes antes de repetir la demo.
+
+La conexión desde el host usa el puerto `5434`; entre contenedores PostgreSQL escucha en `5432`.
 
 ## Simulador local de carga de Flota (MED-001)
 
@@ -80,31 +94,6 @@ actualizaciones de ubicación. Los perfiles sintéticos y sus ubicaciones se eli
 el destino HTTP y el contexto de Docker deben ser locales. Los informes se guardan en
 `carga/resultados/`, excluida de Git. La prueba corta valida que el simulador funcione, pero no
 reemplaza las tres ejecuciones de aceptación.
-
-## `ms-viajes`
-
-Para compilar y ejecutar el servicio HTTP de viajes:
-
-```text
-npm run viajes
-Docker Compose inicializa automáticamente:
-1. **`postgres`:** Aplica los esquemas DDL de los tres servicios (`src/ms-flota/schema.sql`, `src/ms-tarifas/schema.sql`, `src/ms-viajes/schema.sql`).
-2. **`jaeger`:** Levanta el recolector OTLP y la interfaz gráfica de trazas.
-3. **`auth-emulator`:** Inicializa las claves RSA 2048 y publica el endpoint JWKS.
-4. **`ms-viajes`**, **`ms-tarifas`**, **`ms-flota`:** Conectan a PostgreSQL y quedan listos.
-5. **`nginx`:** Expone el API Gateway unificado en el puerto `8080`.
-
-### 4. Ejecutar la suite completa de pruebas
-```powershell
-# Ejecuta todas las pruebas unitarias y de integración offline (115 tests)
-npm.cmd test
-```
-
-### 5. Ejecutar la suite E2E contra el API Gateway
-```powershell
-$env:E2E_BASE_URL = "http://localhost:8080"
-npm.cmd run test:e2e
-```
 
 ---
 
@@ -157,7 +146,7 @@ Permite ingresar rol (pasajero o chofer), coordenadas de origen y destino, y sim
 
 ### 3. Peticiones REST Reproducibles (.http)
 En Visual Studio Code con la extensión *REST Client*:
-- **`requests/flujo-e2e.http`:** Ejecución secuencial de todo el flujo (ubicación de chofer $\rightarrow$ disponibilidad $\rightarrow$ estimación $\rightarrow$ confirmación $\rightarrow$ oferta $\rightarrow$ asignación atómica $\rightarrow$ inicio $\rightarrow$ finalización y cobro).
+- **`requests/flujo-e2e.http`:** Ejecución secuencial de todo el flujo (ubicación de chofer $\rightarrow$ disponibilidad $\rightarrow$ estimación $\rightarrow$ confirmación $\rightarrow$ oferta $\rightarrow$ asignación atómica $\rightarrow$ inicio $\rightarrow$ finalización, consulta del recibo y reintento idempotente del cobro).
 - **`requests/seguridad-rbac.http`:** Demostración formal de los 3 escenarios obligatorios de seguridad:
   1. `200/201`: Acceso autorizado con token RS256 legítimo.
   2. `401`: Token ausente, firma adulterada o token expirado.
@@ -171,5 +160,7 @@ En Visual Studio Code con la extensión *REST Client*:
 - [docs/api.md](docs/api.md): Contrato HTTP consolidado de endpoints públicos e internos.
 - [docs/contratos.md](docs/contratos.md): Convenciones compartidas, formatos de datos y reglas de integración.
 - [docs/backlog.md](docs/backlog.md): Estado detallado de las tareas y criterios de aceptación.
+- [docs/informe.md](docs/informe.md): Arquitectura, decisiones, resultados de medición y evidencia de seguridad.
+- [docs/guion-demo.md](docs/guion-demo.md): Guion cronometrado para ejecutar la demostración del proyecto.
 - [docs/ataque.md](docs/ataque.md): Bitácora de ataques controlados y verificación de defensas efectivas.
 - [docs/adr/](docs/adr/): Registro numerado de decisiones arquitectónicas (ADRs).
