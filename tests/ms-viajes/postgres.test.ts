@@ -21,7 +21,7 @@ import {
   RepositorioCobrosPostgres,
   RepositorioIdempotenciaPostgres,
   RepositorioOfertasPostgres,
-  RepositorioViajesPostgres
+  RepositorioViajesPostgres, type EjecutorSql
 } from "../../src/ms-viajes/postgres";
 
 const disponible = Boolean(process.env.DATABASE_URL);
@@ -33,6 +33,31 @@ async function limpiar(pool: Pool): Promise<void> {
   await pool.query("DELETE FROM viajes.viaje WHERE id LIKE $1", [`${PREFIJO}%`]);
   await pool.query("DELETE FROM viajes.idempotencia WHERE actor_id LIKE $1", [`${PREFIJO}%`]);
 }
+
+test("el UPDATE de PostgreSQL limita cada transición al conjunto de estados anteriores permitido", async () => {
+  const llamadas: Array<{ consulta: string; valores: unknown[] }> = [];
+  const ejecutor = {
+    async query(consulta: string, valores: unknown[] = []) {
+      llamadas.push({ consulta, valores });
+      if (consulta.includes("SELECT estado FROM viajes.viaje")) return { rows: [{ estado: "SOLICITADO" }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    }
+  } as unknown as EjecutorSql;
+  const repositorio = new RepositorioViajesPostgres(ejecutor);
+  const viaje: Viaje = {
+    id: "viaje-transicion-postgres", pasajeroId: "pasajero-1", origen: { latitud: -27.45, longitud: -58.98 },
+    destino: { latitud: -27.46, longitud: -58.99 }, estimacionId: "estimacion-1", precioEstimado: "8086",
+    moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: {}, estado: "CANCELADO_POR_PASAJERO", creadoEn: new Date()
+  };
+  await assert.rejects(
+    () => repositorio.guardar(viaje),
+    (error: unknown) => error instanceof ErrorDominio && error.codigo === "TRANSICION_ESTADO_INVALIDA"
+  );
+  const actualizacion = llamadas.find((llamada) => llamada.consulta.includes("UPDATE viajes.viaje"));
+  assert.ok(actualizacion);
+  assert.match(actualizacion.consulta, /estado = ANY\(\$9::text\[\]\)/);
+  assert.deepEqual(actualizacion.valores[8], ["SOLICITADO", "ASIGNADO", "CHOFER_EN_CAMINO"]);
+});
 
 test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariantes", { skip: !disponible }, async (t) => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -108,7 +133,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
       if (r.status === "rejected") {
         const err = r.reason as ErrorDominio;
         assert.ok(
-          err.codigo === "VIAJE_NO_DISPONIBLE" || err.codigo === "ASIGNACION_EN_CONFLICTO",
+          err.codigo === "VIAJE_NO_DISPONIBLE" || err.codigo === "ASIGNACION_EN_CONFLICTO" || err.codigo === "TRANSICION_ESTADO_INVALIDA",
           `Código inesperado de rechazo: ${err.codigo}`
         );
       }

@@ -1,6 +1,7 @@
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import {
   ErrorDominio,
+  estadosOrigenPermitidos,
   type ActorAutenticado,
   type AsignadorAtomico,
   type Cobro,
@@ -174,19 +175,9 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
         return mapearViaje(resultado.rows[0]);
       }
 
-      // Actualización de un viaje existente con validación de estado previo
-      let condicionEstado = "";
-      if (viaje.estado === "ASIGNADO") {
-        condicionEstado = " AND estado = 'SOLICITADO'";
-      } else if (viaje.estado === "CHOFER_EN_CAMINO") {
-        condicionEstado = " AND estado = 'ASIGNADO'";
-      } else if (viaje.estado === "EN_CURSO") {
-        condicionEstado = " AND estado = 'CHOFER_EN_CAMINO'";
-      } else if (viaje.estado === "FINALIZADO") {
-        condicionEstado = " AND estado = 'EN_CURSO'";
-      } else if (viaje.estado.startsWith("CANCELADO_")) {
-        condicionEstado = " AND estado NOT IN ('FINALIZADO', 'CANCELADO_POR_PASAJERO', 'CANCELADO_POR_CHOFER', 'CANCELADO_POR_OPERADOR')";
-      }
+      // La matriz de dominio también limita el UPDATE condicional para impedir saltos concurrentes.
+      const estadosAnteriores = estadosOrigenPermitidos(viaje.estado);
+      if (estadosAnteriores.length === 0) throw new ErrorDominio("TRANSICION_ESTADO_INVALIDA", "El estado solicitado es terminal y no admite transiciones.");
 
       const resultado = await this.ejecutor.query<FilaViaje>(
         `UPDATE viajes.viaje SET
@@ -199,7 +190,7 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
           cancelado_en = CASE WHEN $3 IN ('CANCELADO_POR_PASAJERO', 'CANCELADO_POR_CHOFER', 'CANCELADO_POR_OPERADOR') THEN COALESCE($7, CURRENT_TIMESTAMP) ELSE NULL END,
           motivo_cancelacion = COALESCE($8, motivo_cancelacion),
           fecha_actualizacion = CURRENT_TIMESTAMP
-        WHERE id = $1 ${condicionEstado}
+        WHERE id = $1 AND estado = ANY($9::text[])
         RETURNING *`,
         [
           viaje.id,
@@ -209,18 +200,13 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
           viaje.iniciadoEm ?? null,
           viaje.finalizadoEm ?? null,
           viaje.canceladoEm ?? null,
-          viaje.motivoCancelacion ?? null
+          viaje.motivoCancelacion ?? null,
+          estadosAnteriores
         ]
       );
 
       if ((resultado.rowCount ?? 0) === 0) {
-        if (viaje.estado === "ASIGNADO") {
-          throw new ErrorDominio("VIAJE_NO_DISPONIBLE", "El viaje ya no está disponible.");
-        }
-        if (viaje.estado.startsWith("CANCELADO_")) {
-          throw new ErrorDominio("VIAJE_TERMINAL", "El viaje ya terminó.");
-        }
-        throw new ErrorDominio("TRANSICION_INVALIDA", "La transición solicitada no es válida.");
+        throw new ErrorDominio("TRANSICION_ESTADO_INVALIDA", "La transición solicitada no es válida para el estado actual.");
       }
 
       return mapearViaje(resultado.rows[0]);

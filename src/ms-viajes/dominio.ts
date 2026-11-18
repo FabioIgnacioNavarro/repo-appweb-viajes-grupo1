@@ -156,6 +156,34 @@ export class ErrorDominio extends Error {
   }
 }
 
+/** Matriz única de transiciones del viaje, compartida por casos de uso y el adaptador SQL. */
+export const transicionesViajePermitidas: Readonly<Record<EstadoViaje, readonly EstadoViaje[]>> = {
+  SOLICITADO: ["ASIGNADO", "SIN_CHOFERES_DISPONIBLES", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_OPERADOR"],
+  ASIGNADO: ["CHOFER_EN_CAMINO", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_CHOFER", "CANCELADO_POR_OPERADOR"],
+  CHOFER_EN_CAMINO: ["EN_CURSO", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_CHOFER", "CANCELADO_POR_OPERADOR"],
+  EN_CURSO: ["FINALIZADO", "CANCELADO_POR_OPERADOR"],
+  FINALIZADO: [],
+  CANCELADO_POR_PASAJERO: [],
+  CANCELADO_POR_CHOFER: [],
+  CANCELADO_POR_OPERADOR: [],
+  SIN_CHOFERES_DISPONIBLES: []
+};
+
+export function transicionPermitidaViaje(origen: EstadoViaje, destino: EstadoViaje): boolean {
+  return transicionesViajePermitidas[origen].includes(destino);
+}
+
+export function estadosOrigenPermitidos(destino: EstadoViaje): EstadoViaje[] {
+  return (Object.keys(transicionesViajePermitidas) as EstadoViaje[])
+    .filter((origen) => transicionPermitidaViaje(origen, destino));
+}
+
+export function exigirTransicionViaje(origen: EstadoViaje, destino: EstadoViaje): void {
+  if (!transicionPermitidaViaje(origen, destino)) {
+    throw new ErrorDominio("TRANSICION_ESTADO_INVALIDA", `No se permite pasar de ${origen} a ${destino}.`);
+  }
+}
+
 export class GeneradorIdMemoria implements GeneradorId {
   private secuencia = 0;
 
@@ -169,6 +197,8 @@ export class RepositorioViajesMemoria implements RepositorioViajes {
   private readonly datos = new Map<string, Viaje>();
 
   async guardar(viaje: Viaje): Promise<Viaje> {
+    const anterior = this.datos.get(viaje.id);
+    if (anterior) exigirTransicionViaje(anterior.estado, viaje.estado);
     const copia = structuredClone(viaje);
     this.datos.set(viaje.id, copia);
     return structuredClone(copia);
@@ -331,7 +361,7 @@ export class ConfirmarViaje {
     exigirRol(actor, "PASAJERO");
     if (!clave) throw new ErrorDominio("CLAVE_IDEMPOTENCIA_REQUERIDA", "La confirmacion requiere una clave de idempotencia.");
     const anterior = (await this.idempotencia.obtener(actor.idUsuario, clave)) as Viaje | undefined;
-    if (anterior) return anterior;
+    if (anterior) return await this.viajes.obtener(anterior.id) ?? anterior;
     exigirEstimacionVigente(estimacion, ahora);
     exigirImporte(estimacion.precioEstimado);
     const viaje: Viaje = {
@@ -380,7 +410,7 @@ export class AceptarOferta {
       throw new ErrorDominio("OFERTA_VENCIDA", "La oferta ya vencio.");
     }
     const viaje = exigirViaje(await this.viajes.obtener(oferta.viajeId));
-    if (viaje.estado !== "SOLICITADO") throw new ErrorDominio("VIAJE_NO_DISPONIBLE", "El viaje ya no esta disponible.");
+    exigirTransicionViaje(viaje.estado, "ASIGNADO");
     if (!(await this.asignador.intentarAsignar(viaje.id, actor.idUsuario))) throw new ErrorDominio("ASIGNACION_EN_CONFLICTO", "El viaje o el chofer ya fueron asignados.");
     const actualizado = await this.viajes.guardar({ ...viaje, choferId: actor.idUsuario, estado: "ASIGNADO" });
     await this.ofertas.guardar({ ...oferta, estado: "ACEPTADA", respondidaEm: new Date(ahora) });
@@ -425,7 +455,7 @@ export class CancelarViaje {
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     const estado = actor.rol === "PASAJERO" ? "CANCELADO_POR_PASAJERO" : actor.rol === "CHOFER" ? "CANCELADO_POR_CHOFER" : actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR" ? "CANCELADO_POR_OPERADOR" : undefined;
     if (!estado || (actor.rol === "PASAJERO" && viaje.pasajeroId !== actor.idUsuario) || (actor.rol === "CHOFER" && viaje.choferId !== actor.idUsuario)) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El actor no puede cancelar este viaje.");
-    if (["FINALIZADO", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_CHOFER", "CANCELADO_POR_OPERADOR"].includes(viaje.estado)) throw new ErrorDominio("VIAJE_TERMINAL", "El viaje ya termino.");
+    exigirTransicionViaje(viaje.estado, estado);
     if (viaje.choferId) await this.asignador.liberar(viaje.id, viaje.choferId);
     const cancelado = await this.viajes.guardar({ ...viaje, estado, motivoCancelacion: motivo, canceladoEm: new Date(ahora) });
     const ofertas = this.ofertas ? await this.ofertas.listarPorViaje(viaje.id) : [];
@@ -436,6 +466,16 @@ export class CancelarViaje {
       }
     }
     return cancelado;
+  }
+}
+
+/** Marca terminal un viaje sin candidatos; la invoca la integración si Flota responde vacío. */
+export class MarcarViajeSinChoferesDisponibles {
+  constructor(private readonly viajes: RepositorioViajes) {}
+  async ejecutar(viajeId: string): Promise<Viaje> {
+    const viaje = exigirViaje(await this.viajes.obtener(viajeId));
+    exigirTransicionViaje(viaje.estado, "SIN_CHOFERES_DISPONIBLES");
+    return await this.viajes.guardar({ ...viaje, estado: "SIN_CHOFERES_DISPONIBLES" });
   }
 }
 
@@ -473,8 +513,7 @@ export class AvanzarViaje {
     exigirRol(actor, "CHOFER");
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     if (viaje.choferId !== actor.idUsuario) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El viaje no pertenece al chofer.");
-    const valido = (viaje.estado === "ASIGNADO" && estado === "CHOFER_EN_CAMINO") || (viaje.estado === "CHOFER_EN_CAMINO" && estado === "EN_CURSO");
-    if (!valido) throw new ErrorDominio("TRANSICION_INVALIDA", "La transicion solicitada no es valida.");
+    exigirTransicionViaje(viaje.estado, estado);
     return await this.viajes.guardar({ ...viaje, estado, iniciadoEm: estado === "EN_CURSO" ? new Date(ahora) : viaje.iniciadoEm });
   }
 }
@@ -488,7 +527,7 @@ export class FinalizarViaje {
     if (viaje.choferId !== actor.idUsuario) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El viaje no pertenece al chofer.");
     const cobroExistente = await this.cobros.obtenerPorViaje(viaje.id);
     if (cobroExistente) return { viaje, cobro: cobroExistente };
-    if (viaje.estado !== "EN_CURSO") throw new ErrorDominio("TRANSICION_INVALIDA", "Solo se puede finalizar un viaje en curso.");
+    exigirTransicionViaje(viaje.estado, "FINALIZADO");
     const viajeFinalizado = await this.viajes.guardar({ ...viaje, estado: "FINALIZADO", precioFinal: viaje.precioEstimado, finalizadoEm: new Date(ahora) });
     await this.asignador.liberar(viaje.id, actor.idUsuario);
     const cobro = await this.cobros.guardar({ id: this.ids.generar("cobro"), viajeId: viaje.id, importe: viaje.precioEstimado, moneda: "ARS", estado: "CONFIRMADO", creadoEn: new Date(ahora) });
