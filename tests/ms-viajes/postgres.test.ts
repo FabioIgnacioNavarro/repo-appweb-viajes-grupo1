@@ -133,6 +133,84 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
     await pool.end();
   });
 
+  await t.test("la segunda petición espera los locks del viaje y la oferta y luego lee los estados confirmados", async () => {
+    const viajeId = `${PREFIJO}viaje-lock-espera`;
+    const ofertaId = `${PREFIJO}oferta-lock-espera`;
+    const ahora = new Date();
+    const choferId = `${PREFIJO}chofer-lock-espera`;
+    await repoViajes.guardar({
+      id: viajeId, pasajeroId: `${PREFIJO}pasajero-lock-espera`, origen: { latitud: -27.45, longitud: -58.98 },
+      destino: { latitud: -27.46, longitud: -58.99 }, estimacionId: `${PREFIJO}estimacion-lock-espera`,
+      precioEstimado: "5000", moneda: "ARS", multiplicadorDemanda: 1, factoresPrecio: {}, estado: "SOLICITADO", creadoEn: ahora
+    });
+    await repoOfertas.guardar({
+      id: ofertaId, viajeId, choferId, estado: "PENDIENTE", enviadaEm: ahora, expiraEm: new Date(ahora.getTime() + 60_000)
+    });
+
+    const primera = await pool.connect();
+    const segunda = await pool.connect();
+    let primeraAbierta = false;
+    let segundaAbierta = false;
+    let consultaBloqueada: Promise<unknown> | undefined;
+    try {
+      await primera.query("BEGIN");
+      primeraAbierta = true;
+      const viajesPrimera = new RepositorioViajesPostgres(primera);
+      const ofertasPrimera = new RepositorioOfertasPostgres(primera);
+      const viaje = await viajesPrimera.obtenerParaActualizar(viajeId);
+      const oferta = await ofertasPrimera.obtenerParaActualizar(ofertaId);
+      assert.ok(viaje);
+      assert.ok(oferta);
+
+      await segunda.query("BEGIN");
+      segundaAbierta = true;
+      const pidResultado = await segunda.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+      const pidSegunda = pidResultado.rows[0].pid;
+      const ofertasSegunda = new RepositorioOfertasPostgres(segunda);
+      assert.equal((await ofertasSegunda.obtener(ofertaId))?.estado, "PENDIENTE");
+
+      let avisarInicio: () => void = () => undefined;
+      const inicioBloqueo = new Promise<void>((resolver) => { avisarInicio = resolver; });
+      const ejecutorSegunda = {
+        query(consulta: string, valores?: unknown[]) {
+          if (consulta.includes("FROM viajes.viaje WHERE id = $1 FOR UPDATE")) avisarInicio();
+          return segunda.query(consulta, valores as string[] | undefined);
+        }
+      } as unknown as EjecutorSql;
+      consultaBloqueada = new RepositorioViajesPostgres(ejecutorSegunda).obtenerParaActualizar(viajeId);
+      await inicioBloqueo;
+
+      let bloqueoObservado = false;
+      for (let intento = 0; intento < 100; intento += 1) {
+        const bloqueos = await pool.query<{ bloqueado: boolean }>(
+          "SELECT cardinality(pg_blocking_pids($1::integer)) > 0 AS bloqueado",
+          [pidSegunda]
+        );
+        if (bloqueos.rows[0]?.bloqueado) { bloqueoObservado = true; break; }
+        await new Promise((resolver) => setTimeout(resolver, 10));
+      }
+      assert.equal(bloqueoObservado, true, "la segunda conexión debe quedar esperando el lock de la primera");
+
+      await viajesPrimera.guardar({ ...viaje, choferId, estado: "ASIGNADO" });
+      await ofertasPrimera.guardar({ ...oferta, estado: "ACEPTADA", respondidaEm: ahora });
+      await primera.query("COMMIT");
+      primeraAbierta = false;
+
+      const viajeReleido = await consultaBloqueada as Viaje | undefined;
+      const ofertaReleida = await ofertasSegunda.obtenerParaActualizar(ofertaId);
+      assert.equal(viajeReleido?.estado, "ASIGNADO");
+      assert.equal(ofertaReleida?.estado, "ACEPTADA");
+      await segunda.query("COMMIT");
+      segundaAbierta = false;
+    } finally {
+      if (primeraAbierta) await primera.query("ROLLBACK").catch(() => undefined);
+      if (consultaBloqueada) await consultaBloqueada.catch(() => undefined);
+      if (segundaAbierta) await segunda.query("ROLLBACK").catch(() => undefined);
+      primera.release();
+      segunda.release();
+    }
+  });
+
   await t.test("50 aceptaciones concurrentes dejan exactamente un ganador y 49 perdedores", async () => {
     const viajeId = `${PREFIJO}viaje-50`;
     const ahora = new Date();
