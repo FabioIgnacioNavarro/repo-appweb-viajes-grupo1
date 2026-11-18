@@ -22,7 +22,8 @@ import {
   RepositorioCobrosPostgres,
   RepositorioIdempotenciaPostgres,
   RepositorioOfertasPostgres,
-  RepositorioViajesPostgres
+  RepositorioViajesPostgres,
+  TransaccionesViajesPostgres
 } from "./postgres";
 import { crearRouterViajes } from "./http";
 import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-servicios";
@@ -47,6 +48,7 @@ const ofertas = pool ? new RepositorioOfertasPostgres(pool) : new RepositorioOfe
 const cobros = pool ? new RepositorioCobrosPostgres(pool) : new RepositorioCobrosMemoria();
 const idempotencia = pool ? new RepositorioIdempotenciaPostgres(pool) : new RepositorioIdempotenciaMemoria();
 const asignador = pool ? new AsignadorAtomicoPostgres(pool) : new AsignadorAtomicoMemoria();
+const transaccionViajes = pool ? new TransaccionesViajesPostgres(pool) : undefined;
 const ids = new GeneradorIdMemoria();
 
 const timeoutServicio = Number(process.env.TIMEOUT_SERVICIO_MS ?? "1500");
@@ -67,7 +69,7 @@ const dependencias = {
   viajes, ofertas,
   confirmar,
   confirmarConOfertas: (actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, jwt: string) => confirmarConOfertas.ejecutar(actor, estimacion, clave, jwt),
-  aceptar: new AceptarOferta(ofertas, viajes, asignador, eventosTiempoReal),
+  aceptar: new AceptarOferta(ofertas, viajes, asignador, eventosTiempoReal, transaccionViajes),
   rechazar: new RechazarOferta(ofertas),
   cancelar: new CancelarViaje(viajes, asignador, ofertas, eventosTiempoReal),
   avanzar: new AvanzarViaje(viajes),
