@@ -343,6 +343,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
       moneda: "ARS",
       multiplicadorDemanda: 1.0,
       factoresPrecio: { zona_id: "sur" },
+      versionRegla: 1,
       creadaEn: ahora,
       vigenteHasta: new Date(ahora.getTime() + 180_000)
     };

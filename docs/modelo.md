@@ -232,7 +232,7 @@ fecha_actualizacion
 
 `vehiculo_utilizado_id` identifica el vehículo asignado. `vehiculo_utilizado` guarda una copia inmutable de los datos relevantes del vehículo en el momento de la asignación. Ambos campos son `NULL` antes de que un chofer acepte.
 
-`datos_demanda` es una fotografía de los factores utilizados para calcular el precio, por ejemplo:
+`factores_precio` es una fotografía de los factores y de la versión de regla utilizados para calcular el precio, por ejemplo:
 
 ```json
 {
@@ -245,11 +245,12 @@ fecha_actualizacion
   "factor_disponibilidad": 1.2,
   "factor_demanda": 1.5,
   "factor_horario": 1.0,
-  "multiplicador_aplicado": 1.98
+  "multiplicador_aplicado": 1.98,
+  "version_regla": 1
 }
 ```
 
-El precio y el multiplicador quedan congelados al confirmar. No se utilizan versiones de configuración por ahora.
+El precio, el multiplicador, los factores y `version_regla` quedan congelados al confirmar. La auditoría devuelve este snapshot persistido y no recalcula la tarifa con la regla activa actual.
 
 ### `oferta`
 

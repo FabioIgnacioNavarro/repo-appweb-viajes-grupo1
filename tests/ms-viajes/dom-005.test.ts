@@ -152,7 +152,7 @@ test("DOM-005: confirma el snapshot aceptado aunque recalcular cambie clima y de
     assert.equal(viaje.id_estimacion, primera.id_estimacion);
     assert.equal(viaje.precio_estimado, primera.precio_estimado);
     assert.equal(viaje.multiplicador_demanda, primera.multiplicador_demanda);
-    assert.deepEqual(viaje.factores_precio, primera.factores_precio);
+    assert.deepEqual(viaje.factores_precio, { ...primera.factores_precio, version_regla: 1 });
   } finally {
     liberarConfirmacion();
     await cerrar(servicioViajes.servidor);

@@ -134,8 +134,18 @@ Confirma la solicitud de un viaje a partir de una estimación vigente. Congela e
 - **Respuesta (`201 Created`):** Objeto Viaje en estado `"solicitado"` si se encontraron candidatos o `"sin_choferes_disponibles"` si la búsqueda no encontró ninguno.
 
 #### `GET /viajes`
-Lista los viajes propios del usuario autenticado (o todos si es `ADMINISTRADOR`/`SOPORTE`).
-- **Respuesta (`200 OK`):** `{"viajes": [ ... ]}`.
+Pasajero y chofer reciben sus viajes propios. `SOPORTE` y `ADMINISTRADOR` pueden consultar el listado global con filtros y paginación.
+- **Filtros opcionales (solo operador/admin):** `estado` (estado público en minúsculas), `desde` (fecha ISO 8601 UTC inclusiva), `hasta` (fecha ISO 8601 UTC exclusiva), `pagina` (desde 1) y `limite` (1–100; predeterminado 20).
+- **Respuesta operador/admin (`200 OK`):** `{"viajes": [ ... ], "pagina": 1, "limite": 20, "total": 42}`.
+- **Respuesta pasajero/chofer (`200 OK`):** `{"viajes": [ ... ]}` con sus viajes; si envía filtros, recibe `403 ROL_NO_AUTORIZADO`.
+- **Entrada inválida (`400`):** estado, fecha, página, límite o combinación de fechas inválida.
+
+#### `GET /viajes/:idViaje/auditoria-tarifa`
+Devuelve el snapshot de precio que quedó congelado al confirmar el viaje. No vuelve a calcular la tarifa.
+- **Autorización:** Solo `SOPORTE` o `ADMINISTRADOR`.
+- **Respuesta (`200 OK`):** `{"id_viaje": "...", "id_estimacion": "...", "precio_confirmado": "125000", "moneda": "ARS", "multiplicador_demanda": 1.25, "factores_precio": { ... }, "version_regla": 1, "congelada_en": "2026-11-17T15:04:05.000Z"}`.
+- **No encontrado (`404`):** `VIAJE_NO_ENCONTRADO`.
+- **No autorizado (`403`):** `ROL_NO_AUTORIZADO`.
 
 #### `GET /viajes/:idViaje`
 Consulta el detalle de un viaje específico.

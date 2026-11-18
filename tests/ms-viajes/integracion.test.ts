@@ -5,7 +5,7 @@ import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, MarcarV
 import { ConfirmarViajeYBuscarChoferes } from "../../src/ms-viajes/integracion";
 
 const actor: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
-const estimacion: EstimacionVigente = { id: "estimacion-1", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 }, precioEstimado: "8086", moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: { zona_id: "centro" }, creadaEn: new Date(), vigenteHasta: new Date(Date.now() + 180_000) };
+const estimacion: EstimacionVigente = { id: "estimacion-1", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 }, precioEstimado: "8086", moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: { zona_id: "centro" }, versionRegla: 1, creadaEn: new Date(), vigenteHasta: new Date(Date.now() + 180_000) };
 
 test("confirmación conserva exactamente precio e idempotencia, y crea ofertas solo una vez por candidato", async () => {
   const viajes = new RepositorioViajesMemoria(); const ofertas = new RepositorioOfertasMemoria(); const ids = new GeneradorIdMemoria();

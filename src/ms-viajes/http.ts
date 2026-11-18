@@ -1,10 +1,11 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import {
   AceptarOferta, AvanzarViaje, CancelarViaje, ConfirmarViaje, ConsultarViaje,
-  ConsultarChoferesOcupados, ConsultarDemandaPorZona,
+  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona,
   ErrorDominio, FinalizarViaje, RechazarOferta,
+  ListarViajesOperador,
   type ActorAutenticado, type EstimacionVigente, type RepositorioOfertas, type RepositorioViajes,
-  type Viaje, type Oferta, type PublicadorEventosTiempoReal, type PublicarEstadoViaje,
+  type EstadoViaje, type Viaje, type Oferta, type PublicadorEventosTiempoReal, type PublicarEstadoViaje,
   type PublicarUbicacionChoferEnViaje, type ConsultarOfertasChofer
 } from "./dominio";
 import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
@@ -23,6 +24,8 @@ export interface DependenciasViajes {
   avanzar: AvanzarViaje;
   finalizar: FinalizarViaje;
   consultar: ConsultarViaje;
+  listarViajesOperador?: ListarViajesOperador;
+  auditoriaTarifa?: ConsultarAuditoriaTarifa;
   validadorToken: ValidadorToken;
   obtenerEstimacion: (actor: ActorAutenticado, idEstimacion: string, token: string) => Promise<EstimacionVigente | undefined>;
   confirmarConOfertas?: (actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, token: string) => Promise<Viaje>;
@@ -86,6 +89,43 @@ function ofertaDto(oferta: { id: string; viajeId: string; choferId: string; esta
 }
 
 function validarId(valor: unknown): valor is string { return typeof valor === "string" && valor.length > 0 && valor.length <= 200; }
+
+const estadosViajePublicos: Record<string, EstadoViaje> = {
+  solicitado: "SOLICITADO", asignado: "ASIGNADO", chofer_en_camino: "CHOFER_EN_CAMINO", en_curso: "EN_CURSO",
+  finalizado: "FINALIZADO", cancelado_por_pasajero: "CANCELADO_POR_PASAJERO", cancelado_por_chofer: "CANCELADO_POR_CHOFER",
+  cancelado_por_operador: "CANCELADO_POR_OPERADOR", sin_choferes_disponibles: "SIN_CHOFERES_DISPONIBLES"
+};
+
+function parametrosListadoViajes(pedido: Request): { estado?: EstadoViaje; desde?: Date; hasta?: Date; pagina: number; limite: number } {
+  const permitidos = new Set(["estado", "desde", "hasta", "pagina", "limite"]);
+  if (Object.keys(pedido.query).some((clave) => !permitidos.has(clave))) throw new ErrorDominio("ENTRADA_INVALIDA", "El filtro de viajes contiene parámetros desconocidos.");
+  const leer = (clave: string): string | undefined => {
+    const valor = pedido.query[clave];
+    if (valor === undefined) return undefined;
+    if (typeof valor !== "string") throw new ErrorDominio("ENTRADA_INVALIDA", `El parámetro ${clave} debe aparecer una sola vez.`);
+    return valor;
+  };
+  const leerFecha = (clave: string): Date | undefined => {
+    const valor = leer(clave);
+    if (valor === undefined) return undefined;
+    const fecha = new Date(valor);
+    if (!valor.endsWith("Z") || !Number.isFinite(fecha.getTime())) throw new ErrorDominio("ENTRADA_INVALIDA", `${clave} debe ser una fecha ISO 8601 UTC.`);
+    return fecha;
+  };
+  const leerEntero = (clave: string, predeterminado: number): number => {
+    const valor = leer(clave);
+    if (valor === undefined) return predeterminado;
+    if (!/^[0-9]+$/.test(valor) || !Number.isSafeInteger(Number(valor))) throw new ErrorDominio("ENTRADA_INVALIDA", `${clave} debe ser un entero positivo.`);
+    return Number(valor);
+  };
+  const estadoTexto = leer("estado");
+  if (estadoTexto !== undefined && !estadosViajePublicos[estadoTexto]) throw new ErrorDominio("ENTRADA_INVALIDA", "El estado solicitado no existe.");
+  return {
+    estado: estadoTexto === undefined ? undefined : estadosViajePublicos[estadoTexto],
+    desde: leerFecha("desde"), hasta: leerFecha("hasta"),
+    pagina: leerEntero("pagina", 1), limite: leerEntero("limite", 20)
+  };
+}
 
 export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   const router = express.Router();
@@ -154,9 +194,38 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.get("/viajes", async (pedido, respuesta) => {
     try {
       const actor = actorDe(pedido);
+      const puedeListarGlobal = actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR";
+      if (puedeListarGlobal && deps.listarViajesOperador) {
+        const consulta = parametrosListadoViajes(pedido);
+        const resultado = await deps.listarViajesOperador.ejecutar(actor, consulta);
+        respuesta.status(200).json({ viajes: resultado.viajes.map(viajeDto), pagina: resultado.pagina, limite: resultado.limite, total: resultado.total });
+        return;
+      }
+      if (Object.keys(pedido.query).length > 0) {
+        respuesta.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo soporte o administración puede filtrar el listado global.", detalles: {} } });
+        return;
+      }
       const lista = await deps.viajes.listar();
-      const propios = lista.filter((viaje) => viaje.pasajeroId === actor.idUsuario || viaje.choferId === actor.idUsuario || actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR");
+      const propios = lista.filter((viaje) => viaje.pasajeroId === actor.idUsuario || viaje.choferId === actor.idUsuario
+        || (!deps.listarViajesOperador && puedeListarGlobal));
       respuesta.status(200).json({ viajes: propios.map(viajeDto) });
+    } catch (error) { errorHttp(error, respuesta); }
+  });
+
+  router.get("/viajes/:idViaje/auditoria-tarifa", async (pedido, respuesta) => {
+    try {
+      if (!deps.auditoriaTarifa) throw new Error("La consulta de auditoría no está configurada.");
+      const auditoria = await deps.auditoriaTarifa.ejecutar(actorDe(pedido), pedido.params.idViaje);
+      respuesta.status(200).json({
+        id_viaje: auditoria.idViaje,
+        id_estimacion: auditoria.idEstimacion,
+        precio_confirmado: auditoria.precioConfirmado,
+        moneda: auditoria.moneda,
+        multiplicador_demanda: auditoria.multiplicadorDemanda,
+        factores_precio: auditoria.factoresPrecio,
+        version_regla: auditoria.versionRegla,
+        congelada_en: auditoria.congeladaEn.toISOString()
+      });
     } catch (error) { errorHttp(error, respuesta); }
   });
 
