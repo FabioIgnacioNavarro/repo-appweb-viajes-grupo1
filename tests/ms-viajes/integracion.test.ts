@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
-import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria, RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente } from "../../src/ms-viajes/dominio";
+import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, MarcarViajeSinChoferesDisponibles, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria, RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente } from "../../src/ms-viajes/dominio";
 import { ConfirmarViajeYBuscarChoferes } from "../../src/ms-viajes/integracion";
 
 const actor: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
@@ -9,7 +9,7 @@ const estimacion: EstimacionVigente = { id: "estimacion-1", origen: { latitud: -
 
 test("confirmación conserva exactamente precio e idempotencia, y crea ofertas solo una vez por candidato", async () => {
   const viajes = new RepositorioViajesMemoria(); const ofertas = new RepositorioOfertasMemoria(); const ids = new GeneradorIdMemoria();
-  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar(_origen, jwt) { assert.equal(jwt, "jwt-pasajero"); return ["chofer-1", "chofer-1", "chofer-2"]; } }, new CrearOfertasParaCandidatos(ofertas, ids));
+  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar(_origen, jwt) { assert.equal(jwt, "jwt-pasajero"); return ["chofer-1", "chofer-1", "chofer-2"]; } }, new CrearOfertasParaCandidatos(ofertas, ids), new MarcarViajeSinChoferesDisponibles(viajes));
   const primero = await caso.ejecutar(actor, estimacion, "clave-1", "jwt-pasajero");
   const segundo = await caso.ejecutar(actor, estimacion, "clave-1", "jwt-pasajero");
   assert.equal(primero.id, segundo.id);
@@ -21,7 +21,7 @@ test("confirmación conserva exactamente precio e idempotencia, y crea ofertas s
 test("si flota cae, la operación falla cerrado y un reintento idempotente puede completar la búsqueda", async () => {
   const viajes = new RepositorioViajesMemoria(); const ofertas = new RepositorioOfertasMemoria(); const ids = new GeneradorIdMemoria();
   let disponible = false;
-  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar() { if (!disponible) throw new ErrorDependenciaHttp("ms-flota", "buscar_candidatos"); return ["chofer-1"]; } }, new CrearOfertasParaCandidatos(ofertas, ids));
+  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar() { if (!disponible) throw new ErrorDependenciaHttp("ms-flota", "buscar_candidatos"); return ["chofer-1"]; } }, new CrearOfertasParaCandidatos(ofertas, ids), new MarcarViajeSinChoferesDisponibles(viajes));
   await assert.rejects(() => caso.ejecutar(actor, estimacion, "clave-2", "jwt-pasajero"), ErrorDependenciaHttp);
   assert.equal((await viajes.listar()).length, 1);
   const viajesListados = await viajes.listar();
@@ -37,8 +37,26 @@ test("publica cada oferta nueva solo al chofer destinatario", async () => {
   const viajes = new RepositorioViajesMemoria(); const ofertas = new RepositorioOfertasMemoria(); const ids = new GeneradorIdMemoria();
   const publicaciones: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
   const eventos = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { publicaciones.push({ usuario, evento, datos }); } };
-  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar() { return ["chofer-1", "chofer-2"]; } }, new CrearOfertasParaCandidatos(ofertas, ids), eventos);
+  const caso = new ConfirmarViajeYBuscarChoferes(new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids), { async buscar() { return ["chofer-1", "chofer-2"]; } }, new CrearOfertasParaCandidatos(ofertas, ids), new MarcarViajeSinChoferesDisponibles(viajes), eventos);
   await caso.ejecutar(actor, estimacion, "clave-eventos", "jwt-pasajero");
   assert.deepEqual(publicaciones.map((p) => p.usuario), ["chofer-1", "chofer-2"]);
   assert.ok(publicaciones.every((p) => p.evento === "OFERTA_NUEVA" && typeof p.datos.id_oferta === "string"));
+});
+
+test("si no hay candidatos, el viaje pasa a terminal y un reintento devuelve el estado actual", async () => {
+  const viajes = new RepositorioViajesMemoria(); const ofertas = new RepositorioOfertasMemoria(); const ids = new GeneradorIdMemoria();
+  let busquedas = 0;
+  const caso = new ConfirmarViajeYBuscarChoferes(
+    new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids),
+    { async buscar() { busquedas += 1; return []; } },
+    new CrearOfertasParaCandidatos(ofertas, ids),
+    new MarcarViajeSinChoferesDisponibles(viajes)
+  );
+  const primero = await caso.ejecutar(actor, estimacion, "clave-sin-choferes", "jwt-pasajero");
+  const reintento = await caso.ejecutar(actor, estimacion, "clave-sin-choferes", "jwt-pasajero");
+  assert.equal(primero.estado, "SIN_CHOFERES_DISPONIBLES");
+  assert.equal(reintento.estado, "SIN_CHOFERES_DISPONIBLES");
+  assert.equal(reintento.id, primero.id);
+  assert.equal(busquedas, 1);
+  assert.equal((await ofertas.listarPorViaje(primero.id)).length, 0);
 });

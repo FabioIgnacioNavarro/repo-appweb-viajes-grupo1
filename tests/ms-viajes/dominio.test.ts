@@ -3,8 +3,9 @@ import test from "node:test";
 import {
   AceptarOferta, ActorAutenticado, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje,
   ConfirmarViaje, CrearOferta, ConsultarViaje, ErrorDominio, EstimacionVigente, FinalizarViaje,
-  GeneradorIdMemoria, RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria,
-  RepositorioOfertasMemoria, RepositorioViajesMemoria, type Oferta
+  exigirTransicionViaje, GeneradorIdMemoria, RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria,
+  RepositorioOfertasMemoria, RepositorioViajesMemoria, transicionPermitidaViaje,
+  transicionesViajePermitidas, type EstadoViaje, type Oferta
 } from "../../src/ms-viajes/dominio";
 
 const pasajero: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
@@ -23,6 +24,31 @@ function contexto() {
   const confirmar = new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids);
   return { viajes, ofertas, cobros, asignador, ids, confirmar };
 }
+
+test("la matriz exhaustiva acepta solo las transiciones documentadas y rechaza todas las demás", () => {
+  const esperada: Record<EstadoViaje, readonly EstadoViaje[]> = {
+    SOLICITADO: ["ASIGNADO", "SIN_CHOFERES_DISPONIBLES", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_OPERADOR"],
+    ASIGNADO: ["CHOFER_EN_CAMINO", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_CHOFER", "CANCELADO_POR_OPERADOR"],
+    CHOFER_EN_CAMINO: ["EN_CURSO", "CANCELADO_POR_PASAJERO", "CANCELADO_POR_CHOFER", "CANCELADO_POR_OPERADOR"],
+    EN_CURSO: ["FINALIZADO", "CANCELADO_POR_OPERADOR"],
+    FINALIZADO: [], CANCELADO_POR_PASAJERO: [], CANCELADO_POR_CHOFER: [], CANCELADO_POR_OPERADOR: [],
+    SIN_CHOFERES_DISPONIBLES: []
+  };
+  assert.deepEqual(transicionesViajePermitidas, esperada);
+  const estados = Object.keys(esperada) as EstadoViaje[];
+  for (const origen of estados) {
+    for (const destino of estados) {
+      const valida = esperada[origen].includes(destino);
+      assert.equal(transicionPermitidaViaje(origen, destino), valida, `${origen} → ${destino}`);
+      if (valida) assert.doesNotThrow(() => exigirTransicionViaje(origen, destino));
+      else assert.throws(
+        () => exigirTransicionViaje(origen, destino),
+        (error: unknown) => error instanceof ErrorDominio && error.codigo === "TRANSICION_ESTADO_INVALIDA",
+        `${origen} → ${destino} debe rechazarse con error de transición`
+      );
+    }
+  }
+});
 
 test("confirma un viaje y congela el precio y los factores", async () => {
   const ctx = contexto();
@@ -102,7 +128,7 @@ test("la cancelacion y la aceptacion simultaneas dejan un resultado valido", asy
   await new CancelarViaje(ctx.viajes, ctx.asignador).ejecutar(pasajero, viaje.id, "ya no necesito el viaje");
   await assert.rejects(
     async () => await aceptar.ejecutar({ idUsuario: "chofer-1", rol: "CHOFER" }, oferta.id),
-    (error: unknown) => error instanceof ErrorDominio && error.codigo === "VIAJE_NO_DISPONIBLE"
+    (error: unknown) => error instanceof ErrorDominio && error.codigo === "TRANSICION_ESTADO_INVALIDA"
   );
   assert.equal((await ctx.viajes.obtener(viaje.id))?.estado, "CANCELADO_POR_PASAJERO");
 });
@@ -123,6 +149,27 @@ test("cancelar y finalizar respetan autorizacion y cobran una sola vez", async (
   assert.equal(segundo.cobro.id, primero.cobro.id);
   await assert.rejects(
     async () => await new CancelarViaje(ctx.viajes, ctx.asignador).ejecutar(pasajero, viaje.id, "tarde"),
-    (error: unknown) => error instanceof ErrorDominio && error.codigo === "VIAJE_TERMINAL"
+    (error: unknown) => error instanceof ErrorDominio && error.codigo === "TRANSICION_ESTADO_INVALIDA"
   );
+});
+
+test("el pasajero no puede cancelar un viaje en curso, pero soporte puede por transición de operador", async () => {
+  const ctx = contexto();
+  const viaje = await ctx.confirmar.ejecutar(pasajero, estimacion(), "clave-cancelacion-en-curso");
+  const oferta = await new CrearOferta(ctx.ofertas, ctx.viajes, ctx.ids).ejecutar(
+    { idUsuario: "soporte", rol: "SOPORTE" }, viaje.id, "chofer-1", new Date(Date.now() + 60_000)
+  );
+  await new AceptarOferta(ctx.ofertas, ctx.viajes, ctx.asignador).ejecutar({ idUsuario: "chofer-1", rol: "CHOFER" }, oferta.id);
+  const avanzar = new AvanzarViaje(ctx.viajes);
+  await avanzar.ejecutar({ idUsuario: "chofer-1", rol: "CHOFER" }, viaje.id, "CHOFER_EN_CAMINO");
+  await avanzar.ejecutar({ idUsuario: "chofer-1", rol: "CHOFER" }, viaje.id, "EN_CURSO");
+
+  await assert.rejects(
+    () => new CancelarViaje(ctx.viajes, ctx.asignador).ejecutar(pasajero, viaje.id, "tarde"),
+    (error: unknown) => error instanceof ErrorDominio && error.codigo === "TRANSICION_ESTADO_INVALIDA"
+  );
+  const cancelado = await new CancelarViaje(ctx.viajes, ctx.asignador).ejecutar(
+    { idUsuario: "soporte", rol: "SOPORTE" }, viaje.id, "incidente"
+  );
+  assert.equal(cancelado.estado, "CANCELADO_POR_OPERADOR");
 });

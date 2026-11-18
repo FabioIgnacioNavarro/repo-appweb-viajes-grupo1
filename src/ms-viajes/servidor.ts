@@ -10,6 +10,7 @@ import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarOfertasChofer, ConfirmarViaje,
   ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
+  MarcarViajeSinChoferesDisponibles,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
 } from "./dominio";
@@ -55,7 +56,7 @@ const clienteTarifas = new ClienteTarifasHttp(exigirBaseInterna(process.env.MS_T
 const clienteFlota = new ClienteFlotaHttp(exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL"), clienteHttp, Number(process.env.RADIO_BUSQUEDA_CHOFERES_METROS ?? "5000"));
 
 const confirmar = new ConfirmarViaje(viajes, idempotencia, ids);
-const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(confirmar, clienteFlota, new CrearOfertasParaCandidatos(ofertas, ids), eventosTiempoReal);
+const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(confirmar, clienteFlota, new CrearOfertasParaCandidatos(ofertas, ids), new MarcarViajeSinChoferesDisponibles(viajes), eventosTiempoReal);
 
 const consultarDemanda = pool ? new ConsultarDemandaPorZonaPostgres(pool) : new ConsultarDemandaPorZona(viajes);
 const consultarOcupacion = pool ? new ConsultarChoferesOcupadosPostgres(pool) : new ConsultarChoferesOcupados(viajes);

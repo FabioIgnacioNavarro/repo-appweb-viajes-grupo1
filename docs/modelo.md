@@ -379,7 +379,22 @@ EN_CURSO
   └─> CANCELADO_POR_OPERADOR
 ```
 
-Un viaje finalizado o cancelado es terminal y no puede volver a recibir ofertas.
+`SIN_CHOFERES_DISPONIBLES`, `FINALIZADO` y los tres estados `CANCELADO_POR_*` son terminales: no admiten transiciones posteriores ni nuevas ofertas. `OFERTADO` no es un estado del viaje; cada propuesta se representa mediante el estado de una entidad `oferta`. Una oferta puede vencer (`VENCIDA`), pero el viaje no se marca `EXPIRADO`.
+
+### Quién puede solicitar cada transición
+
+| Transición | Actor autorizado | Condición |
+|---|---|---|
+| `SOLICITADO` → `ASIGNADO` | Chofer destinatario | Acepta una oferta pendiente y vigente; la asignación es atómica. |
+| `SOLICITADO` → `SIN_CHOFERES_DISPONIBLES` | Sistema | La búsqueda termina sin candidatos disponibles. |
+| `SOLICITADO`, `ASIGNADO` o `CHOFER_EN_CAMINO` → `CANCELADO_POR_PASAJERO` | Pasajero titular | Solo cancela su propio viaje. |
+| `ASIGNADO` o `CHOFER_EN_CAMINO` → `CANCELADO_POR_CHOFER` | Chofer asignado | El chofer cancela su propio viaje antes de iniciarlo. |
+| Cualquier estado activo → `CANCELADO_POR_OPERADOR` | Soporte o administrador | Puede cancelar desde `SOLICITADO`, `ASIGNADO`, `CHOFER_EN_CAMINO` o `EN_CURSO`. |
+| `ASIGNADO` → `CHOFER_EN_CAMINO` | Chofer asignado | Registra su llegada. |
+| `CHOFER_EN_CAMINO` → `EN_CURSO` | Chofer asignado | Inicia el traslado. |
+| `EN_CURSO` → `FINALIZADO` | Chofer asignado | Finaliza el traslado y genera el cobro único. |
+
+Toda transición que no figure en esta tabla se rechaza con `TRANSICION_ESTADO_INVALIDA` y HTTP `409 Conflict`. Intentar cambiar un estado terminal también devuelve ese error.
 
 ## Flujo mínimo del viaje
 
@@ -388,8 +403,8 @@ Un viaje finalizado o cancelado es terminal y no puede volver a recibir ofertas.
 2. El servidor calcula tarifa base y factores dinámicos.
 3. El pasajero confirma mientras la estimación está vigente.
 4. Se crea el viaje en estado SOLICITADO.
-5. El sistema busca choferes habilitados, disponibles y cercanos.
-6. Se crean ofertas con vencimiento.
+5. El sistema busca choferes habilitados, disponibles y cercanos; si no encuentra candidatos, el viaje pasa a SIN_CHOFERES_DISPONIBLES y termina.
+6. Si encuentra candidatos, se crean ofertas con vencimiento.
 7. Un chofer acepta una oferta.
 8. El viaje pasa a ASIGNADO y se congela el chofer y el vehículo.
 9. El chofer marca CHOFER_EN_CAMINO.

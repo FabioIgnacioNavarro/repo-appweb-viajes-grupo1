@@ -103,8 +103,8 @@ test("la API acepta una oferta solo por su chofer y traduce una transicion inval
     const llegada = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/llegada`, "chofer", { method: "POST", body: "{}" });
     assert.equal(llegada.status, 200);
     const llegadaRepetida = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/llegada`, "chofer", { method: "POST", body: "{}" });
-    assert.equal(llegadaRepetida.status, 422);
-    assert.equal((await llegadaRepetida.json() as { error: { codigo: string } }).error.codigo, "TRANSICION_INVALIDA");
+    assert.equal(llegadaRepetida.status, 409);
+    assert.equal((await llegadaRepetida.json() as { error: { codigo: string } }).error.codigo, "TRANSICION_ESTADO_INVALIDA");
   } finally { await cerrar(contexto.servidor); }
 });
 

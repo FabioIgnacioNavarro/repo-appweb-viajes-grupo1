@@ -131,7 +131,7 @@ Confirma la solicitud de un viaje a partir de una estimación vigente. Congela e
 - **Autorización:** Requiere rol `PASAJERO`.
 - **Encabezados:** `Clave-Idempotencia: <string>`.
 - **Cuerpo recibido:** `{"id_estimacion": "uuid-estimacion"}`.
-- **Respuesta (`201 Created`):** Objeto Viaje con estado `"solicitado"`.
+- **Respuesta (`201 Created`):** Objeto Viaje en estado `"solicitado"` si se encontraron candidatos o `"sin_choferes_disponibles"` si la búsqueda no encontró ninguno.
 
 #### `GET /viajes`
 Lista los viajes propios del usuario autenticado (o todos si es `ADMINISTRADOR`/`SOPORTE`).
@@ -143,9 +143,11 @@ Consulta el detalle de un viaje específico.
 - **Respuesta (`200 OK`):** Objeto Viaje detallado. Si no pertenece al actor $\rightarrow$ `403 VIAJE_NO_AUTORIZADO`.
 
 #### `POST /viajes/:idViaje/cancelacion`
-Cancela un viaje activo según reglas de transición.
+Cancela un viaje según las transiciones y permisos definidos en `docs/modelo.md`.
 - **Cuerpo:** `{"motivo": "string opcional"}`.
-- **Respuesta (`200 OK`):** Viaje en estado `"cancelado"`.
+- **Autorización:** pasajero titular desde `SOLICITADO`, `ASIGNADO` o `CHOFER_EN_CAMINO`; chofer asignado desde `ASIGNADO` o `CHOFER_EN_CAMINO`; `SOPORTE` o `ADMINISTRADOR` desde cualquier estado activo.
+- **Respuesta (`200 OK`):** Viaje en uno de los estados `cancelado_por_pasajero`, `cancelado_por_chofer` o `cancelado_por_operador`.
+- **Conflicto (`409`):** `TRANSICION_ESTADO_INVALIDA` si el estado actual no admite la cancelación.
 
 #### `POST /viajes/:idViaje/llegada`
 El chofer asignado marca su llegada al punto de encuentro.
@@ -240,7 +242,7 @@ Las siguientes rutas **no deben ser accesibles desde el exterior**. El API Gatew
 | **`409`** | Conflict | `OFERTA_VENCIDA` / `OFERTA_NO_DISPONIBLE` | La oferta superó los 60s o ya fue respondida. |
 | **`409`** | Conflict | `ASIGNACION_EN_CONFLICTO` | Carrera concurrente: otro chofer ganó la asignación o el chofer ya tiene viaje activo. |
 | **`409`** | Conflict | `CHOFER_NO_HABILITADO` | Chofer con carnet no validado o inhabilitado administrativamente. |
-| **`422`** | Unprocessable Entity | `TRANSICION_INVALIDA` | Cambio de estado de viaje prohibido por la máquina de estados. |
+| **`409`** | Conflict | `TRANSICION_ESTADO_INVALIDA` | Transición no permitida por la máquina de estados o intento de cambiar un estado terminal. |
 | **`422`** | Unprocessable Entity | `IMPORTE_INVALIDO` / `REGLA_INVALIDA` | Parámetros matemáticos o de regla fuera de rango permitido. |
 | **`422`** | Unprocessable Entity | `ZONA_NO_ENCONTRADA` | Coordenadas fuera de cobertura de las zonas tarifarias activas. |
 | **`503`** | Service Unavailable | `DEPENDENCIA_NO_DISPONIBLE` | Falla o timeout al consultar PostgreSQL, OSRM, Google Routes, Open-Meteo o microservicio hermano. |
