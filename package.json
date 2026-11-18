@@ -11,7 +11,7 @@
     "demo": "npm run build && node dist/terminal.js",
     "demo:web": "npm run build && node dist/servidor-web.js",
     "build:tests": "tsc -p tsconfig.tests.json",
-    "test": "npm run build && npm run build:tests && node --test \"dist-tests/tests/**/*.test.js\"",
+    "test": "npm run build && npm run build:tests && node --test --test-concurrency=1 \"dist-tests/tests/**/*.test.js\"",
     "test:carga": "node --test tests/carga/*.test.mjs",
     "carga:flota": "node carga/simulador.mjs",
     "test:e2e": "npm run build && npm run build:tests && node --test dist-tests/tests/e2e/e2e.test.js",

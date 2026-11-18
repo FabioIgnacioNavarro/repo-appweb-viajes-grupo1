@@ -9,6 +9,7 @@ import {
   type EstadoOferta,
   type EstadoViaje,
   type Oferta,
+  type FiltrosListadoViajes,
   type RepositorioCobros,
   type RepositorioIdempotencia,
   type RepositorioOfertas,
@@ -75,6 +76,15 @@ type FilaIdempotencia = {
   creado_en: Date;
   expira_en: Date;
 };
+
+function filtrosSqlViajes(filtros: Omit<FiltrosListadoViajes, "limite" | "desplazamiento"> = {}): { where: string; valores: unknown[] } {
+  const condiciones: string[] = [];
+  const valores: unknown[] = [];
+  if (filtros.estado) { valores.push(filtros.estado); condiciones.push(`estado = $${valores.length}`); }
+  if (filtros.desde) { valores.push(filtros.desde); condiciones.push(`creado_en >= $${valores.length}`); }
+  if (filtros.hasta) { valores.push(filtros.hasta); condiciones.push(`creado_en < $${valores.length}`); }
+  return { where: condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "", valores };
+}
 
 function mapearViaje(fila: FilaViaje): Viaje {
   const factores = typeof fila.factores_precio === "string"
@@ -244,11 +254,32 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
     return resultado.rows[0] ? mapearViaje(resultado.rows[0]) : undefined;
   }
 
-  async listar(): Promise<Viaje[]> {
+  async listar(filtros: FiltrosListadoViajes = {}): Promise<Viaje[]> {
+    const consulta = filtrosSqlViajes(filtros);
+    const valores = [...consulta.valores];
+    let paginacion = "";
+    if (filtros.limite !== undefined) {
+      valores.push(filtros.limite);
+      paginacion += ` LIMIT $${valores.length}`;
+    }
+    if (filtros.desplazamiento !== undefined) {
+      valores.push(filtros.desplazamiento);
+      paginacion += ` OFFSET $${valores.length}`;
+    }
     const resultado = await this.ejecutor.query<FilaViaje>(
-      "SELECT * FROM viajes.viaje ORDER BY creado_en DESC"
+      `SELECT * FROM viajes.viaje ${consulta.where} ORDER BY creado_en DESC${paginacion}`,
+      valores
     );
     return resultado.rows.map(mapearViaje);
+  }
+
+  async contar(filtros: Omit<FiltrosListadoViajes, "limite" | "desplazamiento"> = {}): Promise<number> {
+    const consulta = filtrosSqlViajes(filtros);
+    const resultado = await this.ejecutor.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM viajes.viaje ${consulta.where}`,
+      consulta.valores
+    );
+    return Number(resultado.rows[0]?.total ?? "0");
   }
 }
 

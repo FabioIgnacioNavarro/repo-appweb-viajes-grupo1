@@ -85,6 +85,7 @@ async function prepararEntornoRbac(): Promise<EntornoPruebaRbac> {
     moneda: "ARS",
     multiplicadorDemanda: 1.2,
     factoresPrecio: { zona_id: "resistencia", solicitudes_activas: 15, choferes_disponibles: 10 },
+    versionRegla: 1,
     creadaEn: ahora,
     vigenteHasta: new Date(ahora.getTime() + 300_000)
   };

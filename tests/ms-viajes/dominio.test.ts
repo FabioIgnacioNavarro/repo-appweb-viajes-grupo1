@@ -11,7 +11,7 @@ import {
 const pasajero: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
 const estimacion = (vigenteHasta = new Date(Date.now() + 180_000)): EstimacionVigente => ({
   id: "estimacion-1", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 },
-  precioEstimado: "8086", moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: { solicitudesActivas: 24, choferesDisponibles: 8 },
+  precioEstimado: "8086", moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: { solicitudesActivas: 24, choferesDisponibles: 8 }, versionRegla: 1,
   creadaEn: new Date(), vigenteHasta
 });
 
@@ -56,7 +56,7 @@ test("confirma un viaje y congela el precio y los factores", async () => {
   assert.equal(viaje.estado, "SOLICITADO");
   assert.equal(viaje.precioEstimado, "8086");
   assert.equal(viaje.multiplicadorDemanda, 1.5);
-  assert.deepEqual(viaje.factoresPrecio, { solicitudesActivas: 24, choferesDisponibles: 8 });
+  assert.deepEqual(viaje.factoresPrecio, { solicitudesActivas: 24, choferesDisponibles: 8, version_regla: 1 });
 });
 
 test("la misma clave de idempotencia devuelve el mismo viaje", async () => {
@@ -119,7 +119,8 @@ test("la aceptación transaccional bloquea el viaje antes de la oferta y conserv
           obtener: (id: string) => ctx.viajes.obtener(id),
           obtenerParaActualizar: (id: string) => { orden.push("bloquear_viaje"); return ctx.viajes.obtener(id); },
           obtenerActivoPorChofer: (id: string) => ctx.viajes.obtenerActivoPorChofer(id),
-          listar: () => ctx.viajes.listar()
+          listar: () => ctx.viajes.listar(),
+          contar: () => ctx.viajes.contar()
         },
         ofertas: {
           guardar: (valor: typeof oferta) => ctx.ofertas.guardar(valor),

@@ -33,6 +33,7 @@ const estimacionValida: EstimacionVigente = {
   moneda: "ARS",
   multiplicadorDemanda: 1.0,
   factoresPrecio: { zona_id: "centro" },
+  versionRegla: 1,
   creadaEn: ahoraPrueba,
   vigenteHasta: new Date(ahoraPrueba.getTime() + 180_000),
 };

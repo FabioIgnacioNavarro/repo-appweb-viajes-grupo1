@@ -7,12 +7,13 @@ test("ms-viajes recibe una estimación de tarifas y reenvía el JWT", async () =
   let authorization = "";
   const http = new ClienteServiciosHttp({ obtener: async (_url, opciones) => {
     authorization = new Headers(opciones?.headers).get("Authorization") ?? "";
-    return Response.json({ id_estimacion: "estimacion-1", precio_estimado: "8086", moneda: "ARS", multiplicador_demanda: 1.5, factores_precio: { zona_id: "centro" }, creada_en: "2026-10-16T12:00:00Z", vigente_hasta: "2026-10-16T12:03:00Z", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 } });
+    return Response.json({ id_estimacion: "estimacion-1", precio_estimado: "8086", moneda: "ARS", multiplicador_demanda: 1.5, factores_precio: { zona_id: "centro" }, version_regla: 3, creada_en: "2026-10-16T12:00:00Z", vigente_hasta: "2026-10-16T12:03:00Z", origen: { latitud: -27.45, longitud: -58.98 }, destino: { latitud: -27.46, longitud: -58.99 } });
   }, registrarError: () => {} });
   const estimacion = await new ClienteTarifasHttp("http://ms-tarifas:3001", http).obtenerEstimacion("estimacion-1", "jwt-pasajero");
   assert.equal(authorization, "Bearer jwt-pasajero");
   assert.equal(estimacion?.precioEstimado, "8086");
   assert.equal(estimacion?.factoresPrecio.zona_id, "centro");
+  assert.equal(estimacion?.versionRegla, 3);
 });
 
 test("ms-viajes consulta candidatos a flota con el JWT del pasajero", async () => {

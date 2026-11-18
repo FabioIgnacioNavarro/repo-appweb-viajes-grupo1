@@ -9,7 +9,7 @@ import { ValidadorJwtJwks } from "../compartido/jwt";
 import { ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarOfertasChofer, ConfirmarViaje,
-  ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
+  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, ListarViajesOperador, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta,
   MarcarViajeSinChoferesDisponibles,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
@@ -75,6 +75,8 @@ const dependencias = {
   avanzar: new AvanzarViaje(viajes),
   finalizar: new FinalizarViaje(viajes, cobros, asignador, ids),
   consultar: new ConsultarViaje(viajes),
+  listarViajesOperador: new ListarViajesOperador(viajes),
+  auditoriaTarifa: new ConsultarAuditoriaTarifa(viajes),
   validadorToken: token,
   obtenerEstimacion: (_actor: ActorAutenticado, id: string, jwt: string) => clienteTarifas.obtenerEstimacion(id, jwt),
   consultarDemanda,

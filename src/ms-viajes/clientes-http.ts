@@ -3,7 +3,7 @@ import { ErrorDominio, type Coordenada, type EstimacionVigente, type FuenteCandi
 
 type RespuestaEstimacion = {
   id_estimacion: string; precio_estimado: string; moneda: string; multiplicador_demanda: number;
-  factores_precio: Record<string, unknown>; creada_en: string; vigente_hasta: string;
+  factores_precio: Record<string, unknown>; version_regla: number; creada_en: string; vigente_hasta: string;
   origen: { latitud: number; longitud: number }; destino: { latitud: number; longitud: number };
 };
 
@@ -15,12 +15,12 @@ export class ClienteTarifasHttp {
     try { respuesta = await this.http.getJson<RespuestaEstimacion>("ms-tarifas", "obtener_estimacion", `${this.base}/estimaciones/${encodeURIComponent(id)}`, jwt, true); }
     catch (error) { if (error instanceof ErrorDependenciaHttp && error.estadoHttp === 409) throw new ErrorDominio("ESTIMACION_VENCIDA", "La estimación ya venció."); throw error; }
     if (!respuesta) return undefined;
-    if (respuesta.id_estimacion !== id || respuesta.moneda !== "ARS" || !/^[0-9]+$/.test(respuesta.precio_estimado) || !Number.isFinite(respuesta.multiplicador_demanda) || !fechaValida(respuesta.creada_en) || !fechaValida(respuesta.vigente_hasta) || !coordenadaValida(respuesta.origen) || !coordenadaValida(respuesta.destino) || !respuesta.factores_precio || typeof respuesta.factores_precio !== "object") {
+    if (respuesta.id_estimacion !== id || respuesta.moneda !== "ARS" || !/^[0-9]+$/.test(respuesta.precio_estimado) || !Number.isFinite(respuesta.multiplicador_demanda) || !Number.isSafeInteger(respuesta.version_regla) || respuesta.version_regla < 1 || !fechaValida(respuesta.creada_en) || !fechaValida(respuesta.vigente_hasta) || !coordenadaValida(respuesta.origen) || !coordenadaValida(respuesta.destino) || !respuesta.factores_precio || typeof respuesta.factores_precio !== "object") {
       registrarFallaDependencia("ms-tarifas", "contrato_estimacion", "respuesta_invalida");
       throw new ErrorDependenciaHttp("ms-tarifas", "contrato_estimacion");
     }
     return { id: respuesta.id_estimacion, origen: respuesta.origen, destino: respuesta.destino, precioEstimado: respuesta.precio_estimado,
-      moneda: "ARS", multiplicadorDemanda: respuesta.multiplicador_demanda, factoresPrecio: respuesta.factores_precio,
+      moneda: "ARS", multiplicadorDemanda: respuesta.multiplicador_demanda, factoresPrecio: respuesta.factores_precio, versionRegla: respuesta.version_regla,
       creadaEn: new Date(respuesta.creada_en), vigenteHasta: new Date(respuesta.vigente_hasta) };
   }
 }

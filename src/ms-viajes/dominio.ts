@@ -65,6 +65,7 @@ export interface EstimacionVigente {
   moneda: "ARS";
   multiplicadorDemanda: number;
   factoresPrecio: Record<string, unknown>;
+  versionRegla: number;
   creadaEn: Date;
   vigenteHasta: Date;
 }
@@ -87,6 +88,14 @@ export interface Viaje {
   finalizadoEm?: Date;
   canceladoEm?: Date;
   motivoCancelacion?: string;
+}
+
+export interface FiltrosListadoViajes {
+  estado?: EstadoViaje;
+  desde?: Date;
+  hasta?: Date;
+  limite?: number;
+  desplazamiento?: number;
 }
 
 export type EstadoOferta = "PENDIENTE" | "ACEPTADA" | "RECHAZADA" | "VENCIDA" | "CANCELADA" | "NO_SELECCIONADA";
@@ -114,7 +123,8 @@ export interface RepositorioViajes {
   guardar(viaje: Viaje): Promise<Viaje>;
   obtener(id: string): Promise<Viaje | undefined>;
   obtenerActivoPorChofer(idChofer: string): Promise<Viaje | undefined>;
-  listar(): Promise<Viaje[]>;
+  listar(filtros?: FiltrosListadoViajes): Promise<Viaje[]>;
+  contar(filtros?: Omit<FiltrosListadoViajes, "limite" | "desplazamiento">): Promise<number>;
 }
 
 export interface RepositorioOfertas {
@@ -225,8 +235,23 @@ export class RepositorioViajesMemoria implements RepositorioViajes {
     return viaje ? structuredClone(viaje) : undefined;
   }
 
-  async listar(): Promise<Viaje[]> {
-    return [...this.datos.values()].map((viaje) => structuredClone(viaje));
+  private filtrar(filtros: Omit<FiltrosListadoViajes, "limite" | "desplazamiento"> = {}): Viaje[] {
+    return [...this.datos.values()].filter((viaje) =>
+      (!filtros.estado || viaje.estado === filtros.estado)
+      && (!filtros.desde || viaje.creadoEn.getTime() >= filtros.desde.getTime())
+      && (!filtros.hasta || viaje.creadoEn.getTime() < filtros.hasta.getTime())
+    ).sort((a, b) => b.creadoEn.getTime() - a.creadoEn.getTime());
+  }
+
+  async listar(filtros: FiltrosListadoViajes = {}): Promise<Viaje[]> {
+    const viajes = this.filtrar(filtros);
+    const inicio = filtros.desplazamiento ?? 0;
+    const fin = filtros.limite === undefined ? undefined : inicio + filtros.limite;
+    return viajes.slice(inicio, fin).map((viaje) => structuredClone(viaje));
+  }
+
+  async contar(filtros: Omit<FiltrosListadoViajes, "limite" | "desplazamiento"> = {}): Promise<number> {
+    return this.filtrar(filtros).length;
   }
 }
 
@@ -384,7 +409,7 @@ export class ConfirmarViaje {
       precioEstimado: estimacion.precioEstimado,
       moneda: "ARS",
       multiplicadorDemanda: estimacion.multiplicadorDemanda,
-      factoresPrecio: structuredClone(estimacion.factoresPrecio),
+      factoresPrecio: { ...structuredClone(estimacion.factoresPrecio), version_regla: estimacion.versionRegla },
       estado: "SOLICITADO",
       creadoEn: new Date(ahora)
     };
@@ -502,6 +527,83 @@ export class ConsultarViaje {
     const autorizado = viaje.pasajeroId === actor.idUsuario || viaje.choferId === actor.idUsuario || actor.rol === "SOPORTE" || actor.rol === "ADMINISTRADOR";
     if (!autorizado) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El actor no puede consultar este viaje.");
     return viaje;
+  }
+}
+
+export interface ConsultaViajesOperador {
+  estado?: EstadoViaje;
+  desde?: Date;
+  hasta?: Date;
+  pagina?: number;
+  limite?: number;
+}
+
+export interface ResultadoListadoViajesOperador {
+  viajes: Viaje[];
+  pagina: number;
+  limite: number;
+  total: number;
+}
+
+/** Búsqueda global paginada; la autorización se mantiene dentro del dominio. */
+export class ListarViajesOperador {
+  constructor(private readonly viajes: RepositorioViajes) {}
+
+  async ejecutar(actor: ActorAutenticado, consulta: ConsultaViajesOperador = {}): Promise<ResultadoListadoViajesOperador> {
+    exigirRol(actor, "SOPORTE", "ADMINISTRADOR");
+    const pagina = consulta.pagina ?? 1;
+    const limite = consulta.limite ?? 20;
+    if (!Number.isSafeInteger(pagina) || pagina < 1 || !Number.isSafeInteger(limite) || limite < 1 || limite > 100
+      || !Number.isSafeInteger((pagina - 1) * limite)
+      || (consulta.desde && !Number.isFinite(consulta.desde.getTime()))
+      || (consulta.hasta && !Number.isFinite(consulta.hasta.getTime()))
+      || (consulta.desde && consulta.hasta && consulta.desde.getTime() >= consulta.hasta.getTime())) {
+      throw new ErrorDominio("ENTRADA_INVALIDA", "Los filtros o la paginación no son válidos.");
+    }
+    const filtros = {
+      estado: consulta.estado,
+      desde: consulta.desde,
+      hasta: consulta.hasta,
+      limite,
+      desplazamiento: (pagina - 1) * limite
+    };
+    const [viajes, total] = await Promise.all([
+      this.viajes.listar(filtros),
+      this.viajes.contar({ estado: filtros.estado, desde: filtros.desde, hasta: filtros.hasta })
+    ]);
+    return { viajes, pagina, limite, total };
+  }
+}
+
+export interface AuditoriaTarifaViaje {
+  idViaje: string;
+  idEstimacion: string;
+  precioConfirmado: string;
+  moneda: "ARS";
+  multiplicadorDemanda: number;
+  factoresPrecio: Record<string, unknown>;
+  versionRegla: number | null;
+  congeladaEn: Date;
+}
+
+/** Lee únicamente el snapshot persistido; nunca consulta ni recalcula una tarifa. */
+export class ConsultarAuditoriaTarifa {
+  constructor(private readonly viajes: RepositorioViajes) {}
+
+  async ejecutar(actor: ActorAutenticado, viajeId: string): Promise<AuditoriaTarifaViaje> {
+    exigirRol(actor, "SOPORTE", "ADMINISTRADOR");
+    const viaje = exigirViaje(await this.viajes.obtener(viajeId));
+    const version = viaje.factoresPrecio.version_regla;
+    return {
+      idViaje: viaje.id,
+      idEstimacion: viaje.estimacionId,
+      precioConfirmado: viaje.precioEstimado,
+      moneda: viaje.moneda,
+      multiplicadorDemanda: viaje.multiplicadorDemanda,
+      factoresPrecio: structuredClone(viaje.factoresPrecio),
+      versionRegla: typeof version === "number" && Number.isSafeInteger(version) ? version : null,
+      congeladaEn: new Date(viaje.creadoEn)
+    };
   }
 }
 
