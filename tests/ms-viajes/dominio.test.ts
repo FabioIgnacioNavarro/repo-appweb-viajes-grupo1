@@ -5,7 +5,7 @@ import {
   ConfirmarViaje, CrearOferta, ConsultarViaje, ErrorDominio, EstimacionVigente, FinalizarViaje,
   exigirTransicionViaje, GeneradorIdMemoria, RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria,
   RepositorioOfertasMemoria, RepositorioViajesMemoria, transicionPermitidaViaje,
-  transicionesViajePermitidas, type EstadoViaje, type Oferta
+  transicionesViajePermitidas, type EstadoViaje, type Oferta, type RepositoriosViajeTransaccionales, type TransaccionViajes
 } from "../../src/ms-viajes/dominio";
 
 const pasajero: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
@@ -102,6 +102,41 @@ test("cincuenta aceptaciones dejan un unico ganador", async () => {
   }
   assert.equal(ganadores, 1);
   assert.equal((await ctx.viajes.obtener(viaje.id))?.estado, "ASIGNADO");
+});
+
+test("la aceptación transaccional bloquea el viaje antes de la oferta y conserva la regla de dominio", async () => {
+  const ctx = contexto();
+  const viaje = await ctx.confirmar.ejecutar(pasajero, estimacion(), "clave-lock-orden");
+  const oferta = await new CrearOferta(ctx.ofertas, ctx.viajes, ctx.ids).ejecutar(
+    { idUsuario: "soporte", rol: "SOPORTE" }, viaje.id, "chofer-1", new Date(Date.now() + 60_000)
+  );
+  const orden: string[] = [];
+  const transaccion: TransaccionViajes = {
+    async ejecutar<T>(operacion: (repositorios: RepositoriosViajeTransaccionales) => Promise<T>): Promise<T> {
+      return operacion({
+        viajes: {
+          guardar: (valor: typeof viaje) => ctx.viajes.guardar(valor),
+          obtener: (id: string) => ctx.viajes.obtener(id),
+          obtenerParaActualizar: (id: string) => { orden.push("bloquear_viaje"); return ctx.viajes.obtener(id); },
+          obtenerActivoPorChofer: (id: string) => ctx.viajes.obtenerActivoPorChofer(id),
+          listar: () => ctx.viajes.listar()
+        },
+        ofertas: {
+          guardar: (valor: typeof oferta) => ctx.ofertas.guardar(valor),
+          obtener: (id: string) => { orden.push("leer_oferta"); return ctx.ofertas.obtener(id); },
+          obtenerParaActualizar: (id: string) => { orden.push("bloquear_oferta"); return ctx.ofertas.obtener(id); },
+          listarPorChofer: (id: string) => ctx.ofertas.listarPorChofer(id),
+          listarPorViaje: (id: string) => ctx.ofertas.listarPorViaje(id)
+        }
+      });
+    }
+  };
+
+  const asignado = await new AceptarOferta(ctx.ofertas, ctx.viajes, ctx.asignador, undefined, transaccion)
+    .ejecutar({ idUsuario: "chofer-1", rol: "CHOFER" }, oferta.id);
+  assert.deepEqual(orden.slice(0, 3), ["leer_oferta", "bloquear_viaje", "bloquear_oferta"]);
+  assert.equal(asignado.estado, "ASIGNADO");
+  assert.equal((await ctx.ofertas.obtener(oferta.id))?.estado, "ACEPTADA");
 });
 
 test("un chofer no puede aceptar dos viajes activos", async () => {

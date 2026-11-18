@@ -13,6 +13,8 @@ import {
   type RepositorioIdempotencia,
   type RepositorioOfertas,
   type RepositorioViajes,
+  type RepositoriosViajeTransaccionales,
+  type TransaccionViajes,
   type Viaje
 } from "./dominio";
 
@@ -131,6 +133,14 @@ function mapearCobro(fila: FilaCobro): Cobro {
 export class RepositorioViajesPostgres implements RepositorioViajes {
   constructor(private readonly ejecutor: EjecutorSql) {}
 
+  async obtenerParaActualizar(id: string): Promise<Viaje | undefined> {
+    const resultado = await this.ejecutor.query<FilaViaje>(
+      "SELECT * FROM viajes.viaje WHERE id = $1 FOR UPDATE",
+      [id]
+    );
+    return resultado.rows[0] ? mapearViaje(resultado.rows[0]) : undefined;
+  }
+
   async guardar(viaje: Viaje): Promise<Viaje> {
     try {
       const existe = await this.ejecutor.query("SELECT estado FROM viajes.viaje WHERE id = $1", [viaje.id]);
@@ -245,6 +255,14 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
 export class RepositorioOfertasPostgres implements RepositorioOfertas {
   constructor(private readonly ejecutor: EjecutorSql) {}
 
+  async obtenerParaActualizar(id: string): Promise<Oferta | undefined> {
+    const resultado = await this.ejecutor.query<FilaOferta>(
+      "SELECT * FROM viajes.oferta WHERE id = $1 FOR UPDATE",
+      [id]
+    );
+    return resultado.rows[0] ? mapearOferta(resultado.rows[0]) : undefined;
+  }
+
   async guardar(oferta: Oferta): Promise<Oferta> {
     try {
       const resultado = await this.ejecutor.query<FilaOferta>(
@@ -349,6 +367,33 @@ export class RepositorioIdempotenciaPostgres implements RepositorioIdempotencia 
        ON CONFLICT (actor_id, operacion, clave) DO UPDATE SET resultado = EXCLUDED.resultado`,
       [actorId, clave, JSON.stringify(resultado)]
     );
+  }
+}
+
+/** Ejecuta escrituras coordinadas de viajes y ofertas en una transacción PostgreSQL local. */
+export class TransaccionesViajesPostgres implements TransaccionViajes {
+  constructor(private readonly pool: Pool) {}
+
+  async ejecutar<T>(operacion: (repositorios: RepositoriosViajeTransaccionales) => Promise<T>): Promise<T> {
+    const cliente = await this.pool.connect();
+    try {
+      await cliente.query("BEGIN");
+      const repositorios: RepositoriosViajeTransaccionales = {
+        viajes: new RepositorioViajesPostgres(cliente),
+        ofertas: new RepositorioOfertasPostgres(cliente)
+      };
+      const resultado = await operacion(repositorios);
+      await cliente.query("COMMIT");
+      return resultado;
+    } catch (error: unknown) {
+      try { await cliente.query("ROLLBACK"); } catch { /* Conserva el error que provocó el rollback. */ }
+      if ((error as { code?: string }).code === "23505") {
+        throw new ErrorDominio("ASIGNACION_EN_CONFLICTO", "El viaje o el chofer ya fueron asignados.");
+      }
+      throw error;
+    } finally {
+      cliente.release();
+    }
   }
 }
 

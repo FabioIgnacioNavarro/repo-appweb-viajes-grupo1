@@ -134,6 +134,17 @@ export interface RepositorioIdempotencia {
   guardar(actorId: string, clave: string, resultado: unknown): Promise<void>;
 }
 
+/** Repositorios con bloqueos explícitos disponibles solo dentro de una transacción local. */
+export interface RepositoriosViajeTransaccionales {
+  viajes: RepositorioViajes & { obtenerParaActualizar(id: string): Promise<Viaje | undefined> };
+  ofertas: RepositorioOfertas & { obtenerParaActualizar(id: string): Promise<Oferta | undefined> };
+}
+
+/** Puerto de unidad de trabajo; el dominio define la operación y el adaptador controla BEGIN/COMMIT/ROLLBACK. */
+export interface TransaccionViajes {
+  ejecutar<T>(operacion: (repositorios: RepositoriosViajeTransaccionales) => Promise<T>): Promise<T>;
+}
+
 /** Puerto para obtener candidatos; no conoce HTTP ni JWT. */
 export interface FuenteCandidatos {
   buscar(origen: Coordenada, jwt: string): Promise<string[]>;
@@ -396,10 +407,18 @@ export class CrearOferta {
 }
 
 export class AceptarOferta {
-  constructor(private readonly ofertas: RepositorioOfertas, private readonly viajes: RepositorioViajes, private readonly asignador: AsignadorAtomico, private readonly eventos?: PublicadorEventosTiempoReal) {}
+  constructor(
+    private readonly ofertas: RepositorioOfertas,
+    private readonly viajes: RepositorioViajes,
+    private readonly asignador: AsignadorAtomico,
+    private readonly eventos?: PublicadorEventosTiempoReal,
+    private readonly transaccion?: TransaccionViajes
+  ) {}
 
   async ejecutar(actor: ActorAutenticado, ofertaId: string, ahora = new Date()): Promise<Viaje> {
     exigirRol(actor, "CHOFER");
+    if (this.transaccion) return await this.ejecutarTransaccional(actor, ofertaId, ahora);
+
     const oferta = await this.ofertas.obtener(ofertaId);
     if (!oferta) throw new ErrorDominio("OFERTA_NO_ENCONTRADA", "La oferta no existe.");
     if (oferta.choferId !== actor.idUsuario) throw new ErrorDominio("OFERTA_NO_AUTORIZADA", "La oferta no pertenece al chofer.");
@@ -421,6 +440,44 @@ export class AceptarOferta {
       }
     }
     return actualizado;
+  }
+
+  private async ejecutarTransaccional(actor: ActorAutenticado, ofertaId: string, ahora: Date): Promise<Viaje> {
+    type Resultado = { viaje?: Viaje; notificaciones: Oferta[]; error?: ErrorDominio };
+    const resultado = await this.transaccion!.ejecutar<Resultado>(async ({ viajes, ofertas }) => {
+      // Se lee la oferta sin bloquear solo para conocer el viaje; el orden de locks sigue siendo viaje y luego oferta.
+      const ofertaInicial = await ofertas.obtener(ofertaId);
+      if (!ofertaInicial) throw new ErrorDominio("OFERTA_NO_ENCONTRADA", "La oferta no existe.");
+      const viaje = exigirViaje(await viajes.obtenerParaActualizar(ofertaInicial.viajeId));
+      const oferta = await ofertas.obtenerParaActualizar(ofertaId);
+      if (!oferta) throw new ErrorDominio("OFERTA_NO_ENCONTRADA", "La oferta no existe.");
+      if (oferta.viajeId !== viaje.id) throw new ErrorDominio("OFERTA_NO_DISPONIBLE", "La oferta ya no corresponde al viaje.");
+      if (oferta.choferId !== actor.idUsuario) throw new ErrorDominio("OFERTA_NO_AUTORIZADA", "La oferta no pertenece al chofer.");
+      exigirTransicionViaje(viaje.estado, "ASIGNADO");
+      if (oferta.estado !== "PENDIENTE") throw new ErrorDominio("OFERTA_NO_DISPONIBLE", "La oferta ya fue respondida.");
+      if (oferta.expiraEm.getTime() <= ahora.getTime()) {
+        const vencida = await ofertas.guardar({ ...oferta, estado: "VENCIDA", respondidaEm: new Date(ahora) });
+        return { notificaciones: [vencida], error: new ErrorDominio("OFERTA_VENCIDA", "La oferta ya vencio.") };
+      }
+
+      // Las restricciones de PostgreSQL son la última defensa ante carreras entre viajes distintos.
+      const actualizado = await viajes.guardar({ ...viaje, choferId: actor.idUsuario, estado: "ASIGNADO" });
+      await ofertas.guardar({ ...oferta, estado: "ACEPTADA", respondidaEm: new Date(ahora) });
+      const notificaciones: Oferta[] = [];
+      for (const otra of await ofertas.listarPorViaje(viaje.id)) {
+        if (otra.id !== oferta.id && otra.estado === "PENDIENTE") {
+          notificaciones.push(await ofertas.guardar({ ...otra, estado: "NO_SELECCIONADA", respondidaEm: new Date(ahora) }));
+        }
+      }
+      return { viaje: actualizado, notificaciones };
+    });
+
+    for (const oferta of resultado.notificaciones) {
+      if (oferta.estado === "VENCIDA") publicarEstadoOferta(this.eventos, oferta, "OFERTA_VENCIDA", "vigencia_vencida");
+      if (oferta.estado === "NO_SELECCIONADA") publicarEstadoOferta(this.eventos, oferta, "OFERTA_CANCELADA", "viaje_asignado");
+    }
+    if (resultado.error) throw resultado.error;
+    return exigirViaje(resultado.viaje);
   }
 }
 

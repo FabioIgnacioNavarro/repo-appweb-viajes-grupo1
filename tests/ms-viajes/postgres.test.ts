@@ -21,7 +21,7 @@ import {
   RepositorioCobrosPostgres,
   RepositorioIdempotenciaPostgres,
   RepositorioOfertasPostgres,
-  RepositorioViajesPostgres, type EjecutorSql
+  RepositorioViajesPostgres, TransaccionesViajesPostgres, type EjecutorSql
 } from "../../src/ms-viajes/postgres";
 
 const disponible = Boolean(process.env.DATABASE_URL);
@@ -59,6 +59,61 @@ test("el UPDATE de PostgreSQL limita cada transición al conjunto de estados ant
   assert.deepEqual(actualizacion.valores[8], ["SOLICITADO", "ASIGNADO", "CHOFER_EN_CAMINO"]);
 });
 
+test("la unidad de trabajo bloquea primero viaje y luego oferta, confirma y libera la conexión", async () => {
+  const consultas: string[] = [];
+  let liberada = false;
+  const cliente = {
+    async query(consulta: string) {
+      consultas.push(consulta);
+      return { rows: [], rowCount: 0 };
+    },
+    release() { liberada = true; }
+  };
+  const pool = { async connect() { return cliente; } } as unknown as Pool;
+  const transaccion = new TransaccionesViajesPostgres(pool);
+
+  const resultado = await transaccion.ejecutar(async (repositorios) => {
+    await repositorios.viajes.obtenerParaActualizar("viaje-1");
+    await repositorios.ofertas.obtenerParaActualizar("oferta-1");
+    return "confirmado";
+  });
+
+  assert.equal(resultado, "confirmado");
+  assert.equal(consultas[0], "BEGIN");
+  assert.match(consultas[1], /FROM viajes\.viaje WHERE id = \$1 FOR UPDATE/);
+  assert.match(consultas[2], /FROM viajes\.oferta WHERE id = \$1 FOR UPDATE/);
+  assert.equal(consultas[3], "COMMIT");
+  assert.equal(liberada, true);
+});
+
+test("la unidad de trabajo revierte y libera si falla una escritura", async () => {
+  const consultas: string[] = [];
+  let liberada = false;
+  const errorEsperado = new Error("fallo de persistencia simulado");
+  const cliente = {
+    async query(consulta: string) {
+      consultas.push(consulta);
+      if (consulta.includes("SELECT estado FROM viajes.viaje")) return { rows: [{ estado: "SOLICITADO" }], rowCount: 1 };
+      if (consulta.includes("UPDATE viajes.viaje SET")) throw errorEsperado;
+      return { rows: [], rowCount: 0 };
+    },
+    release() { liberada = true; }
+  };
+  const pool = { async connect() { return cliente; } } as unknown as Pool;
+  const transaccion = new TransaccionesViajesPostgres(pool);
+  const viaje: Viaje = {
+    id: "viaje-fallo-transaccion", pasajeroId: "pasajero-1", origen: { latitud: -27.45, longitud: -58.98 },
+    destino: { latitud: -27.46, longitud: -58.99 }, estimacionId: "estimacion-1", precioEstimado: "8086",
+    moneda: "ARS", multiplicadorDemanda: 1.5, factoresPrecio: {}, estado: "ASIGNADO", choferId: "chofer-1", creadoEn: new Date()
+  };
+
+  await assert.rejects(() => transaccion.ejecutar(async ({ viajes }) => viajes.guardar(viaje)), errorEsperado);
+  assert.equal(consultas[0], "BEGIN");
+  assert.ok(consultas.some((consulta) => consulta.includes("UPDATE viajes.viaje SET")));
+  assert.equal(consultas.at(-1), "ROLLBACK");
+  assert.equal(liberada, true);
+});
+
 test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariantes", { skip: !disponible }, async (t) => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const sql = await readFile("src/ms-viajes/schema.sql", "utf8");
@@ -70,6 +125,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
   const repoCobros = new RepositorioCobrosPostgres(pool);
   const repoIdempotencia = new RepositorioIdempotenciaPostgres(pool);
   const asignador = new AsignadorAtomicoPostgres(pool);
+  const transaccion = new TransaccionesViajesPostgres(pool);
   const ids = new GeneradorIdMemoria();
 
   t.after(async () => {
@@ -111,7 +167,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
       ofertas.push(await repoOfertas.guardar(oferta));
     }
 
-    const casoDeUso = new AceptarOferta(repoOfertas, repoViajes, asignador);
+    const casoDeUso = new AceptarOferta(repoOfertas, repoViajes, asignador, undefined, transaccion);
 
     const promesas = ofertas.map((oferta) => {
       const actor: ActorAutenticado = {
@@ -143,6 +199,9 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
     assert.ok(viajeFinal);
     assert.equal(viajeFinal.estado, "ASIGNADO");
     assert.ok(viajeFinal.choferId?.startsWith(`${PREFIJO}chofer-50-`));
+    const ofertasFinales = await repoOfertas.listarPorViaje(viajeId);
+    assert.equal(ofertasFinales.filter((oferta) => oferta.estado === "ACEPTADA").length, 1);
+    assert.equal(ofertasFinales.filter((oferta) => oferta.estado === "NO_SELECCIONADA").length, 49);
   });
 
   await t.test("un chofer no puede tener dos viajes activos (garantizado por índice único parcial)", async () => {
@@ -200,7 +259,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
     await repoOfertas.guardar(oferta1);
     await repoOfertas.guardar(oferta2);
 
-    const casoDeUso = new AceptarOferta(repoOfertas, repoViajes, asignador);
+    const casoDeUso = new AceptarOferta(repoOfertas, repoViajes, asignador, undefined, transaccion);
     const actor: ActorAutenticado = { idUsuario: choferId, rol: "CHOFER" };
 
     const asignado1 = await casoDeUso.ejecutar(actor, oferta1.id, ahora);
@@ -247,7 +306,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
     };
     await repoOfertas.guardar(oferta);
 
-    const aceptar = new AceptarOferta(repoOfertas, repoViajes, asignador);
+    const aceptar = new AceptarOferta(repoOfertas, repoViajes, asignador, undefined, transaccion);
     const cancelar = new CancelarViaje(repoViajes, asignador);
 
     const actorPasajero: ActorAutenticado = { idUsuario: pasajeroId, rol: "PASAJERO" };

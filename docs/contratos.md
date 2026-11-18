@@ -97,8 +97,15 @@ publican sus puertos fuera de la red privada de Compose.
 Tras confirmar un viaje, `ms-viajes` consume `GET /choferes/cercanos` de `ms-flota` con el mismo JWT
 y crea una oferta de 60 segundos para hasta veinte IDs únicos. La creación de ofertas es idempotente
 por viaje y chofer, por lo que la misma `Clave-Idempotencia` puede reanudar el matching después de
-una caída. La aceptación mantiene la comprobación de exclusión del dominio mediante asignación
-atómica en PostgreSQL (`AsignadorAtomicoPostgres`) con control de concurrencia e índice condicional único.
+una caída. Esta consulta HTTP ocurre antes de cualquier transacción de escritura.
+
+La aceptación de una oferta se resuelve dentro de una transacción local de PostgreSQL en `ms-viajes`:
+primero bloquea la fila del viaje y luego la oferta (`SELECT ... FOR UPDATE`), vuelve a comprobar
+las reglas del dominio, asigna el chofer, acepta su oferta y marca las restantes como no seleccionadas.
+El índice parcial `ux_viaje_chofer_activo` protege además contra que un chofer quede asignado a dos
+viajes activos. Si cualquier escritura falla, se revierte el conjunto completo. No se mantiene una
+transacción abierta mientras se llama a otro microservicio; no hay una transacción distribuida entre
+servicios.
 
 Para excluir ocupados, `ms-flota` usa un adaptador HTTP de request que llama
 `GET /interno/choferes/ocupados` en `ms-viajes`, reenviando el bearer. `ms-viajes` solo responde los
