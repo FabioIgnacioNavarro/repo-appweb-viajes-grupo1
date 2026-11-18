@@ -102,6 +102,8 @@ una caída. Esta consulta HTTP ocurre antes de cualquier transacción de escritu
 La aceptación de una oferta se resuelve dentro de una transacción local de PostgreSQL en `ms-viajes`:
 primero bloquea la fila del viaje y luego la oferta (`SELECT ... FOR UPDATE`), vuelve a comprobar
 las reglas del dominio, asigna el chofer, acepta su oferta y marca las restantes como no seleccionadas.
+Una segunda transacción que intente bloquear esas mismas filas espera a que la primera confirme o
+revierta; al obtener el lock relee el estado confirmado y vuelve a validar antes de escribir.
 El índice parcial `ux_viaje_chofer_activo` protege además contra que un chofer quede asignado a dos
 viajes activos. Si cualquier escritura falla, se revierte el conjunto completo. No se mantiene una
 transacción abierta mientras se llama a otro microservicio; no hay una transacción distribuida entre
