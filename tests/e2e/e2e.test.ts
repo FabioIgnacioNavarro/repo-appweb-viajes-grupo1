@@ -44,7 +44,31 @@ test("E2E flujo feliz: estimar, confirmar, ofertar, asignar y cobrar", { skip: !
   const finalizado = await pedir(`/viajes/${oferta.id_viaje}/finalizacion`, chofer, { method: "POST", body: "{}" });
   assert.equal(finalizado.status, 200);
   assert.equal(finalizado.cuerpo.viaje.estado, "finalizado");
-  assert.equal(finalizado.cuerpo.cobro.estado, "confirmado");
+  assert.equal(finalizado.cuerpo.cobro.estado, "fallido");
+  assert.equal(finalizado.cuerpo.cobro.importe, finalizado.cuerpo.viaje.precio_final);
+
+  const reciboPasajero = await pedir(`/viajes/${oferta.id_viaje}/cobro`, pasajero);
+  const reciboChofer = await pedir(`/viajes/${oferta.id_viaje}/cobro`, chofer);
+  assert.equal(reciboPasajero.status, 200);
+  assert.equal(reciboChofer.status, 200);
+  assert.equal(reciboPasajero.cuerpo.id_cobro, finalizado.cuerpo.cobro.id_cobro);
+  assert.equal(reciboChofer.cuerpo.importe, finalizado.cuerpo.viaje.precio_final);
+
+  const claveReintento = `pago-${Date.now()}`;
+  const reintento = await pedir(`/viajes/${oferta.id_viaje}/cobro/reintento`, pasajero, {
+    method: "POST", headers: { "Clave-Idempotencia": claveReintento }, body: "{}"
+  });
+  const repetidoReintento = await pedir(`/viajes/${oferta.id_viaje}/cobro/reintento`, pasajero, {
+    method: "POST", headers: { "Clave-Idempotencia": claveReintento }, body: "{}"
+  });
+  assert.equal(reintento.status, 200);
+  assert.equal(reintento.cuerpo.estado, "confirmado");
+  assert.equal(repetidoReintento.cuerpo.id_cobro, finalizado.cuerpo.cobro.id_cobro);
+  assert.equal(repetidoReintento.cuerpo.intentos, reintento.cuerpo.intentos);
+
+  const segundaFinalizacion = await pedir(`/viajes/${oferta.id_viaje}/finalizacion`, chofer, { method: "POST", body: "{}" });
+  assert.equal(segundaFinalizacion.cuerpo.cobro.id_cobro, finalizado.cuerpo.cobro.id_cobro);
+  assert.equal(segundaFinalizacion.cuerpo.cobro.importe, finalizado.cuerpo.viaje.precio_final);
 });
 
 test("E2E rechaza token ausente y viaje ajeno", { skip: !base }, async () => {

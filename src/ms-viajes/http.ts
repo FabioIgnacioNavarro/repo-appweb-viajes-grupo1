@@ -1,10 +1,10 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import {
   AceptarOferta, AvanzarViaje, CancelarViaje, ConfirmarViaje, ConsultarViaje,
-  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona,
-  ErrorDominio, FinalizarViaje, RechazarOferta,
+  ConsultarAuditoriaTarifa, ConsultarCobro, ConsultarChoferesOcupados, ConsultarDemandaPorZona,
+  ErrorDominio, FinalizarViaje, RechazarOferta, ReintentarCobro,
   ListarViajesOperador,
-  type ActorAutenticado, type EstimacionVigente, type RepositorioOfertas, type RepositorioViajes,
+  type ActorAutenticado, type Cobro, type EstimacionVigente, type RepositorioOfertas, type RepositorioViajes,
   type EstadoViaje, type Viaje, type Oferta, type PublicadorEventosTiempoReal, type PublicarEstadoViaje,
   type PublicarUbicacionChoferEnViaje, type ConsultarOfertasChofer
 } from "./dominio";
@@ -23,6 +23,8 @@ export interface DependenciasViajes {
   cancelar: CancelarViaje;
   avanzar: AvanzarViaje;
   finalizar: FinalizarViaje;
+  consultarCobro?: ConsultarCobro;
+  reintentarCobro?: ReintentarCobro;
   consultar: ConsultarViaje;
   listarViajesOperador?: ListarViajesOperador;
   auditoriaTarifa?: ConsultarAuditoriaTarifa;
@@ -55,12 +57,12 @@ function errorHttp(error: unknown, respuesta: Response): void {
     return;
   }
   const mapa: Record<string, number> = {
-    TOKEN_REQUERIDO: 401, TOKEN_INVALIDO: 401, ROL_NO_AUTORIZADO: 403, VIAJE_NO_AUTORIZADO: 403,
-    OFERTA_NO_AUTORIZADA: 403, VIAJE_NO_ENCONTRADO: 404, OFERTA_NO_ENCONTRADA: 404,
+    TOKEN_REQUERIDO: 401, TOKEN_INVALIDO: 401, ROL_NO_AUTORIZADO: 403, VIAJE_NO_AUTORIZADO: 403, COBRO_NO_AUTORIZADO: 403,
+    OFERTA_NO_AUTORIZADA: 403, VIAJE_NO_ENCONTRADO: 404, OFERTA_NO_ENCONTRADA: 404, COBRO_NO_ENCONTRADO: 404,
     ENTRADA_INVALIDA: 400, CLAVE_IDEMPOTENCIA_REQUERIDA: 400, IMPORTE_INVALIDO: 422,
     ESTIMACION_NO_ENCONTRADA: 404, ESTIMACION_VENCIDA: 409, OFERTA_VENCIDA: 409, OFERTA_NO_DISPONIBLE: 409,
     VIAJE_NO_DISPONIBLE: 409, VIAJE_NO_OFERTABLE: 409,
-    ASIGNACION_EN_CONFLICTO: 409, TRANSICION_ESTADO_INVALIDA: 409, UBICACION_NO_AUTORIZADA: 403
+    ASIGNACION_EN_CONFLICTO: 409, TRANSICION_ESTADO_INVALIDA: 409, COBRO_NO_REINTENTABLE: 409, UBICACION_NO_AUTORIZADA: 403
   };
   if (error instanceof ErrorDominio) {
     respuesta.status(mapa[error.codigo] ?? 422).json({ error: { codigo: error.codigo, mensaje: error.message, detalles: {} } });
@@ -86,6 +88,18 @@ function viajeDto(viaje: Viaje | undefined): Record<string, unknown> {
 
 function ofertaDto(oferta: { id: string; viajeId: string; choferId: string; estado: string; enviadaEm: Date; expiraEm: Date; respondidaEm?: Date }): Record<string, unknown> {
   return { id_oferta: oferta.id, id_viaje: oferta.viajeId, id_chofer: oferta.choferId, estado: oferta.estado.toLowerCase(), enviada_en: oferta.enviadaEm.toISOString(), expira_en: oferta.expiraEm.toISOString(), respondida_en: fecha(oferta.respondidaEm) };
+}
+
+function cobroDto(cobro: Cobro): Record<string, unknown> {
+  return {
+    id_cobro: cobro.id,
+    id_viaje: cobro.viajeId,
+    importe: cobro.importe,
+    moneda: cobro.moneda,
+    estado: cobro.estado.toLowerCase(),
+    intentos: cobro.intentos,
+    creado_en: cobro.creadoEn.toISOString()
+  };
 }
 
 function validarId(valor: unknown): valor is string { return typeof valor === "string" && valor.length > 0 && valor.length <= 200; }
@@ -236,6 +250,28 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     } catch (error) { errorHttp(error, respuesta); }
   });
 
+  router.get("/viajes/:idViaje/cobro", async (pedido, respuesta) => {
+    try {
+      if (!deps.consultarCobro) throw new Error("La consulta de cobro no está configurada.");
+      const cobro = await deps.consultarCobro.ejecutar(actorDe(pedido), pedido.params.idViaje);
+      respuesta.status(200).json(cobroDto(cobro));
+    } catch (error) { errorHttp(error, respuesta); }
+  });
+
+  router.post("/viajes/:idViaje/cobro/reintento", async (pedido, respuesta) => {
+    try {
+      if (!deps.reintentarCobro) throw new Error("El reintento de cobro no está configurado.");
+      const cuerpo = pedido.body as unknown;
+      if (cuerpo !== undefined && (!objeto(cuerpo) || Object.keys(cuerpo).length > 0)) {
+        throw new ErrorDominio("ENTRADA_INVALIDA", "El reintento de cobro no recibe datos en el cuerpo.");
+      }
+      const clave = pedido.header("Clave-Idempotencia");
+      if (!clave || clave.length > 200) throw new ErrorDominio("CLAVE_IDEMPOTENCIA_REQUERIDA", "El reintento requiere Clave-Idempotencia.");
+      const cobro = await deps.reintentarCobro.ejecutar(actorDe(pedido), pedido.params.idViaje, clave);
+      respuesta.status(200).json(cobroDto(cobro));
+    } catch (error) { errorHttp(error, respuesta); }
+  });
+
   router.get("/viajes/:idViaje/seguimiento", async (pedido, respuesta) => {
     try {
       const viaje = await deps.consultar.ejecutar(actorDe(pedido), pedido.params.idViaje);
@@ -273,7 +309,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     try {
       const resultado = await deps.finalizar.ejecutar(actorDe(pedido), pedido.params.idViaje);
       deps.publicarEstado?.ejecutar(resultado.viaje);
-      respuesta.status(200).json({ viaje: viajeDto(resultado.viaje), cobro: { id_cobro: resultado.cobro.id, importe: resultado.cobro.importe, moneda: resultado.cobro.moneda, estado: resultado.cobro.estado.toLowerCase() } });
+      respuesta.status(200).json({ viaje: viajeDto(resultado.viaje), cobro: cobroDto(resultado.cobro) });
     } catch (error) { errorHttp(error, respuesta); }
   });
 

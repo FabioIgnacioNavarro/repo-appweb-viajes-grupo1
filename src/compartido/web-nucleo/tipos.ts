@@ -16,7 +16,7 @@ export type EstadoViaje =
 
 export type EstadoOferta = "PENDIENTE" | "ACEPTADA" | "VENCIDA" | "CANCELADA";
 
-export type EstadoCobro = "PENDIENTE" | "COBRADO" | "FALLIDO";
+export type EstadoCobro = "PENDIENTE" | "FALLIDO" | "CONFIRMADO";
 
 export interface Coordenada {
   latitud: number;

@@ -95,9 +95,18 @@ CREATE TABLE IF NOT EXISTS viajes.cobro (
   viaje_id TEXT NOT NULL UNIQUE REFERENCES viajes.viaje (id),
   importe BIGINT NOT NULL CHECK (importe >= 0),
   moneda TEXT NOT NULL DEFAULT 'ARS' CHECK (moneda = 'ARS'),
-  estado TEXT NOT NULL CHECK (estado IN ('CONFIRMADO')),
+  estado TEXT NOT NULL CHECK (estado IN ('PENDIENTE', 'FALLIDO', 'CONFIRMADO')),
+  intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
   creado_en TIMESTAMPTZ NOT NULL
 );
+
+-- Actualiza instalaciones existentes a los estados y contador de intentos de WEB-005.
+ALTER TABLE viajes.cobro ADD COLUMN IF NOT EXISTS intentos INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS cobro_estado_check;
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS ck_cobro_estado;
+ALTER TABLE viajes.cobro ADD CONSTRAINT ck_cobro_estado CHECK (estado IN ('PENDIENTE', 'FALLIDO', 'CONFIRMADO'));
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS cobro_intentos_check;
+ALTER TABLE viajes.cobro ADD CONSTRAINT ck_cobro_intentos CHECK (intentos >= 0);
 
 -- Idempotencia: la clave pertenece al actor y a la intención (operacion). Un reintento con la misma
 -- clave y la misma huella devuelve el resultado guardado; con otra huella es un conflicto, no un
