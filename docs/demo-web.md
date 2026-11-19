@@ -78,7 +78,13 @@ useEffect(() => {
 
 ## 3. Comandos de Ejecución y Compilación
 
-- **Servidor de desarrollo frontend:**
+- **Servidor unificado en Docker Compose (Producción / Gateway):**
+  ```powershell
+  docker compose up --build -d
+  ```
+  Nginx compila y entrega la SPA desde `http://localhost:8080/` bajo el mismo origen que la API (sin CORS), con fallback SPA a `index.html`, cabeceras de seguridad básicas (`X-Content-Type-Options`, `Referrer-Policy`) y proxy WebSocket en `/tiempo-real` y `/ws`.
+
+- **Servidor de desarrollo frontend (con recarga en vivo):**
   ```powershell
   npm.cmd run dev:web
   ```

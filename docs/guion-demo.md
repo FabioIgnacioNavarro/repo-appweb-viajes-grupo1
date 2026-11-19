@@ -25,7 +25,7 @@ Invoke-RestMethod http://localhost:8080/ready/tarifas
 Invoke-RestMethod http://localhost:8080/ready/flota
 ```
 
-Para mostrar la interfaz, abrí otra terminal y ejecutá `npm.cmd run dev:web`; luego abrí `http://localhost:5173`. El servidor web de desarrollo usa el gateway local en `8080`.
+Para mostrar la interfaz, podés abrir directamente `http://localhost:8080/` servida por Nginx desde el mismo gateway (o, si preferís hot-reload de desarrollo, abrir otra terminal con `npm.cmd run dev:web` y entrar a `http://localhost:5173`). El cliente web se comunica con el gateway local en `8080` tanto por HTTP como por WebSocket (`/ws` / `/tiempo-real`).
 
 El Compose de desarrollo usa `JWT_MODO=falso`. Para que la interfaz represente a los actores con las identidades que están sembradas en la base, en la pantalla de ingreso usá **token manual** y copiá los tokens `@pasajero` y `@chofer` de [`../requests/flujo-e2e.http`](../requests/flujo-e2e.http). Para soporte, generá un token falso local de prueba:
 
@@ -34,19 +34,17 @@ $tokenSoporte = node -e "const p={tipo:'jwt-falso',idUsuario:'soporte-demo-1',ro
 $tokenSoporte
 ```
 
-Los tokens falsos solo sirven en el entorno local de desarrollo. No son credenciales reales y no deben usarse en producción. Para mantener pasajero y chofer conectados a la vez, usá dos perfiles de navegador separados.
-
-**Nota de alcance:** la interfaz estática aún no se sirve desde Nginx. Además, el cliente web intenta conectar a `/ws` y Nginx publica `/tiempo-real`; por eso el bloque de tiempo real de esta defensa debe mostrarse con la prueba automatizada hasta que se alineen esas rutas. La prueba está en `tests/ms-viajes/tiempo-real.test.ts` y cubre handshake, autorización, eventos y reconexión.
+Los tokens falsos solo sirven en el entorno local de desarrollo. No son credenciales reales y no deben usarse en producción. Para mantener pasajero y chofer conectados a la vez, usá dos perfiles de navegador separados. Nginx sirve la SPA en `/` y reenvía el upgrade WebSocket tanto en `/tiempo-real` como en `/ws` hacia `ms-viajes`; además, las pruebas unitarias e integración de WebSocket siguen disponibles en `tests/ms-viajes/tiempo-real.test.ts`.
 
 ## Cronograma
 
 | Tiempo | Presentación | Acción y evidencia |
 |---|---|---|
 | 0:00–1:00 | Problema y arquitectura | Explicar pasajero → gateway → `ms-viajes`; cotización con `ms-tarifas`; candidatos con `ms-flota`; PostgreSQL como fuente de verdad. |
-| 1:00–2:00 | Sistema levantado | Mostrar los servicios saludables, `/health`, `/ready/*` y la interfaz local en `5173`. |
+| 1:00–2:00 | Sistema levantado | Mostrar los servicios saludables, `/health`, `/ready/*` y la interfaz web servida desde Nginx en `http://localhost:8080/`. |
 | 2:00–4:00 | Pasajero y Variante A | Ingresar con el token de pasajero. Solicitar origen/destino y señalar precio en ARS, multiplicador, factores y vigencia de tres minutos. Aclarar que el precio lo calcula el servidor. |
 | 4:00–5:00 | Confirmación idempotente | Confirmar el viaje y mostrar el precio congelado. En `requests/flujo-e2e.http`, repetir la confirmación con la misma `Clave-Idempotencia` y comparar el `id_viaje`. |
-| 5:00–7:00 | Chofer y oferta | Abrir el perfil separado del chofer, actualizar ubicación y disponibilidad, obtener la oferta, aceptarla y avanzar llegada/inicio. El endpoint es el estado canónico; si la ruta WS todavía no está alineada, describir la prueba automatizada sin afirmar que el evento se vio en vivo. |
+| 5:00–7:00 | Chofer y oferta | Abrir el perfil separado del chofer, actualizar ubicación y disponibilidad, obtener la oferta en vivo por WebSocket (`/ws` / `/tiempo-real`), aceptarla y avanzar llegada/inicio. |
 | 7:00–8:00 | Soporte | Mostrar `GET /viajes` con el token local de soporte y explicar que su rol habilita supervisión. Intentar acceder a un viaje con otro pasajero debe responder `403 VIAJE_NO_AUTORIZADO`. |
 | 8:00–10:00 | Finalización y cobro | El chofer finaliza. El primer cobro simulado queda `fallido`; pasajero y chofer consultan `GET /viajes/{id}/cobro`. Pasajero titular o soporte reintenta con `Clave-Idempotencia`; el mismo cobro pasa a `confirmado`, mantiene su ID y conserva el importe final. |
 | 10:00–12:00 | Falla controlada | En terminal ejecutá `docker compose stop ms-flota`. Mostrá `/ready/flota` y la respuesta segura `503 DEPENDENCIA_NO_DISPONIBLE` de una operación que requiere candidatos. Restaurá con `docker compose start ms-flota`; repetir la operación con la misma clave idempotente no duplica el viaje. |

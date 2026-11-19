@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { WebSocket } from "ws";
 
 const base = process.env.E2E_BASE_URL;
 const pasajero = "falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwicm9sIjoiUEFTQUpFUk8ifQ";
@@ -78,7 +79,35 @@ test("E2E rechaza token ausente y viaje ajeno", { skip: !base }, async () => {
   assert.equal(ajeno.status, 200);
 });
 
-test("E2E el gateway bloquea rutas internas y devuelve sobre de error uniforme", { skip: !base }, async () => {
+test("E2E el gateway entrega la SPA con MIME y seguridad, reenvía WebSocket y bloquea rutas internas", { skip: !base }, async () => {
+  const raiz = await fetch(`${base}/`);
+  assert.equal(raiz.status, 200);
+  assert.match(raiz.headers.get("content-type") ?? "", /text\/html/);
+  assert.equal(raiz.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(raiz.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  const html = await raiz.text();
+  assert.match(html, /<div id="root"><\/div>/);
+
+  const scriptMatch = html.match(/src="(\/assets\/[^"]+\.js)"/);
+  assert.ok(scriptMatch, "index.html debe referenciar un bundle JS en /assets/");
+  const assetJs = await fetch(`${base}${scriptMatch[1]}`);
+  assert.equal(assetJs.status, 200);
+  assert.match(assetJs.headers.get("content-type") ?? "", /javascript/);
+
+  const cssMatch = html.match(/href="(\/assets\/[^"]+\.css)"/);
+  assert.ok(cssMatch, "index.html debe referenciar una hoja CSS en /assets/");
+  const assetCss = await fetch(`${base}${cssMatch[1]}`);
+  assert.equal(assetCss.status, 200);
+  assert.match(assetCss.headers.get("content-type") ?? "", /text\/css/);
+
+  const fallbackFront = await fetch(`${base}/pasajero`);
+  assert.equal(fallbackFront.status, 200);
+  assert.match(fallbackFront.headers.get("content-type") ?? "", /text\/html/);
+  assert.match(await fallbackFront.text(), /<div id="root"><\/div>/);
+
+  const assetFaltante = await fetch(`${base}/assets/no-existe.js`);
+  assert.equal(assetFaltante.status, 404);
+
   const rutaInterna = await pedir("/interno/demanda-por-zona?zona_id=resistencia", pasajero);
   assert.equal(rutaInterna.status, 404);
   assert.equal(rutaInterna.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
@@ -87,7 +116,19 @@ test("E2E el gateway bloquea rutas internas y devuelve sobre de error uniforme",
   assert.equal(estimacionInterna.status, 404);
   assert.equal(estimacionInterna.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
 
-  const rutaDesconocida = await pedir("/ruta-completamente-inexistente", pasajero);
-  assert.equal(rutaDesconocida.status, 404);
-  assert.equal(rutaDesconocida.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
+  const wsBase = base!.replace(/^http/, "ws");
+  for (const rutaWs of ["/tiempo-real", "/ws"]) {
+    await new Promise<void>((resolver, rechazar) => {
+      const socket = new WebSocket(`${wsBase}${rutaWs}`, ["viajes.v1", "autenticacion-jwt", pasajero]);
+      const timeout = setTimeout(() => { socket.terminate(); rechazar(new Error(`Timeout conectando WebSocket en ${rutaWs}`)); }, 5000);
+      socket.once("message", (dato) => {
+        clearTimeout(timeout);
+        const mensaje = JSON.parse(dato.toString()) as { evento?: string };
+        assert.equal(mensaje.evento, "CANAL_LISTO");
+        socket.close();
+        resolver();
+      });
+      socket.once("error", (err) => { clearTimeout(timeout); rechazar(err); });
+    });
+  }
 });

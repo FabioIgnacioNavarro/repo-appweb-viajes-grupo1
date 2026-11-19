@@ -2,9 +2,14 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-COPY tsconfig.json ./
+COPY tsconfig.json vite.config.mts ./
 COPY src ./src
+COPY web ./web
 RUN npm run build
+
+FROM nginx:1.27-alpine AS gateway
+COPY --from=build /app/dist/web /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
 
 FROM node:22-bookworm-slim
 WORKDIR /app

@@ -57,15 +57,17 @@ La suite completa incluye pruebas unitarias y de integración. Las pruebas que r
 
 En VS Code, abrí `requests/flujo-e2e.http` con la extensión REST Client y ejecutá sus solicitudes en orden. El archivo indica cuándo copiar los identificadores que devuelve cada paso. Para la guía con tiempos, roles, precio dinámico, WebSocket, cobro, falla y seguridad, seguí [`docs/guion-demo.md`](docs/guion-demo.md).
 
-### Interfaz web local
+### Interfaz web unificada y desarrollo
 
-La interfaz se sirve aparte del gateway. En una segunda terminal ejecutá:
+Al levantar Docker Compose (`docker compose up --build -d`), Nginx compila y sirve automáticamente la interfaz web estática desde `http://localhost:8080/` bajo el mismo origen que la API (sin CORS), con fallback SPA a `index.html` y canal WebSocket habilitado en `/tiempo-real` y `/ws`.
+
+Para desarrollo local con recarga instantánea de Vite (opcional), podés ejecutar en una segunda terminal:
 
 ```powershell
 npm.cmd run dev:web
 ```
 
-Abrí `http://localhost:5173`; Vite reenvía las llamadas de API al gateway local. Para entrar con identidades compatibles con los datos sintéticos sembrados por Compose, usá la opción de token manual y los actores documentados en `requests/flujo-e2e.http`.
+Abrí `http://localhost:5173`; Vite reenvía las llamadas de API y WebSocket al gateway local. Para entrar con identidades compatibles con los datos sintéticos sembrados por Compose, usá la opción de token manual y los actores documentados en `requests/flujo-e2e.http`.
 
 El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL los ejecuta al crear un volumen vacío. Un volumen existente no vuelve a ejecutar scripts nuevos. En ese caso, aplicar las migraciones/esquemas correspondientes antes de repetir la demo.
 
@@ -101,7 +103,7 @@ reemplaza las tres ejecuciones de aceptación.
 
 | Servicio | Puerto Host | Descripción | Endpoints Clave |
 |---|---|---|---|
-| **`nginx` (API Gateway)** | `8080` | Entrada única pública con enrutamiento y blindaje de rutas internas. | `GET /health`<br>`GET /ready/*`<br>`GET /tiempo-real`<br>`POST /viajes/estimacion`<br>`POST /viajes` |
+| **`nginx` (API Gateway)** | `8080` | Entrada única pública: sirve la SPA estática (`/`), enruta APIs, proxea WebSocket y blinda rutas internas. | `GET /` (SPA)<br>`GET /health`<br>`GET /ready/*`<br>`GET /tiempo-real`, `GET /ws`<br>`POST /viajes/estimacion`<br>`POST /viajes` |
 | **`auth-emulator`** | `9099` | Emulador OIDC / Firebase Auth con claves RSA 2048 y tokens dinámicos. | `GET /.well-known/jwks.json`<br>`GET /auth/tokens-demo`<br>`POST /auth/token` |
 | **`jaeger`** | `16686` | Interfaz web de observabilidad distribuida y análisis de latencias. | `http://localhost:16686` (Web UI)<br>`http://localhost:4318` (OTLP) |
 | **`ms-viajes`** | *Interno :3000* | Ciclo de vida, asignación atómica concurrente, cobros e idempotencia. | `GET /ready`<br>`POST /viajes`<br>`GET /viajes/:id` |

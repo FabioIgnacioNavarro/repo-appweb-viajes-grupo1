@@ -23,6 +23,10 @@ export default defineConfig({
         target: "ws://localhost:8080",
         ws: true,
       },
+      "/tiempo-real": {
+        target: "ws://localhost:8080",
+        ws: true,
+      },
     },
   },
   resolve: {
