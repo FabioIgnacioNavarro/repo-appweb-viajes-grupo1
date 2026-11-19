@@ -6,7 +6,9 @@ import {
   CrearEstimacion,
   ErrorTarifas,
   GeneradorIdMemoria,
+  GestionarReglaDemanda,
   RepositorioEstimacionesMemoria,
+  RepositorioReglasMemoria,
   type ReglaTarifa,
   type ZonaTarifaria
 } from "../../src/ms-tarifas/dominio";
@@ -40,11 +42,14 @@ async function iniciarServidorTarifas(opciones: {
   fallarDependencia?: boolean;
 } = {}): Promise<{ base: string; servidor: Server; estimaciones: RepositorioEstimacionesMemoria }> {
   const estimaciones = new RepositorioEstimacionesMemoria();
+  const repoReglas = new RepositorioReglasMemoria(regla);
+  const gestionarRegla = new GestionarReglaDemanda(repoReglas);
   const ids = new GeneradorIdMemoria();
   const actores: Record<string, ActorJWT> = {
     "token-pasajero-1": { idUsuario: "pasajero-1", rol: "PASAJERO" },
     "token-pasajero-2": { idUsuario: "pasajero-2", rol: "PASAJERO" },
     "token-chofer-1": { idUsuario: "chofer-1", rol: "CHOFER" },
+    "token-soporte-1": { idUsuario: "soporte-1", rol: "SOPORTE" },
     "token-admin": { idUsuario: "admin-1", rol: "ADMINISTRADOR" }
   };
 
@@ -61,7 +66,7 @@ async function iniciarServidorTarifas(opciones: {
     { async contarDisponibles() { return 5; } },
     { async contarSolicitudesActivas() { return 2; } },
     { async resolver() { return zona; } },
-    { async obtenerActiva() { return regla; } },
+    repoReglas,
     estimaciones,
     ids
   );
@@ -69,6 +74,7 @@ async function iniciarServidorTarifas(opciones: {
   const deps: DependenciasTarifas = {
     estimar: (pasajeroId, origen, destino) => caso.ejecutar(pasajeroId, origen, destino),
     estimaciones,
+    reglas: gestionarRegla,
     validador: {
       async validar(token: string) {
         const actor = actores[token];
@@ -251,5 +257,108 @@ test("ms-tarifas HTTP: rechaza rol CHOFER en estimación (403), entrada con prec
     assert.equal(depErr.error.codigo, "DEPENDENCIA_NO_DISPONIBLE");
   } finally {
     await cerrar(ctxFalla.servidor);
+  }
+});
+
+test("ms-tarifas HTTP: GET/PUT /reglas/demanda aplica RBAC, valida curva y registra autor del JWT y versión", async () => {
+  const ctx = await iniciarServidorTarifas();
+  try {
+    // 1. SOPORTE y PASAJERO reciben 403 en GET y PUT
+    for (const token of ["token-soporte-1", "token-pasajero-1", "token-chofer-1"]) {
+      const getForbidden = await fetch(`${ctx.base}/reglas/demanda`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      assert.equal(getForbidden.status, 403);
+      const getErr = await getForbidden.json() as { error: { codigo: string } };
+      assert.equal(getErr.error.codigo, "ROL_NO_AUTORIZADO");
+
+      const putForbidden = await fetch(`${ctx.base}/reglas/demanda`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          multiplicador_minimo: 0.8,
+          multiplicador_maximo: 2.2,
+          demanda_por_mil: [{ hasta: null, multiplicador: 1.1 }]
+        })
+      });
+      assert.equal(putForbidden.status, 403);
+    }
+
+    // 2. ADMINISTRADOR consulta v1 activa e historial
+    const getOk = await fetch(`${ctx.base}/reglas/demanda`, {
+      headers: { Authorization: "Bearer token-admin" }
+    });
+    assert.equal(getOk.status, 200);
+    const inicial = await getOk.json() as {
+      activa: { version: number; autor: string; demanda_por_mil: Array<{ hasta: number | null; multiplicador: number }> };
+      historial: Array<{ version: number; autor: string; activa: boolean }>;
+    };
+    assert.equal(inicial.activa.version, 1);
+    assert.equal(inicial.activa.autor, "sistema");
+    assert.equal(inicial.activa.demanda_por_mil.at(-1)?.hasta, null);
+    assert.equal(inicial.historial.length, 1);
+
+    // 3. ADMINISTRADOR no puede enviar autor, version, fecha o precio (400 ENTRADA_INVALIDA)
+    const spoofRes = await fetch(`${ctx.base}/reglas/demanda`, {
+      method: "PUT",
+      headers: { Authorization: "Bearer token-admin", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        autor: "otro-admin",
+        version: 99,
+        multiplicador_minimo: 0.75,
+        multiplicador_maximo: 2.0,
+        demanda_por_mil: [{ hasta: null, multiplicador: 1.0 }]
+      })
+    });
+    assert.equal(spoofRes.status, 400);
+    const spoofErr = await spoofRes.json() as { error: { codigo: string } };
+    assert.equal(spoofErr.error.codigo, "ENTRADA_INVALIDA");
+
+    // 4. ADMINISTRADOR publica curva inválida -> 422 REGLA_INVALIDA
+    const invalidaRes = await fetch(`${ctx.base}/reglas/demanda`, {
+      method: "PUT",
+      headers: { Authorization: "Bearer token-admin", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        multiplicador_minimo: 0.75,
+        multiplicador_maximo: 2.0,
+        demanda_por_mil: [
+          { hasta: 999, multiplicador: 1.5 },
+          { hasta: null, multiplicador: 1.0 }
+        ]
+      })
+    });
+    assert.equal(invalidaRes.status, 422);
+    const invalidaErr = await invalidaRes.json() as { error: { codigo: string } };
+    assert.equal(invalidaErr.error.codigo, "REGLA_INVALIDA");
+
+    // 5. ADMINISTRADOR publica nueva versión válida -> version 2 con autor del JWT
+    const putOk = await fetch(`${ctx.base}/reglas/demanda`, {
+      method: "PUT",
+      headers: { Authorization: "Bearer token-admin", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        multiplicador_minimo: 0.8,
+        multiplicador_maximo: 2.5,
+        lluvia_con_precipitacion: 1.15,
+        lluvia_sin_precipitacion: 1.0,
+        demanda_por_mil: [
+          { hasta: 999, multiplicador: 1.0 },
+          { hasta: 1999, multiplicador: 1.2 },
+          { hasta: null, multiplicador: 1.45 }
+        ]
+      })
+    });
+    assert.equal(putOk.status, 200);
+    const actualizada = await putOk.json() as {
+      activa: { version: number; autor: string; multiplicador_maximo: number };
+      historial: Array<{ version: number; autor: string; activa: boolean }>;
+    };
+    assert.equal(actualizada.activa.version, 2);
+    assert.equal(actualizada.activa.autor, "admin-1");
+    assert.equal(actualizada.activa.multiplicador_maximo, 2.5);
+    assert.equal(actualizada.historial.length, 2);
+    assert.equal(actualizada.historial[0]?.activa, true);
+    assert.equal(actualizada.historial[1]?.activa, false);
+  } finally {
+    await cerrar(ctx.servidor);
   }
 });

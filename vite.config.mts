@@ -16,6 +16,7 @@ export default defineConfig({
       "/viajes": "http://localhost:8080",
       "/choferes": "http://localhost:8080",
       "/estimaciones": "http://localhost:8080",
+      "/reglas": "http://localhost:8080",
       "/health": "http://localhost:8080",
       "/ready": "http://localhost:8080",
       "/auth": "http://localhost:9099",

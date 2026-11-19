@@ -125,6 +125,51 @@ Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, d
   }
   ```
 
+#### `GET /reglas/demanda`
+Devuelve la regla dinámica vigente y el historial completo de versiones inmutables con autor y fecha de creación.
+- **Autorización:** Exclusivo del rol `ADMINISTRADOR` (`SOPORTE`, `PASAJERO` y `CHOFER` reciben `403 ROL_NO_AUTORIZADO`).
+- **Respuesta (`200 OK`):**
+  ```json
+  {
+    "activa": {
+      "version": 1,
+      "autor": "sistema",
+      "creada_en": "2026-11-02T13:00:00.000Z",
+      "activa": true,
+      "tarifa_base_pesos": "1000",
+      "precio_por_kilometro_pesos": "600",
+      "precio_por_minuto_pesos": "120",
+      "multiplicador_minimo": 0.75,
+      "multiplicador_maximo": 2.0,
+      "lluvia_con_precipitacion": 1.1,
+      "lluvia_sin_precipitacion": 1.0,
+      "disponibilidad": [
+        { "hasta": 0, "multiplicador": 1.3 },
+        { "hasta": null, "multiplicador": 1.0 }
+      ],
+      "demanda_por_mil": [
+        { "hasta": 999, "multiplicador": 1.0 },
+        { "hasta": null, "multiplicador": 1.3 }
+      ],
+      "horario": {
+        "MADRUGADA": 1.0,
+        "MANANA": 1.0,
+        "SIESTA": 0.95,
+        "TARDE": 1.05,
+        "NOCHE": 1.1
+      }
+    },
+    "historial": [ ... ]
+  }
+  ```
+
+#### `PUT /reglas/demanda`
+Valida la curva de demanda y los multiplicadores, y crea una nueva versión activa sin modificar estimaciones ni viajes confirmados previos. El servidor asigna `version` incremental, `autor` desde el JWT validado y `creada_en` con reloj del servidor; el cliente no puede enviar `autor`, `version`, `creada_en` ni campos de precio.
+- **Autorización:** Exclusivo del rol `ADMINISTRADOR` (`403 ROL_NO_AUTORIZADO` para otros roles).
+- **Cuerpo recibido:** Campos editables de factores dinámicos (`multiplicador_minimo`, `multiplicador_maximo`, `lluvia_con_precipitacion`, `lluvia_sin_precipitacion`, `disponibilidad`, `demanda_por_mil`, `horario`), con multiplicadores entre `0.5` y `5.0` (máximo 4 decimales), límites coherentes (`minimo <= maximo`), umbrales estrictamente crecientes terminados en `hasta: null` y curva de demanda no decreciente.
+- **Respuesta (`200 OK`):** `{ "activa": { ... }, "historial": [ ... ] }`.
+- **Entrada inválida (`400` / `422`):** `400 ENTRADA_INVALIDA` si incluye campos no permitidos (`autor`, `version`, `creada_en`, `precio`, etc.) o tipos erróneos; `422 REGLA_INVALIDA` si la curva o los límites no son válidos.
+
 ---
 
 ### 3.2 Servicio `ms-viajes` (Ciclo de Vida del Viaje y Ofertas)
