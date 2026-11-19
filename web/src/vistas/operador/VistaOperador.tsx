@@ -1,5 +1,6 @@
 import React from "react";
 import { obtenerSesion } from "../../nucleo/sesion";
+import { Boton, IconoSoporte, Tarjeta } from "../../componentes/comunes";
 
 /**
  * Vista de Operador / Soporte — Asignada a Fabio (Flujo C: WEB-008)
@@ -9,42 +10,44 @@ export const VistaOperador: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">Mesa de Operaciones y Soporte</span>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-0.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
             Supervisión de Viajes en Tiempo Real
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-600 mt-1">
             Monitoreo de estado de flota, viajes en curso y auditoría de precio dinámico congelado.
           </p>
         </div>
-        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+        <span className="inline-flex items-center gap-1.5 w-fit text-xs font-semibold px-3 py-1 rounded-full bg-purple-50 text-purple-800 border border-purple-200">
+          <IconoSoporte size={14} />
           Operador: {sesion?.nombre}
         </span>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-            Viajes Activos e Historial
-          </h2>
-          <div className="flex items-center gap-2">
+      <Tarjeta
+        titulo="Viajes Activos e Historial"
+        accion={
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <label htmlFor="filtro-viajes-operador" className="sr-only">
+              Filtrar por ID de viaje o pasajero
+            </label>
             <input
+              id="filtro-viajes-operador"
               type="text"
               placeholder="Filtrar por ID de viaje o pasajero..."
-              className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50"
+              className="min-h-[36px] px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:bg-white"
             />
-            <button className="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
+            <Boton variante="primario" tamano="sm">
               Actualizar
-            </button>
+            </Boton>
           </div>
-        </div>
-
-        <div className="p-8 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500">
+        }
+      >
+        <div className="p-8 rounded-lg bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-600">
           Tabla de supervisión (a completar en WEB-008 consumiendo API-002: GET /viajes y GET /viajes/:id/auditoria-tarifa).
         </div>
-      </div>
+      </Tarjeta>
     </div>
   );
 };

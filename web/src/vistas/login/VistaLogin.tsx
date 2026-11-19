@@ -7,14 +7,27 @@ import {
   iniciarSesion,
 } from "../../nucleo/sesion";
 import { Rol } from "../../nucleo/tipos";
+import {
+  Boton,
+  CampoTexto,
+  IconoAdmin,
+  IconoChofer,
+  IconoEscudo,
+  IconoFlechaDerecha,
+  IconoPasajero,
+  IconoSoporte,
+  Tarjeta,
+} from "../../componentes/comunes";
 
 interface PerfilDemo {
   id: string;
   nombre: string;
   rol: Rol;
   descripcion: string;
-  emoji: string;
-  color: string;
+  icono: React.ReactNode;
+  colorIcono: string;
+  colorBorde: string;
+  colorInsignia: string;
 }
 
 const PERFILES_DEMO: PerfilDemo[] = [
@@ -23,32 +36,40 @@ const PERFILES_DEMO: PerfilDemo[] = [
     nombre: "Ana Gómez",
     rol: "PASAJERO",
     descripcion: "Solicita viajes, visualiza precio dinámico (Variante A), sigue en vivo y paga.",
-    emoji: "🙋‍♀️",
-    color: "border-blue-200 hover:border-blue-400 bg-blue-50/50",
+    icono: <IconoPasajero size={20} />,
+    colorIcono: "bg-blue-50 text-blue-700 border-blue-200",
+    colorBorde: "hover:border-blue-400",
+    colorInsignia: "bg-blue-50 text-blue-800 border-blue-200",
   },
   {
     id: "11111111-1111-4111-8111-111111111111",
     nombre: "Carlos Maidana",
     rol: "CHOFER",
     descripcion: "Activa disponibilidad, recibe ofertas en tiempo real y realiza el trayecto.",
-    emoji: "🚕",
-    color: "border-emerald-200 hover:border-emerald-400 bg-emerald-50/50",
+    icono: <IconoChofer size={20} />,
+    colorIcono: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    colorBorde: "hover:border-emerald-400",
+    colorInsignia: "bg-emerald-50 text-emerald-800 border-emerald-200",
   },
   {
     id: "44444444-4444-4444-8444-444444444444",
     nombre: "Lucía Operaciones",
     rol: "SOPORTE",
     descripcion: "Supervisa viajes en curso, consulta auditoría de tarifas y asiste en cancelaciones.",
-    emoji: "🎧",
-    color: "border-purple-200 hover:border-purple-400 bg-purple-50/50",
+    icono: <IconoSoporte size={20} />,
+    colorIcono: "bg-amber-50 text-amber-800 border-amber-200",
+    colorBorde: "hover:border-amber-400",
+    colorInsignia: "bg-amber-50 text-amber-900 border-amber-200",
   },
   {
     id: "99999999-9999-4999-8999-999999999999",
     nombre: "Martín Administrador",
     rol: "ADMINISTRADOR",
     descripcion: "Acceso total, configuración de reglas de demanda por zona y métricas del sistema.",
-    emoji: "⚙️",
-    color: "border-amber-200 hover:border-amber-400 bg-amber-50/50",
+    icono: <IconoAdmin size={20} />,
+    colorIcono: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    colorBorde: "hover:border-indigo-400",
+    colorInsignia: "bg-indigo-50 text-indigo-800 border-indigo-200",
   },
 ];
 
@@ -74,7 +95,6 @@ export const VistaLogin: React.FC = () => {
 
     try {
       if (modoToken === "emulador") {
-        // Solicitar token RS256 al emulador de identidad (/auth/token)
         const respuesta = await fetch("/auth/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -97,11 +117,10 @@ export const VistaLogin: React.FC = () => {
         }
       }
 
-      // Fallback explícito o modo desarrollo offline compatible con JWT_MODO=falso (solo fuera de producción)
       const soloProduccion =
-        (typeof window !== "undefined" &&
-          (window as unknown as { __ENV__?: { VITE_DESHABILITAR_JWT_FALSO?: string } }).__ENV__
-            ?.VITE_DESHABILITAR_JWT_FALSO === "true");
+        typeof window !== "undefined" &&
+        (window as unknown as { __ENV__?: { VITE_DESHABILITAR_JWT_FALSO?: string } }).__ENV__
+          ?.VITE_DESHABILITAR_JWT_FALSO === "true";
       if (soloProduccion) {
         setError("El emulador de identidad no respondió y el modo falso está deshabilitado en producción.");
         return;
@@ -145,27 +164,26 @@ export const VistaLogin: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8" data-testid="vista-login">
-      {/* Encabezado */}
-      <div className="text-center mb-6">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+    <div className="max-w-4xl mx-auto py-4 sm:py-8 space-y-6" data-testid="vista-login">
+      <div className="space-y-2 text-center sm:text-left">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
           Bienvenido a la Plataforma de Viajes
         </h1>
-        <p className="mt-2 text-sm sm:text-base text-slate-600 max-w-xl mx-auto">
+        <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
           Seleccioná un perfil de prueba para ingresar con credenciales de identidad externa o pegá un token JWT.
         </p>
       </div>
 
-      {/* Selector de modo de emisión de credenciales (Emulador RS256 vs Desarrollo jwt-falso) */}
-      <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs">
-        <span className="font-semibold text-slate-700">Modo de emisión de credenciales:</span>
-        <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1" role="group" aria-label="Modo de token">
+      {/* Selector de modo de emisión de credenciales */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs">
+        <span className="font-semibold text-slate-800">Modo de emisión de credenciales:</span>
+        <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1 w-full sm:w-auto" role="group" aria-label="Modo de token">
           <button
             type="button"
             data-testid="modo-token-emulador"
             onClick={() => setModoToken("emulador")}
-            className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-              modoToken === "emulador" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            className={`flex-1 sm:flex-none min-h-[36px] px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
+              modoToken === "emulador" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-700 hover:text-slate-900"
             }`}
           >
             Emulador JWKS (RS256)
@@ -174,8 +192,8 @@ export const VistaLogin: React.FC = () => {
             type="button"
             data-testid="modo-token-falso"
             onClick={() => setModoToken("falso")}
-            className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${
-              modoToken === "falso" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            className={`flex-1 sm:flex-none min-h-[36px] px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
+              modoToken === "falso" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-700 hover:text-slate-900"
             }`}
             title="Solo para entornos locales con JWT_MODO=falso fuera de producción"
           >
@@ -188,77 +206,91 @@ export const VistaLogin: React.FC = () => {
         <div
           role="alert"
           data-testid="alerta-login"
-          className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between gap-3"
+          className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-center justify-between gap-3"
         >
           <span>{error}</span>
           <button
             type="button"
             onClick={() => setError(null)}
             aria-label="Cerrar aviso"
-            className="font-bold text-rose-900 px-2 py-0.5 cursor-pointer"
+            className="font-bold text-rose-900 px-2 py-1 rounded-md hover:bg-rose-100 cursor-pointer shrink-0"
           >
             &times;
           </button>
         </div>
       )}
 
-      {/* Tarjetas de Selección Rápida de Rol */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      {/* Cuadrícula de Perfiles por Rol */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {PERFILES_DEMO.map((p) => (
           <button
             key={p.id}
             type="button"
             disabled={cargando}
             onClick={() => iniciarConPerfil(p)}
-            className={`p-5 rounded-2xl border text-left transition transform active:scale-98 shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:outline-none ${p.color}`}
+            className={`p-5 rounded-xl border border-slate-200 bg-white text-left transition-all cursor-pointer flex flex-col justify-between gap-4 group ${p.colorBorde}`}
           >
-            <div className="flex items-start gap-3">
-              <span className="text-3xl p-2 bg-white rounded-xl shadow-xs border border-slate-100" aria-hidden="true">
-                {p.emoji}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-slate-900 text-base">{p.nombre}</h3>
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 shrink-0">
-                    {p.rol}
-                  </span>
+            <div className="space-y-3 w-full">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 ${p.colorIcono}`}>
+                    {p.icono}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-slate-900 text-sm sm:text-base truncate">{p.nombre}</h2>
+                    <span className="block text-[11px] font-mono text-slate-500 truncate">{p.id}</span>
+                  </div>
                 </div>
-                <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{p.descripcion}</p>
+                <span className={`text-[11px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full border shrink-0 ${p.colorInsignia}`}>
+                  {p.rol}
+                </span>
               </div>
+              <p className="text-xs text-slate-600 leading-relaxed">{p.descripcion}</p>
+            </div>
+
+            <div className="w-full pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-700 group-hover:text-slate-900">
+              <span>Ingresar como {p.rol.toLowerCase()}</span>
+              <span className="transition-transform group-hover:translate-x-1">
+                <IconoFlechaDerecha size={14} />
+              </span>
             </div>
           </button>
         ))}
       </div>
 
       {/* Ingreso Manual de Token JWT */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <h3 className="text-sm font-semibold text-slate-900 mb-2">Ingresar con Token JWT propio (Tema 19 / OIDC)</h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Si tenés un token generado por el emulador JWKS o un JWT de desarrollo (<code>falso.*</code>), pegalo aquí para validar la sesión:
-        </p>
-        <form onSubmit={iniciarConTokenManual} className="flex flex-col sm:flex-row gap-3">
-          <label htmlFor="input-token-manual" className="sr-only">
-            Token JWT
-          </label>
-          <input
-            id="input-token-manual"
-            data-testid="input-token-manual"
-            type="text"
-            value={tokenManual}
-            onChange={(e) => setTokenManual(e.target.value)}
-            placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
-            className="flex-1 px-3.5 py-2 text-xs font-mono rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-          />
-          <button
+      <Tarjeta
+        titulo={
+          <span className="inline-flex items-center gap-2">
+            <IconoEscudo size={18} className="text-slate-700" />
+            Ingresar con Token JWT propio (Tema 19 / OIDC)
+          </span>
+        }
+        subtitulo="Si tenés un token generado por el emulador JWKS o un JWT de desarrollo (falso.*), pegalo aquí para validar la sesión."
+      >
+        <form onSubmit={iniciarConTokenManual} className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1 min-w-0">
+            <CampoTexto
+              id="input-token-manual"
+              data-testid="input-token-manual"
+              etiqueta="Token JWT (Bearer)"
+              value={tokenManual}
+              onChange={(e) => setTokenManual(e.target.value)}
+              placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+              className="font-mono text-xs"
+            />
+          </div>
+          <Boton
             type="submit"
             data-testid="boton-token-manual"
+            variante="primario"
             disabled={!tokenManual.trim() || cargando}
-            className="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition shadow-xs cursor-pointer"
+            className="w-full sm:w-auto shrink-0"
           >
             Validar e Ingresar
-          </button>
+          </Boton>
         </form>
-      </div>
+      </Tarjeta>
     </div>
   );
 };
