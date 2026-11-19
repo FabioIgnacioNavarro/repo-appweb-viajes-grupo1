@@ -50,10 +50,11 @@ Este documento consolida el contrato de la API HTTP de la plataforma para todos 
 | `GET` | `/ready/viajes` | `ms-viajes:3000/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/ready/tarifas` | `ms-tarifas:3001/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/ready/flota` | `ms-flota:3002/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
+| `GET` | `/` (y rutas SPA) | Estáticos Nginx (`dist/web`) | Sirve `index.html`, `/assets/*` con MIME types correctos y fallback a `index.html` para rutas del front. |
 
 ### Canal de tiempo real
 
-`GET /tiempo-real` establece una conexión WebSocket con `ms-viajes` (Nginx reenvía el upgrade). El handshake requiere un JWT válido en `Authorization: Bearer <JWT>`. Los clientes de navegador, que no permiten encabezados personalizados en WebSocket, pueden presentar los subprotocolos `viajes.v1`, `autenticacion-jwt`, `<JWT>`; el servidor negocia únicamente `viajes.v1`, nunca devuelve el token. No se aceptan JWT en la URL. El servidor asocia la conexión al `id_usuario` del JWT y no permite elegir otro usuario o viaje en la URL.
+`GET /tiempo-real` (y su alias compatible `GET /ws` utilizado por el cliente web) establece una conexión WebSocket con `ms-viajes` (Nginx reenvía el upgrade en ambos endpoints). El handshake requiere un JWT válido en `Authorization: Bearer <JWT>`. Los clientes de navegador, que no permiten encabezados personalizados en WebSocket, pueden presentar los subprotocolos `viajes.v1`, `autenticacion-jwt`, `<JWT>`; el servidor negocia únicamente `viajes.v1`, nunca devuelve el token. No se aceptan JWT en la URL. El servidor asocia la conexión al `id_usuario` del JWT y no permite elegir otro usuario o viaje en la URL.
 
 Los mensajes son JSON con la envoltura `{"evento":"...","datos":{...}}`:
 

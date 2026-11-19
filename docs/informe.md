@@ -36,7 +36,7 @@ flowchart LR
 
 Los servicios están organizados con arquitectura hexagonal: el dominio define reglas y puertos; Express, PostgreSQL, HTTP entre servicios, proveedores de rutas y el adaptador de pagos se conectan desde la capa de infraestructura. PostgreSQL es la fuente persistente de viajes, ofertas, cobros, idempotencia, tarifas y datos de flota. No se incorporó Redis.
 
-En el Compose de desarrollo, Nginx publica la API en el puerto `8080`; el servidor Vite de la interfaz se inicia aparte en `5173`. La interfaz estática no forma parte de la imagen actual de Docker. Jaeger publica su interfaz en `16686`, el emulador de identidad en `9099`, y PostgreSQL usa `5432` dentro de Compose y `5434` desde el host.
+En el Compose de desarrollo, Nginx publica en el puerto `8080` tanto la API como el bundle estático compilado de la interfaz web (`dist/web`), eliminando la necesidad de CORS (opcionalmente puede usarse Vite en `5173` para hot-reload). Jaeger publica su interfaz en `16686`, el emulador de identidad en `9099`, y PostgreSQL usa `5432` dentro de Compose y `5434` desde el host.
 
 ## 3. Flujos y reglas principales
 
@@ -52,7 +52,7 @@ Las respuestas HTTP tienen un sobre de error uniforme. Las dependencias internas
 
 ### 3.3 Tiempo real
 
-`ms-viajes` publica ofertas y cambios de viaje por WebSocket autenticado. Al reconectar, la aplicación debe recuperar el estado canónico con endpoints HTTP. El contrato y las pruebas automatizadas cubren autenticación, autorización, reconexión y recuperación. **La visualización en vivo desde el cliente web y el gateway requiere alinear la ruta del cliente (`/ws`) con la ruta WebSocket publicada por Nginx (`/tiempo-real`); ese recorrido no se considera verificado en este corte.**
+`ms-viajes` publica ofertas y cambios de viaje por WebSocket autenticado. Al reconectar, la aplicación recupera el estado canónico con endpoints HTTP. El contrato y las pruebas automatizadas cubren autenticación, autorización, reconexión y recuperación; Nginx reenvía el upgrade tanto en `/tiempo-real` como en `/ws` hacia `ms-viajes`.
 
 ### 3.4 Cobro
 
@@ -105,7 +105,6 @@ Estos son resultados registrados por el grupo, no mediciones ejecutadas durante 
 - Los resultados de carga corresponden al hardware y configuración descritos en `docs/mediciones.md`; no garantizan el mismo rendimiento en otras escalas.
 - La sesión que preparó este informe no tenía el motor Docker disponible. `docker compose config --quiet` valida la sintaxis, pero no se pudo ejecutar `docker compose up`, la demo E2E real ni la prueba de base PostgreSQL en esta sesión.
 - Falta que una persona distinta de quien preparó los cambios repita la secuencia de clon limpio y registre sistema operativo, versiones, resultado de Compose, tests y flujo REST.
-- La ruta WebSocket del cliente (`/ws`) y la publicada por Nginx (`/tiempo-real`) difieren. Coordinar su alineación antes de presentar una demostración visual en vivo.
 
 ## 7. Referencias del proyecto
 
