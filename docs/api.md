@@ -51,6 +51,8 @@ Este documento consolida el contrato de la API HTTP de la plataforma para todos 
 | `GET` | `/ready/tarifas` | `ms-tarifas:3001/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/ready/flota` | `ms-flota:3002/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/` (y rutas SPA) | Estáticos Nginx (`dist/web`) | Sirve `index.html`, `/assets/*` con MIME types correctos y fallback a `index.html` para rutas del front. |
+| `POST` | `/auth/token` | `auth-emulator:9099` | Emite un JWT RS256 de desarrollo/demo para `{ id_usuario, rol }` (también acepta `idUsuario`). Solo entorno con emulador. |
+| `GET` | `/auth/tokens-demo` | `auth-emulator:9099` | Devuelve catálogo de tokens RS256 sintéticos de demostración por rol. |
 
 ### Canal de tiempo real
 

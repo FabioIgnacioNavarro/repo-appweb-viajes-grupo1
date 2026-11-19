@@ -61,7 +61,8 @@ Se adopta la **Opción C**.
    - Gestiona un par de claves RSA con identificador de clave (`kid`) dinámico.
    - Publica `GET /.well-known/jwks.json`.
    - Provee endpoints auxiliares para emitir tokens firmados con claims válidos (`rol`, `sub`, `iss`, `aud`, `exp`), tokens expirados y tokens adulterados.
-2. Se incorpora el servicio `auth-emulator` en `docker-compose.yml` en el puerto `9099`, integrado a la red interna de microservicios.
+2. Se incorpora el servicio `auth-emulator` en `docker-compose.yml` en el puerto `9099`, integrado a la red interna de microservicios, y se proxea `/auth/` desde Nginx (`8080`) para que la SPA obtenga tokens RS256 en el mismo origen sin credenciales reales.
+   *(Nota: `ValidadorJwtFalso` queda deshabilitado en todos los microservicios si `NODE_ENV=production`.)*
 3. Se añaden pruebas unitarias completas para `ValidadorJwtJwks` en `src/compartido/jwt.test.ts` con verificación de firma RS256, expiración, claims anidados, claves desconocidas y rechazo de algoritmo `none`.
 4. Se documenta la demostración de los tres escenarios (200, 401, 403) en `requests/seguridad-rbac.http` y en `docs/ataque.md`.
 

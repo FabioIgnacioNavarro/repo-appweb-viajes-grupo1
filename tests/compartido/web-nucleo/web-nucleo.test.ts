@@ -10,7 +10,10 @@ import {
   tieneRol,
   obtenerToken,
   suscribirSesion,
+  consumirAvisoSesion,
+  crearTokenFalsoDesarrollo,
 } from "../../../src/compartido/web-nucleo/sesion";
+import { ValidadorJwtFalso } from "../../../src/compartido/jwt-falso";
 import {
   clienteApi,
   peticionHttp,
@@ -97,6 +100,8 @@ test("sesion: ciclo de vida completo (iniciar, verificar, consultar, cerrar y ex
   const tokenExpirado = `falso.${Buffer.from(JSON.stringify(payloadExpirado)).toString("base64url")}`;
   iniciarSesion(tokenExpirado);
   assert.equal(obtenerSesion(), null); // Al consultar detecta expiraEn < now y se auto-cierra
+  assert.match(consumirAvisoSesion() ?? "", /expiró/i);
+  assert.equal(consumirAvisoSesion(), null);
 });
 
 test("api: generarClaveIdempotencia produce claves no vacías y no colisionantes", () => {
@@ -214,10 +219,32 @@ test("api: error 401 cierra la sesión local automáticamente", async () => {
     await assert.rejects(async () => {
       await clienteApi.get("/viajes/yo");
     });
-    // Debe haberse cerrado la sesión
+    // Debe haberse cerrado la sesión y guardado un aviso claro para la pantalla de login
     assert.equal(estaAutenticado(), false);
+    assert.match(consumirAvisoSesion() ?? "", /TOKEN_INVALIDO/);
   } finally {
     globalThis.fetch = fetchOriginal;
+  }
+});
+
+test("sesion: crearTokenFalsoDesarrollo es compatible con ValidadorJwtFalso y falla en producción", async () => {
+  const token = crearTokenFalsoDesarrollo({
+    idUsuario: "11111111-1111-4111-8111-111111111111",
+    rol: "CHOFER",
+    nombre: "Carlos Maidana",
+  });
+  const validador = new ValidadorJwtFalso(true);
+  const envAnterior = process.env.NODE_ENV;
+  process.env.NODE_ENV = "development";
+  try {
+    const actor = await validador.validar(token);
+    assert.equal(actor.idUsuario, "11111111-1111-4111-8111-111111111111");
+    assert.equal(actor.rol, "CHOFER");
+
+    process.env.NODE_ENV = "production";
+    await assert.rejects(() => validador.validar(token), /deshabilitado en producción/);
+  } finally {
+    process.env.NODE_ENV = envAnterior;
   }
 });
 

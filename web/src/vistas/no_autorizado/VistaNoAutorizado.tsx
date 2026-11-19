@@ -7,7 +7,7 @@ export const VistaNoAutorizado: React.FC = () => {
   const sesion = obtenerSesion();
 
   return (
-    <div className="max-w-lg mx-auto py-12 text-center">
+    <div className="max-w-lg mx-auto py-12 text-center" data-testid="vista-no-autorizado">
       <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto text-3xl mb-4">
         🚫
       </div>

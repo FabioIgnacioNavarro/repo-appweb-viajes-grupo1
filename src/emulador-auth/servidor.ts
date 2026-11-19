@@ -52,9 +52,12 @@ export function crearAplicacionEmulador() {
   // 4. Endpoint para emitir tokens dinámicos bajo demanda
   app.post("/auth/token", (req, res) => {
     const cuerpo = req.body ?? {};
-    const idUsuario = typeof cuerpo.id_usuario === "string" && cuerpo.id_usuario.trim()
-      ? cuerpo.id_usuario.trim()
-      : ACTORES_DEMO.pasajero.idUsuario;
+    const idRaw = typeof cuerpo.id_usuario === "string" && cuerpo.id_usuario.trim()
+      ? cuerpo.id_usuario
+      : typeof cuerpo.idUsuario === "string" && cuerpo.idUsuario.trim()
+        ? cuerpo.idUsuario
+        : ACTORES_DEMO.pasajero.idUsuario;
+    const idUsuario = idRaw.trim();
     const rolRaw = typeof cuerpo.rol === "string" ? cuerpo.rol.toLowerCase().trim() : "pasajero";
     const rolValido = ["pasajero", "chofer", "administrador", "soporte"].includes(rolRaw)
       ? (rolRaw as "pasajero" | "chofer" | "administrador" | "soporte")
@@ -64,8 +67,12 @@ export function crearAplicacionEmulador() {
       ? cuerpo.expira_en_segundos
       : 3600;
     const adulterarFirma = Boolean(cuerpo.adulterar_firma);
-    const customClaims = typeof cuerpo.custom_claims === "object" && cuerpo.custom_claims !== null
-      ? (cuerpo.custom_claims as Record<string, unknown>)
+    const claimsBase = typeof cuerpo.custom_claims === "object" && cuerpo.custom_claims !== null
+      ? { ...(cuerpo.custom_claims as Record<string, unknown>) }
+      : undefined;
+    const nombreClaim = typeof cuerpo.nombre === "string" && cuerpo.nombre.trim() ? cuerpo.nombre.trim() : undefined;
+    const customClaims = nombreClaim || claimsBase
+      ? { ...(claimsBase ?? {}), ...(nombreClaim ? { name: nombreClaim } : {}) }
       : undefined;
 
     const token = emitirTokenJwt(idUsuario, rolValido, {

@@ -116,6 +116,17 @@ test("E2E el gateway entrega la SPA con MIME y seguridad, reenvía WebSocket y b
   assert.equal(estimacionInterna.status, 404);
   assert.equal(estimacionInterna.cuerpo.error?.codigo, "RUTA_NO_ENCONTRADA");
 
+  const tokenEmulador = await fetch(`${base}/auth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id_usuario: "44444444-4444-4444-8444-444444444444", rol: "soporte", nombre: "Lucía Operaciones" })
+  });
+  assert.equal(tokenEmulador.status, 200);
+  const cuerpoToken = (await tokenEmulador.json()) as { token?: string; id_usuario?: string; rol?: string };
+  assert.equal(cuerpoToken.id_usuario, "44444444-4444-4444-8444-444444444444");
+  assert.equal(cuerpoToken.rol, "soporte");
+  assert.equal(cuerpoToken.token?.split(".").length, 3);
+
   const wsBase = base!.replace(/^http/, "ws");
   for (const rutaWs of ["/tiempo-real", "/ws"]) {
     await new Promise<void>((resolver, rechazar) => {
