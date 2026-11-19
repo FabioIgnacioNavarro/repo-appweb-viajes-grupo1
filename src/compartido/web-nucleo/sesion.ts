@@ -1,12 +1,83 @@
 import { Rol, UsuarioSesion } from "./tipos";
 
 const CLAVE_STORAGE = "viajes_grupo1_sesion";
+const CLAVE_AVISO_STORAGE = "viajes_grupo1_aviso_sesion";
 
 // Suscriptores al cambio de sesión (para reactividad en React y en el Router)
 type OyenteSesion = (sesion: UsuarioSesion | null) => void;
 const oyentes: Set<OyenteSesion> = new Set();
 
 let sesionEnMemoria: UsuarioSesion | null = null;
+let avisoEnMemoria: string | null = null;
+
+function codificarBase64Url(texto: string): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(texto, "utf8").toString("base64url");
+  }
+  const bytes = new TextEncoder().encode(texto);
+  let binario = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binario += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binario).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function guardarAviso(motivo: string | null): void {
+  avisoEnMemoria = motivo;
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      if (motivo) {
+        window.sessionStorage.setItem(CLAVE_AVISO_STORAGE, motivo);
+      } else {
+        window.sessionStorage.removeItem(CLAVE_AVISO_STORAGE);
+      }
+    }
+  } catch {
+    // Ignorar en entornos sin storage
+  }
+}
+
+/**
+ * Obtiene el motivo del último cierre de sesión forzado (expiración o 401), si existe.
+ */
+export function obtenerAvisoSesion(): string | null {
+  if (avisoEnMemoria) return avisoEnMemoria;
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      return window.sessionStorage.getItem(CLAVE_AVISO_STORAGE);
+    }
+  } catch {
+    // Ignorar
+  }
+  return null;
+}
+
+/**
+ * Lee y limpia el aviso de cierre de sesión para mostrarlo una sola vez en la pantalla de login.
+ */
+export function consumirAvisoSesion(): string | null {
+  const aviso = obtenerAvisoSesion();
+  guardarAviso(null);
+  return aviso;
+}
+
+/**
+ * Genera un token falso de desarrollo compatible con ValidadorJwtFalso (src/compartido/jwt-falso.ts).
+ * Debe usarse exclusivamente fuera de producción.
+ */
+export function crearTokenFalsoDesarrollo(datos: { idUsuario: string; rol: Rol; nombre?: string; duracionSegundos?: number }): string {
+  const duracion = datos.duracionSegundos ?? 7200;
+  const payload = {
+    tipo: "jwt-falso",
+    sub: datos.idUsuario,
+    idUsuario: datos.idUsuario,
+    rol: datos.rol,
+    name: datos.nombre ?? datos.idUsuario,
+    email: `${datos.idUsuario.toLowerCase()}@viajes.local`,
+    exp: Math.floor(Date.now() / 1000) + duracion,
+  };
+  return `falso.${codificarBase64Url(JSON.stringify(payload))}`;
+}
 
 function notificarCambio() {
   for (const oyente of oyentes) {
@@ -79,8 +150,8 @@ export function extraerRolDesdeClaims(claims: Record<string, unknown>): Rol {
 export function obtenerSesion(): UsuarioSesion | null {
   if (sesionEnMemoria) {
     // Verificar si expiró
-    if (sesionEnMemoria.expiraEn > 0 && Date.now() / 1000 > sesionEnMemoria.expiraEn) {
-      cerrarSesion();
+    if (sesionEnMemoria.expiraEn > 0 && Date.now() / 1000 >= sesionEnMemoria.expiraEn) {
+      cerrarSesion("Tu sesión expiró. Volvé a iniciar sesión para continuar.");
       return null;
     }
     return sesionEnMemoria;
@@ -91,8 +162,8 @@ export function obtenerSesion(): UsuarioSesion | null {
       const serializado = window.sessionStorage.getItem(CLAVE_STORAGE);
       if (serializado) {
         const recuperada = JSON.parse(serializado) as UsuarioSesion;
-        if (recuperada.expiraEn > 0 && Date.now() / 1000 > recuperada.expiraEn) {
-          window.sessionStorage.removeItem(CLAVE_STORAGE);
+        if (recuperada.expiraEn > 0 && Date.now() / 1000 >= recuperada.expiraEn) {
+          cerrarSesion("Tu sesión expiró. Volvé a iniciar sesión para continuar.");
           return null;
         }
         sesionEnMemoria = recuperada;
@@ -115,6 +186,7 @@ export function iniciarSesion(token: string, datosOpcionales?: Partial<UsuarioSe
   }
 
   const claims = decodificarPayloadJwt(token);
+
   const idUsuario = (
     datosOpcionales?.idUsuario ||
     claims.idUsuario ||
@@ -136,6 +208,7 @@ export function iniciarSesion(token: string, datosOpcionales?: Partial<UsuarioSe
     expiraEn,
   };
 
+  guardarAviso(null);
   sesionEnMemoria = nuevaSesion;
 
   try {
@@ -153,8 +226,11 @@ export function iniciarSesion(token: string, datosOpcionales?: Partial<UsuarioSe
 /**
  * Cierra la sesión activa y notifica a los oyentes
  */
-export function cerrarSesion(): void {
+export function cerrarSesion(motivo?: string): void {
   sesionEnMemoria = null;
+  if (motivo) {
+    guardarAviso(motivo);
+  }
   try {
     if (typeof window !== "undefined" && window.sessionStorage) {
       window.sessionStorage.removeItem(CLAVE_STORAGE);

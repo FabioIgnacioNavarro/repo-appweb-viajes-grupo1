@@ -126,9 +126,12 @@ export async function peticionHttp<T = unknown>(
     };
   }
 
-  // Si el token expiró o es inválido en backend (401), cerrar sesión local
+  // Si el token expiró o es inválido en backend (401), cerrar sesión local y registrar aviso claro
   if (respuesta.status === 401) {
-    cerrarSesion();
+    const motivo = detalleError?.mensaje
+      ? `Tu sesión fue rechazada o expiró (${detalleError.codigo}): ${detalleError.mensaje}`
+      : "Tu sesión expiró o el token no es válido (401). Volvé a iniciar sesión.";
+    cerrarSesion(motivo);
   }
 
   throw new ErrorHttpApi(respuesta.status, detalleError);
