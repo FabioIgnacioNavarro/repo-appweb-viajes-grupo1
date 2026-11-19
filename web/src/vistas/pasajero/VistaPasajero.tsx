@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { clienteApi, ErrorHttpApi, generarClaveIdempotencia } from "../../nucleo/api";
 import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal } from "../../nucleo/ws";
+import { InsigniaEstadoViaje } from "../../componentes/comunes";
+import { MapaLeaflet } from "../../componentes/mapa/MapaLeaflet";
 
 interface Coordenada {
   latitud: number;
@@ -117,31 +119,6 @@ function puntosDeRuta(estimacion: EstimacionDto): Coordenada[] {
   return opciones.sort((a, b) => a.error - b.error)[0]?.puntos ?? [estimacion.origen, estimacion.destino];
 }
 
-function puntosSvg(puntos: Coordenada[]): string {
-  const longitudes = puntos.map((punto) => punto.longitud);
-  const latitudes = puntos.map((punto) => punto.latitud);
-  const minLongitud = Math.min(...longitudes);
-  const maxLongitud = Math.max(...longitudes);
-  const minLatitud = Math.min(...latitudes);
-  const maxLatitud = Math.max(...latitudes);
-  const ancho = maxLongitud - minLongitud || 0.001;
-  const alto = maxLatitud - minLatitud || 0.001;
-  const margen = 48;
-  const anchoVista = 640 - margen * 2;
-  const altoVista = 360 - margen * 2;
-  const escala = Math.min(anchoVista / ancho, altoVista / alto);
-  const dibujadoAncho = ancho * escala;
-  const dibujadoAlto = alto * escala;
-  const desplazamientoX = (640 - dibujadoAncho) / 2;
-  const desplazamientoY = (360 - dibujadoAlto) / 2;
-
-  return puntos.map((punto) => {
-    const x = desplazamientoX + (punto.longitud - minLongitud) * escala;
-    const y = 360 - desplazamientoY - (punto.latitud - minLatitud) * escala;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-}
-
 function etiquetaEstado(estado: string): string {
   const etiquetas: Record<string, string> = {
     solicitado: "Buscando chofer",
@@ -246,10 +223,10 @@ export const VistaPasajero: React.FC = () => {
     ? Math.max(0, Math.ceil((Date.parse(estimacion.vigente_hasta) - ahora) / 1000))
     : 0;
   const puntos = estimacion ? puntosDeRuta(estimacion) : [];
-  const rutaDibujada = puntos.length > 1 ? puntosSvg(puntos) : "";
-  const puntosRutaDibujada = rutaDibujada.split(" ").map((punto) => punto.split(","));
-  const puntoInicial = puntosRutaDibujada[0];
-  const puntoFinal = puntosRutaDibujada[puntosRutaDibujada.length - 1];
+  const rutaMapa: [number, number][] | undefined =
+    puntos.length > 1 ? puntos.map((p) => [p.latitud, p.longitud] as [number, number]) : undefined;
+  const origenMapa = estimacion?.origen ?? viaje?.origen;
+  const destinoMapa = estimacion?.destino ?? viaje?.destino;
   const estadoViaje = viaje?.estado.toLowerCase() ?? "";
   const puedeCancelar = Boolean(viaje && ESTADOS_CANCELABLES_PASAJERO.has(estadoViaje));
 
@@ -367,15 +344,15 @@ export const VistaPasajero: React.FC = () => {
   };
 
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-6" aria-labelledby="titulo-pasajero">
-      <header className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
+    <section className="mx-auto w-full max-w-7xl space-y-6" aria-labelledby="titulo-pasajero">
+      <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Panel de pasajero</p>
           <h1 id="titulo-pasajero" className="mt-1 text-2xl font-extrabold text-slate-900">Hola, {sesion?.nombre || "Pasajero"}</h1>
           <p className="mt-1 text-sm text-slate-500">Cotizá tu recorrido y confirmá el precio antes de pedir el viaje.</p>
         </div>
         <span className="w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Variante A · precio dinámico</span>
-      </header>
+      </div>
 
       {error && (
         <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -451,7 +428,7 @@ export const VistaPasajero: React.FC = () => {
                   </h2>
                   <p className="mt-1 text-2xl font-extrabold text-slate-900">{importePesos(viaje.precio_final ?? viaje.precio_estimado)}</p>
                 </div>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">{etiquetaEstado(viaje.estado)}</span>
+                <InsigniaEstadoViaje estado={viaje.estado} />
               </div>
               <p className="text-xs text-slate-600">El precio y sus factores se mantienen congelados desde la confirmación.</p>
               <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
@@ -497,38 +474,27 @@ export const VistaPasajero: React.FC = () => {
             </div>
             {estimacion && <span className="text-xs font-semibold text-slate-600">{(estimacion.distancia_metros / 1000).toFixed(1)} km · {Math.ceil(estimacion.duracion_segundos / 60)} min</span>}
           </div>
-          <div className="relative min-h-[320px] bg-slate-100 sm:min-h-[440px]">
-            {estimacion ? (
-              <svg className="absolute inset-0 h-full w-full" viewBox="0 0 640 360" role="img" aria-label={`Ruta estimada desde latitud ${estimacion.origen.latitud} hasta latitud ${estimacion.destino.latitud}`} preserveAspectRatio="xMidYMid meet">
-                <defs>
-                  <pattern id="cuadricula-mapa-pasajero" width="32" height="32" patternUnits="userSpaceOnUse">
-                    <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#dbe4e7" strokeWidth="1" />
-                  </pattern>
-                  <filter id="sombra-ruta-pasajero" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" /></filter>
-                </defs>
-                <rect width="640" height="360" fill="#eef3f2" />
-                <rect width="640" height="360" fill="url(#cuadricula-mapa-pasajero)" />
-                {rutaDibujada && <>
-                  <polyline points={rutaDibujada} fill="none" stroke="#0f766e" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" filter="url(#sombra-ruta-pasajero)" />
-                  <polyline points={rutaDibujada} fill="none" stroke="#0f766e" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx={puntoInicial?.[0]} cy={puntoInicial?.[1]} r="12" fill="#059669" stroke="white" strokeWidth="5" />
-                  <circle cx={puntoFinal?.[0]} cy={puntoFinal?.[1]} r="12" fill="#ea580c" stroke="white" strokeWidth="5" />
-                </>}
-                {!rutaDibujada && <text x="320" y="180" textAnchor="middle" fill="#64748b" fontSize="16">Calculá una estimación para ver el recorrido</text>}
-              </svg>
-            ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center text-slate-500">
-                <span aria-hidden="true" className="text-4xl">⌖</span>
-                <p className="mt-2 text-sm font-semibold text-slate-700">Tu recorrido va a aparecer acá</p>
-                <p className="mt-1 max-w-sm text-xs">Ingresá origen y destino para calcular una ruta y conocer la tarifa antes de confirmar.</p>
+          <div className="relative min-h-[360px] bg-slate-100 sm:min-h-[440px]">
+            <MapaLeaflet
+              altura="440px"
+              origen={origenMapa ? { latitud: origenMapa.latitud, longitud: origenMapa.longitud, titulo: origen, tipo: "origen" } : undefined}
+              destino={destinoMapa ? { latitud: destinoMapa.latitud, longitud: destinoMapa.longitud, titulo: destino, tipo: "destino" } : undefined}
+              rutaGeoJson={rutaMapa}
+            />
+            {!estimacion && !viaje && (
+              <div className="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-[400] rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-xs">
+                Ingresá origen y destino para trazar la ruta y calcular el precio dinámico.
               </div>
             )}
-            {estimacion && <div className="absolute bottom-3 left-3 flex gap-2 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-[11px] font-semibold shadow-sm">
-              <span className="text-emerald-700">● Origen</span><span className="text-orange-700">● Destino</span>
-            </div>}
+            {estimacion && (
+              <div className="pointer-events-none absolute bottom-3 left-3 z-[400] flex gap-3 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold shadow-xs">
+                <span className="text-blue-700">● Origen</span>
+                <span className="text-red-700">● Destino</span>
+              </div>
+            )}
           </div>
         </section>
       </div>
-    </main>
+    </section>
   );
 };

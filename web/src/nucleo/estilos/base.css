@@ -1,0 +1,57 @@
+:root {
+  --color-fondo: #f8fafc;
+  --color-superficie: #ffffff;
+  --color-borde: #e2e8f0;
+  --color-texto: #0f172a;
+  --color-texto-secundario: #475569;
+  --color-pasajero: #2563eb;
+  --color-chofer: #059669;
+  --color-operador: #d97706;
+  --color-admin: #4f46e5;
+  --color-peligro: #dc2626;
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+    background-color: var(--color-fondo);
+    color: var(--color-texto);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
+      "Open Sans", "Helvetica Neue", sans-serif;
+  }
+
+  ::selection {
+    background-color: #dbeafe;
+    color: #0f172a;
+  }
+
+  :focus-visible {
+    outline: 2px solid #0f172a;
+    outline-offset: 2px;
+  }
+}
+
+.numeros-tabulares {
+  font-variant-numeric: tabular-nums;
+}
+
+.objetivo-tactil {
+  min-height: 44px;
+}
+
+.leaflet-container {
+  font-family: inherit;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

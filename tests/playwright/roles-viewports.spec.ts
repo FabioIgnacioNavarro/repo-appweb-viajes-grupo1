@@ -92,7 +92,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.locator("header")).toContainText("PASAJERO");
     await expect(page.locator("h1")).toContainText(/Hola, Ana Gómez/i);
-    await expect(page.locator("text=Variante A: Precio Dinámico")).toBeVisible();
+    await expect(page.getByText(/Variante A/i).first()).toBeVisible();
 
     // Salir
     await page.click("button:has-text('Salir')");
@@ -183,7 +183,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     // Navegar a vista Pasajero
     await navAdmin.locator("button:has-text('Pasajero')").click();
     await expect(page).toHaveURL(/#\/pasajero/);
-    await expect(page.locator("text=Variante A: Precio Dinámico")).toBeVisible();
+    await expect(page.getByText(/Variante A/i).first()).toBeVisible();
 
     // Navegar a vista Chofer
     await navAdmin.locator("button:has-text('Chofer')").click();
