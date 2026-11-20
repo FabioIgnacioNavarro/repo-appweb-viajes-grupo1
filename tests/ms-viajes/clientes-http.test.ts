@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { ClienteServiciosHttp, ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
+import { conSpan, iniciarObservabilidad } from "../../src/compartido/observabilidad";
 import { ClienteFlotaHttp, ClienteTarifasHttp } from "../../src/ms-viajes/clientes-http";
 
 test("ms-viajes recibe una estimación de tarifas y reenvía el JWT", async () => {
@@ -55,4 +56,25 @@ test("cliente de servicio falla de forma segura cuando se agota el timeout", asy
   assert.equal(llamadas, 2);
   assert.deepEqual(eventos, [{ servicio: "ms-viajes", operacion: "demanda", resultado: "timeout_o_red" }]);
   assert.equal(JSON.stringify(eventos).includes("secreto-no-debe-loguearse"), false);
+});
+
+test("ARC-006: ClienteServiciosHttp propaga Authorization Bearer y encabezado W3C traceparent entre servicios", async () => {
+  iniciarObservabilidad("ms-viajes-test");
+  let headersCapturados = new Headers();
+  const http = new ClienteServiciosHttp({
+    obtener: async (_url, opciones) => {
+      headersCapturados = new Headers(opciones?.headers);
+      return Response.json({ ok: true });
+    },
+    registrarError: () => {}
+  });
+
+  await conSpan("viaje.confirmar", { "viaje.id": "v-1" }, async () => {
+    await http.getJson("ms-tarifas", "estimacion", "http://ms-tarifas:3001/estimaciones/e-1", "jwt-propagado-123");
+  });
+
+  assert.equal(headersCapturados.get("Authorization"), "Bearer jwt-propagado-123");
+  const traceparent = headersCapturados.get("traceparent");
+  assert.ok(traceparent, "Debe propagar encabezado traceparent W3C");
+  assert.match(traceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[0-3]$/);
 });

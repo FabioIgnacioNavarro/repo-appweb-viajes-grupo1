@@ -1,7 +1,7 @@
 # ADR 0016: Microservicios con autenticacion externa
 
-- Estado: propuesto
-- Fecha: 2026-10-15
+- Estado: Aceptado
+- Fecha: 2026-10-15 (actualizado 2026-11-19 en ARC-006)
 - Participantes: Grupo 1 — Echeverria, Borchichi y Navarro
 
 ## Contexto
@@ -24,17 +24,18 @@ Desventajas: agrega fallas de red, configuracion, observabilidad y consistencia 
 
 ## Decision
 
-Se propone trabajar con tres servicios logicos y desplegables (`ms-viajes`, `ms-tarifas` y `ms-flota`), cada uno con dominio, puertos y adaptadores propios. La integracion se hara mediante contratos HTTP documentados. PostgreSQL sera la fuente de verdad persistente; la separacion en una o dos bases queda sujeta al ADR de persistencia y no se implementa en esta etapa.
+Se trabaja con tres servicios logicos y desplegables (`ms-viajes`, `ms-tarifas` y `ms-flota`), cada uno con dominio hexagonal, puertos y adaptadores propios. La integracion se hace mediante contratos HTTP documentados con propagacion de `Authorization: Bearer` y trazabilidad W3C (`traceparent`). PostgreSQL es la fuente de verdad persistente con frontera estricta por servicio (esquemas/tablas aisladas; prohibido consultar tablas de otro microservicio o definir claves foraneas cruzadas).
 
-La autenticacion sera externa. Cada servicio recibira un JWT y validara su firma, emisor, audiencia, vencimiento y claims mediante un puerto `ValidadorToken`. No se implementa login propio ni se guardan credenciales de Firebase. Hasta que la catedra confirme el proveedor y sus claims, los tests usaran un adaptador falso.
+La autenticacion es externa. Cada servicio valida el JWT de entrada mediante el puerto `ValidadorToken` (`ValidadorJwtJwks` en modo real RS256 contra JWKS: algoritmo `RS256`, firma, `iss`, `aud`, `exp`, `nbf`, `sub` y claim configurable de rol), entregando al dominio un `ActorJWT` (`{ idUsuario, rol }`). No se implementa login propio ni se guardan credenciales de terceros. El adaptador offline (`JWT_MODO=falso`) queda restringido exclusivamente a desarrollo/pruebas locales y esta estrictamente bloqueado al arranque y en ejecucion cuando `NODE_ENV=production`.
 
-Redis no es obligatorio en el primer vertical. Solo se incorporara para idempotencia, expiracion, cache o coordinacion cuando exista un ADR que justifique su uso y defina la fuente de verdad.
+Redis no es obligatorio en el primer vertical. Solo se incorporara cuando exista un ADR con medicion de carga que justifique su uso.
 
-## Limites iniciales
+## Limites de servicio y fronteras de datos
 
-- `ms-viajes`: ciclo de vida, ofertas, asignacion, cancelacion, finalizacion, cobro simulado e idempotencia.
-- `ms-tarifas`: rutas, distancia, duracion, tarifa dinamica y estimaciones con vigencia.
-- `ms-flota`: choferes, habilitacion, disponibilidad, ubicaciones y candidatos cercanos.
+- `ms-viajes` (esquema PostgreSQL `viajes` en `src/ms-viajes/schema.sql`): ciclo de vida del viaje (`viaje`), ofertas con vigencia (`oferta`), claves de idempotencia (`idempotencia`) y cobros (`cobro`).
+- `ms-tarifas` (esquema PostgreSQL `tarifa` en `src/ms-tarifas/schema.sql`): zonas tarifarias (`zona_tarifaria`), reglas dinamicas versionadas (`regla_tarifa`) y estimaciones con snapshot de vigencia (`estimacion`).
+- `ms-flota` (esquema logico `flota` en `src/ms-flota/schema.sql`): perfil/habilitacion de choferes (`usuario_chofer`), ubicacion actual (`ubicacion_actual`) e historial (`ubicacion_historica`).
+- **Regla de aislamiento:** ningun servicio lee ni escribe directamente por SQL en las tablas de otro microservicio; toda coordinacion ocurre a traves de endpoints HTTP documentados (`/estimaciones/:id`, `/viajes/estimacion`, `/choferes/cercanos`, `/interno/demanda-por-zona`, `/interno/choferes/ocupados`, `/interno/viajes/ubicacion-chofer`).
 
 ## Consecuencias
 
