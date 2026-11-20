@@ -31,6 +31,22 @@ export interface ReglaTarifa {
   disponibilidad: FactorPorUmbral[];
   demandaPorMil: FactorPorUmbral[];
   horario: Record<FranjaHoraria, number>;
+  autorId?: string;
+  creadaEn?: Date;
+  activa?: boolean;
+}
+export interface NuevaReglaDemandaInput {
+  multiplicadorMinimoEscalado: number;
+  multiplicadorMaximoEscalado: number;
+  lluviaConPrecipitacionEscalado: number;
+  lluviaSinPrecipitacionEscalado: number;
+  disponibilidad: FactorPorUmbral[];
+  demandaPorMil: FactorPorUmbral[];
+  horario: Record<FranjaHoraria, number>;
+}
+export interface ReglaSnapshot {
+  activa: ReglaTarifa;
+  historial: ReglaTarifa[];
 }
 export interface FactoresPrecio {
   choferesDisponibles: number;
@@ -93,6 +109,10 @@ export interface FuenteDisponibilidad { contarDisponibles(zona: ZonaTarifaria, o
 export interface FuenteDemanda { contarSolicitudesActivas(zona: ZonaTarifaria): Promise<number>; }
 export interface RepositorioZonas { resolver(coordenada: Coordenada): Promise<ZonaTarifaria>; }
 export interface RepositorioReglas { obtenerActiva(): Promise<ReglaTarifa>; }
+export interface RepositorioVersionesRegla extends RepositorioReglas {
+  listarHistorial(): Promise<ReglaTarifa[]>;
+  crearNuevaVersion(datos: Omit<ReglaTarifa, "version" | "activa">): Promise<ReglaTarifa>;
+}
 export interface RepositorioEstimaciones {
   guardar(estimacion: EstimacionTarifa): Promise<void>;
   obtener(id: string): Promise<EstimacionTarifa | undefined>;
@@ -308,4 +328,159 @@ export class RepositorioEstimacionesMemoria implements RepositorioEstimaciones {
 export class GeneradorIdMemoria implements GeneradorId {
   private secuencia = 0;
   generar(): string { this.secuencia += 1; return `estimacion-${this.secuencia}`; }
+}
+
+const MIN_FACTOR_ESCALADO = 5_000;
+const MAX_FACTOR_ESCALADO = 50_000;
+const FRANJAS_VALIDAS: readonly FranjaHoraria[] = ["MADRUGADA", "MANANA", "SIESTA", "TARDE", "NOCHE"];
+
+function validarMultiplicadorEscalado(valor: number, campo: string): void {
+  if (!Number.isSafeInteger(valor) || valor < MIN_FACTOR_ESCALADO || valor > MAX_FACTOR_ESCALADO) {
+    throw new ErrorTarifas("REGLA_INVALIDA", `El multiplicador de ${campo} debe estar entre 0.50 y 5.00.`);
+  }
+}
+
+function validarCurvaUmbrales(
+  umbrales: FactorPorUmbral[],
+  nombre: string,
+  monotonia: "no_decreciente" | "no_creciente"
+): FactorPorUmbral[] {
+  if (!Array.isArray(umbrales) || umbrales.length === 0 || umbrales.length > 20) {
+    throw new ErrorTarifas("REGLA_INVALIDA", `La curva de ${nombre} debe tener entre 1 y 20 tramos.`);
+  }
+  const copia: FactorPorUmbral[] = umbrales.map((tramo) => ({
+    hasta: tramo.hasta,
+    multiplicadorEscalado: tramo.multiplicadorEscalado
+  }));
+  for (let i = 0; i < copia.length; i++) {
+    const actual = copia[i]!;
+    if (!Number.isSafeInteger(actual.hasta) || actual.hasta < 0) {
+      throw new ErrorTarifas("REGLA_INVALIDA", `El umbral de ${nombre} en el tramo ${i + 1} no es válido.`);
+    }
+    validarMultiplicadorEscalado(actual.multiplicadorEscalado, `${nombre} (tramo ${i + 1})`);
+    if (i > 0) {
+      const anterior = copia[i - 1]!;
+      if (actual.hasta <= anterior.hasta) {
+        throw new ErrorTarifas("REGLA_INVALIDA", `Los umbrales de ${nombre} deben crecer de forma estricta.`);
+      }
+      if (monotonia === "no_decreciente" && actual.multiplicadorEscalado < anterior.multiplicadorEscalado) {
+        throw new ErrorTarifas("REGLA_INVALIDA", `La curva de ${nombre} no puede disminuir al aumentar la presión de demanda.`);
+      }
+      if (monotonia === "no_creciente" && actual.multiplicadorEscalado > anterior.multiplicadorEscalado) {
+        throw new ErrorTarifas("REGLA_INVALIDA", `La curva de ${nombre} no puede aumentar cuando hay más choferes disponibles.`);
+      }
+    }
+  }
+  if (copia.at(-1)!.hasta !== Number.MAX_SAFE_INTEGER) {
+    throw new ErrorTarifas("REGLA_INVALIDA", `El último tramo de ${nombre} debe cubrir el rango abierto superior.`);
+  }
+  return copia;
+}
+
+/** Valida invariantes de la regla dinámica editable (límites, curvas monótonas, lluvia y franjas). */
+export function validarReglaDemandaInput(entrada: NuevaReglaDemandaInput): NuevaReglaDemandaInput {
+  validarMultiplicadorEscalado(entrada.multiplicadorMinimoEscalado, "multiplicador mínimo");
+  validarMultiplicadorEscalado(entrada.multiplicadorMaximoEscalado, "multiplicador máximo");
+  if (entrada.multiplicadorMinimoEscalado > entrada.multiplicadorMaximoEscalado) {
+    throw new ErrorTarifas("REGLA_INVALIDA", "El multiplicador mínimo no puede superar al máximo.");
+  }
+  validarMultiplicadorEscalado(entrada.lluviaConPrecipitacionEscalado, "lluvia con precipitación");
+  validarMultiplicadorEscalado(entrada.lluviaSinPrecipitacionEscalado, "lluvia sin precipitación");
+  if (entrada.lluviaConPrecipitacionEscalado < entrada.lluviaSinPrecipitacionEscalado) {
+    throw new ErrorTarifas("REGLA_INVALIDA", "El multiplicador con lluvia debe ser mayor o igual que sin lluvia.");
+  }
+  const disponibilidad = validarCurvaUmbrales(entrada.disponibilidad, "disponibilidad", "no_creciente");
+  const demandaPorMil = validarCurvaUmbrales(entrada.demandaPorMil, "demanda", "no_decreciente");
+  const horario = {} as Record<FranjaHoraria, number>;
+  for (const franja of FRANJAS_VALIDAS) {
+    const valor = entrada.horario?.[franja];
+    validarMultiplicadorEscalado(valor, `horario ${franja}`);
+    horario[franja] = valor;
+  }
+  return {
+    multiplicadorMinimoEscalado: entrada.multiplicadorMinimoEscalado,
+    multiplicadorMaximoEscalado: entrada.multiplicadorMaximoEscalado,
+    lluviaConPrecipitacionEscalado: entrada.lluviaConPrecipitacionEscalado,
+    lluviaSinPrecipitacionEscalado: entrada.lluviaSinPrecipitacionEscalado,
+    disponibilidad,
+    demandaPorMil,
+    horario
+  };
+}
+
+/** Caso de uso para consultar y versionar la regla dinámica sin mutar versiones previas. */
+export class GestionarReglaDemanda {
+  constructor(private readonly reglas: RepositorioVersionesRegla) {}
+
+  async consultar(): Promise<ReglaSnapshot> {
+    const [activa, historial] = await Promise.all([this.reglas.obtenerActiva(), this.reglas.listarHistorial()]);
+    return { activa: structuredClone(activa), historial: structuredClone(historial) };
+  }
+
+  async actualizar(
+    autorId: string,
+    entrada: Partial<NuevaReglaDemandaInput>,
+    ahora = new Date()
+  ): Promise<ReglaSnapshot> {
+    if (!autorId.trim()) {
+      throw new ErrorTarifas("ACTOR_INVALIDO", "Falta el identificador del administrador autenticado.");
+    }
+    const actual = await this.reglas.obtenerActiva();
+    const combinada = validarReglaDemandaInput({
+      multiplicadorMinimoEscalado: entrada.multiplicadorMinimoEscalado ?? actual.multiplicadorMinimoEscalado,
+      multiplicadorMaximoEscalado: entrada.multiplicadorMaximoEscalado ?? actual.multiplicadorMaximoEscalado,
+      lluviaConPrecipitacionEscalado: entrada.lluviaConPrecipitacionEscalado ?? actual.lluviaConPrecipitacionEscalado,
+      lluviaSinPrecipitacionEscalado: entrada.lluviaSinPrecipitacionEscalado ?? actual.lluviaSinPrecipitacionEscalado,
+      disponibilidad: entrada.disponibilidad ?? actual.disponibilidad,
+      demandaPorMil: entrada.demandaPorMil ?? actual.demandaPorMil,
+      horario: entrada.horario ? { ...actual.horario, ...entrada.horario } : actual.horario
+    });
+    const nueva = await this.reglas.crearNuevaVersion({
+      tarifaBasePesos: actual.tarifaBasePesos,
+      precioPorKilometroPesos: actual.precioPorKilometroPesos,
+      precioPorMinutoPesos: actual.precioPorMinutoPesos,
+      ...combinada,
+      autorId: autorId.trim(),
+      creadaEn: new Date(ahora)
+    });
+    const historial = await this.reglas.listarHistorial();
+    return { activa: structuredClone(nueva), historial: structuredClone(historial) };
+  }
+}
+
+export class RepositorioReglasMemoria implements RepositorioVersionesRegla {
+  private readonly versiones: ReglaTarifa[];
+
+  constructor(inicial: ReglaTarifa) {
+    this.versiones = [{
+      ...structuredClone(inicial),
+      autorId: inicial.autorId ?? "sistema",
+      creadaEn: inicial.creadaEn ? new Date(inicial.creadaEn) : new Date("2026-11-02T13:00:00.000Z"),
+      activa: true
+    }];
+  }
+
+  async obtenerActiva(): Promise<ReglaTarifa> {
+    const activa = this.versiones.find((r) => r.activa !== false) ?? this.versiones.at(-1);
+    if (!activa) throw new ErrorTarifas("REGLA_NO_CONFIGURADA", "No hay una regla de tarifa activa.");
+    return structuredClone(activa);
+  }
+
+  async listarHistorial(): Promise<ReglaTarifa[]> {
+    return structuredClone([...this.versiones].sort((a, b) => b.version - a.version));
+  }
+
+  async crearNuevaVersion(datos: Omit<ReglaTarifa, "version" | "activa">): Promise<ReglaTarifa> {
+    const ultimaVersion = this.versiones.reduce((max, item) => Math.max(max, item.version), 0);
+    for (const item of this.versiones) item.activa = false;
+    const creada: ReglaTarifa = {
+      ...structuredClone(datos),
+      version: ultimaVersion + 1,
+      activa: true,
+      autorId: datos.autorId ?? "sistema",
+      creadaEn: datos.creadaEn ? new Date(datos.creadaEn) : new Date()
+    };
+    this.versiones.push(creada);
+    return structuredClone(creada);
+  }
 }

@@ -8,9 +8,11 @@ CREATE TABLE IF NOT EXISTS tarifa.regla_tarifa (
   multiplicador_minimo_escalado INTEGER NOT NULL CHECK (multiplicador_minimo_escalado > 0),
   multiplicador_maximo_escalado INTEGER NOT NULL CHECK (multiplicador_maximo_escalado >= multiplicador_minimo_escalado),
   factores JSONB NOT NULL,
+  autor_id TEXT NOT NULL DEFAULT 'sistema',
   activa BOOLEAN NOT NULL DEFAULT TRUE,
   creada_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE tarifa.regla_tarifa ADD COLUMN IF NOT EXISTS autor_id TEXT NOT NULL DEFAULT 'sistema';
 CREATE UNIQUE INDEX IF NOT EXISTS ux_regla_tarifa_activa ON tarifa.regla_tarifa (activa) WHERE activa = TRUE;
 
 INSERT INTO tarifa.regla_tarifa (version, tarifa_base_pesos, precio_por_kilometro_pesos, precio_por_minuto_pesos, multiplicador_minimo_escalado, multiplicador_maximo_escalado, factores)

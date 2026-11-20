@@ -1,5 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
-import { ErrorTarifas, type EstimacionTarifa, type FactoresPrecio, type FranjaHoraria, type ReglaTarifa, type RepositorioEstimaciones, type RepositorioReglas, type RepositorioZonas, type ZonaTarifaria } from "./dominio";
+import { ErrorTarifas, type EstimacionTarifa, type FactoresPrecio, type FranjaHoraria, type ReglaTarifa, type RepositorioEstimaciones, type RepositorioVersionesRegla, type RepositorioZonas, type ZonaTarifaria } from "./dominio";
 
 type FilaRegla = {
   version: number;
@@ -15,6 +15,9 @@ type FilaRegla = {
     demanda_por_mil: ReglaTarifa["demandaPorMil"];
     horario: ReglaTarifa["horario"];
   };
+  autor_id?: string;
+  activa?: boolean;
+  creada_en?: Date | string;
 };
 
 type FilaZona = {
@@ -32,25 +35,90 @@ type FilaEstimacion = {
   factores_precio: FactoresPrecio; version_regla: number; creada_en: Date; vigente_hasta: Date;
 };
 
-export class RepositorioReglasPostgres implements RepositorioReglas {
+const COLUMNAS_REGLA = "version, tarifa_base_pesos, precio_por_kilometro_pesos, precio_por_minuto_pesos, multiplicador_minimo_escalado, multiplicador_maximo_escalado, factores, autor_id, activa, creada_en";
+
+function mapearFilaRegla(fila: FilaRegla): ReglaTarifa {
+  return {
+    version: fila.version,
+    tarifaBasePesos: BigInt(fila.tarifa_base_pesos),
+    precioPorKilometroPesos: BigInt(fila.precio_por_kilometro_pesos),
+    precioPorMinutoPesos: BigInt(fila.precio_por_minuto_pesos),
+    multiplicadorMinimoEscalado: fila.multiplicador_minimo_escalado,
+    multiplicadorMaximoEscalado: fila.multiplicador_maximo_escalado,
+    lluviaConPrecipitacionEscalado: fila.factores.lluvia_con_precipitacion_escalado,
+    lluviaSinPrecipitacionEscalado: fila.factores.lluvia_sin_precipitacion_escalado,
+    disponibilidad: fila.factores.disponibilidad,
+    demandaPorMil: fila.factores.demanda_por_mil,
+    horario: fila.factores.horario,
+    autorId: fila.autor_id ?? "sistema",
+    activa: fila.activa ?? true,
+    creadaEn: fila.creada_en ? new Date(fila.creada_en) : new Date(0)
+  };
+}
+
+export class RepositorioReglasPostgres implements RepositorioVersionesRegla {
   constructor(private readonly pool: Pool) {}
+
   async obtenerActiva(): Promise<ReglaTarifa> {
-    const resultado = await this.pool.query<FilaRegla>("SELECT version, tarifa_base_pesos, precio_por_kilometro_pesos, precio_por_minuto_pesos, multiplicador_minimo_escalado, multiplicador_maximo_escalado, factores FROM tarifa.regla_tarifa WHERE activa = TRUE ORDER BY version DESC LIMIT 1");
+    const resultado = await this.pool.query<FilaRegla>(
+      `SELECT ${COLUMNAS_REGLA} FROM tarifa.regla_tarifa WHERE activa = TRUE ORDER BY version DESC LIMIT 1`
+    );
     const fila = resultado.rows[0];
     if (!fila) throw new ErrorTarifas("REGLA_NO_CONFIGURADA", "No hay una regla de tarifa activa.");
-    return {
-      version: fila.version,
-      tarifaBasePesos: BigInt(fila.tarifa_base_pesos),
-      precioPorKilometroPesos: BigInt(fila.precio_por_kilometro_pesos),
-      precioPorMinutoPesos: BigInt(fila.precio_por_minuto_pesos),
-      multiplicadorMinimoEscalado: fila.multiplicador_minimo_escalado,
-      multiplicadorMaximoEscalado: fila.multiplicador_maximo_escalado,
-      lluviaConPrecipitacionEscalado: fila.factores.lluvia_con_precipitacion_escalado,
-      lluviaSinPrecipitacionEscalado: fila.factores.lluvia_sin_precipitacion_escalado,
-      disponibilidad: fila.factores.disponibilidad,
-      demandaPorMil: fila.factores.demanda_por_mil,
-      horario: fila.factores.horario
-    };
+    return mapearFilaRegla(fila);
+  }
+
+  async listarHistorial(): Promise<ReglaTarifa[]> {
+    const resultado = await this.pool.query<FilaRegla>(
+      `SELECT ${COLUMNAS_REGLA} FROM tarifa.regla_tarifa ORDER BY version DESC`
+    );
+    return resultado.rows.map(mapearFilaRegla);
+  }
+
+  async crearNuevaVersion(datos: Omit<ReglaTarifa, "version" | "activa">): Promise<ReglaTarifa> {
+    const cliente = await this.pool.connect();
+    try {
+      await cliente.query("BEGIN");
+      await cliente.query("LOCK TABLE tarifa.regla_tarifa IN EXCLUSIVE MODE");
+      const maxRes = await cliente.query<{ max_version: number }>(
+        "SELECT COALESCE(MAX(version), 0) AS max_version FROM tarifa.regla_tarifa"
+      );
+      const nuevaVersion = Number(maxRes.rows[0]?.max_version ?? 0) + 1;
+      await cliente.query("UPDATE tarifa.regla_tarifa SET activa = FALSE WHERE activa = TRUE");
+      const factores = {
+        lluvia_con_precipitacion_escalado: datos.lluviaConPrecipitacionEscalado,
+        lluvia_sin_precipitacion_escalado: datos.lluviaSinPrecipitacionEscalado,
+        disponibilidad: datos.disponibilidad,
+        demanda_por_mil: datos.demandaPorMil,
+        horario: datos.horario
+      };
+      const insertRes = await cliente.query<FilaRegla>(
+        `INSERT INTO tarifa.regla_tarifa (
+          version, tarifa_base_pesos, precio_por_kilometro_pesos, precio_por_minuto_pesos,
+          multiplicador_minimo_escalado, multiplicador_maximo_escalado, factores, autor_id, activa, creada_en
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,CURRENT_TIMESTAMP)
+        RETURNING ${COLUMNAS_REGLA}`,
+        [
+          nuevaVersion,
+          datos.tarifaBasePesos.toString(),
+          datos.precioPorKilometroPesos.toString(),
+          datos.precioPorMinutoPesos.toString(),
+          datos.multiplicadorMinimoEscalado,
+          datos.multiplicadorMaximoEscalado,
+          JSON.stringify(factores),
+          datos.autorId ?? "sistema"
+        ]
+      );
+      await cliente.query("COMMIT");
+      const fila = insertRes.rows[0];
+      if (!fila) throw new ErrorTarifas("ERROR_INTERNO", "No se pudo persistir la nueva versión de regla.");
+      return mapearFilaRegla(fila);
+    } catch (causa) {
+      await cliente.query("ROLLBACK");
+      throw causa;
+    } finally {
+      cliente.release();
+    }
   }
 }
 

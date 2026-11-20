@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
-  calcularPrecioPesos, CrearEstimacion, GeneradorIdMemoria, RepositorioEstimacionesMemoria,
+  calcularPrecioPesos, CrearEstimacion, GeneradorIdMemoria, GestionarReglaDemanda,
+  RepositorioEstimacionesMemoria, RepositorioReglasMemoria,
   type CalculadorRuta, type FuenteClima, type FuenteDemanda, type FuenteDisponibilidad,
   type ObservacionClima, type ReglaTarifa, type RepositorioReglas, type RepositorioZonas,
   type RutaCalculada, type ZonaTarifaria
@@ -161,4 +162,68 @@ test("FuenteClimaOpenMeteo cachea por zona durante 15 minutos y consulta de nuev
   const tercera = await fuente.consultar(zona);
   assert.equal(tercera.precipitacionMm, 0);
   assert.equal(llamadas, 2);
+});
+
+test("GestionarReglaDemanda versiona nuevas reglas sin alterar estimaciones previas y valida la curva", async () => {
+  const repoReglas = new RepositorioReglasMemoria(regla);
+  const estimaciones = new RepositorioEstimacionesMemoria();
+  const ahora = new Date("2026-11-19T15:00:00Z");
+
+  // 1. Estimación creada con v3 conserva versionRegla=3 y precio anterior
+  const estimadorCaso = new CrearEstimacion(
+    { async calcular() { return { distanciaMetros: 2500, duracionSegundos: 300, proveedor: "OSRM" }; } },
+    { async consultar() { return { precipitacionMm: 0, observadaEn: new Date(ahora.getTime() - 60_000), fuente: "FAKE" }; } },
+    { async contarDisponibles() { return 5; } },
+    { async contarSolicitudesActivas() { return 6; } }, // 6*1000/5 = 1200 -> 1.1x en v3
+    { async resolver() { return zona; } },
+    repoReglas,
+    estimaciones,
+    new GeneradorIdMemoria()
+  );
+  const estV1 = await estimadorCaso.ejecutar("pasajero-1", zona.centro, zona.centro, ahora);
+  assert.equal(estV1.versionRegla, 3);
+
+  // 2. Publicar v4 sube demanda y autor del servidor
+  const gestor = new GestionarReglaDemanda(repoReglas);
+  const snapshot = await gestor.actualizar("admin-99", {
+    multiplicadorMinimoEscalado: 8_000,
+    multiplicadorMaximoEscalado: 25_000,
+    demandaPorMil: [
+      { hasta: 999, multiplicadorEscalado: 10_000 },
+      { hasta: 1999, multiplicadorEscalado: 14_000 },
+      { hasta: Number.MAX_SAFE_INTEGER, multiplicadorEscalado: 18_000 }
+    ]
+  }, new Date("2026-11-19T16:00:00Z"));
+
+  assert.equal(snapshot.activa.version, 4);
+  assert.equal(snapshot.activa.autorId, "admin-99");
+  assert.equal(snapshot.historial.length, 2);
+  assert.equal(snapshot.historial[1]?.version, 3);
+  assert.equal(snapshot.historial[1]?.activa, false);
+
+  // 3. Nueva estimación usa v4, mientras estV1 guardada no cambia
+  const estV2 = await estimadorCaso.ejecutar("pasajero-1", zona.centro, zona.centro, ahora);
+  assert.equal(estV2.versionRegla, 4);
+  assert.ok(estV2.precioEstimado > estV1.precioEstimado);
+  const estV1Guardada = await estimaciones.obtener(estV1.id);
+  assert.equal(estV1Guardada?.versionRegla, 3);
+  assert.equal(estV1Guardada?.precioEstimado, estV1.precioEstimado);
+
+  // 4. Rechaza curva inválida (no monótona o sin cierre infinito)
+  await assert.rejects(
+    () => gestor.actualizar("admin-99", {
+      demandaPorMil: [
+        { hasta: 999, multiplicadorEscalado: 15_000 },
+        { hasta: Number.MAX_SAFE_INTEGER, multiplicadorEscalado: 11_000 }
+      ]
+    }),
+    (err: { codigo?: string }) => err.codigo === "REGLA_INVALIDA"
+  );
+  await assert.rejects(
+    () => gestor.actualizar("admin-99", {
+      multiplicadorMinimoEscalado: 20_000,
+      multiplicadorMaximoEscalado: 10_000
+    }),
+    (err: { codigo?: string }) => err.codigo === "REGLA_INVALIDA"
+  );
 });

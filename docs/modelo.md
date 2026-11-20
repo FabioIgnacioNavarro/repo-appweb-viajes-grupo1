@@ -313,20 +313,20 @@ La primera falla se simula en el adaptador de pagos falso. El pasajero titular, 
 ### `configuracion_tarifa`
 
 ```text
-configuracion_tarifa
+configuracion_tarifa (tarifa.regla_tarifa)
 --------------------
-id PK
-tarifa_base
-precio_por_kilometro
-precio_por_minuto
-sensibilidad_demanda
-sensibilidad_disponibilidad
-multiplicador_minimo
-multiplicador_maximo
-activo
-fecha_creacion
-fecha_actualizacion
+version PK
+tarifa_base_pesos
+precio_por_kilometro_pesos
+precio_por_minuto_pesos
+multiplicador_minimo_escalado
+multiplicador_maximo_escalado
+factores JSONB
+autor_id
+activa
+creada_en
 ```
+Cada actualización desde administración (`PUT /reglas/demanda`) inserta una nueva versión inmutable con `version = MAX(version) + 1`, `autor_id` extraído del JWT del administrador y `creada_en` del servidor, desactivando la versión anterior sin alterar las estimaciones ni los viajes confirmados con versiones previas.
 
 ### `zona`
 

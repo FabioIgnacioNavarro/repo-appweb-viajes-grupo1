@@ -1,10 +1,21 @@
 import express, { type NextFunction, type Request, type Response } from "express";
-import { CrearEstimacion, ErrorTarifas, type PuntoUbicacion, type RepositorioEstimaciones } from "./dominio";
+import {
+  CrearEstimacion,
+  ErrorTarifas,
+  GestionarReglaDemanda,
+  type FactorPorUmbral,
+  type FranjaHoraria,
+  type NuevaReglaDemandaInput,
+  type PuntoUbicacion,
+  type ReglaTarifa,
+  type RepositorioEstimaciones
+} from "./dominio";
 import type { ActorJWT, ValidadorJwtJwks } from "../compartido/jwt";
 
 export interface DependenciasTarifas {
   estimar: (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => ReturnType<CrearEstimacion["ejecutar"]>;
   estimaciones: RepositorioEstimaciones;
+  reglas?: GestionarReglaDemanda;
   validador: Pick<ValidadorJwtJwks, "validar">;
   comprobarBase: () => Promise<void>;
 }
@@ -37,7 +48,7 @@ function error(res: Response, causa: unknown): void {
       });
       return;
     }
-    const status = causa.codigo === "COORDENADAS_INVALIDAS" || causa.codigo === "DIRECCION_INVALIDA"
+    const status = causa.codigo === "COORDENADAS_INVALIDAS" || causa.codigo === "DIRECCION_INVALIDA" || causa.codigo === "ENTRADA_INVALIDA"
       ? 400
       : causa.codigo === "DIRECCION_NO_ENCONTRADA"
         ? 404
@@ -45,6 +56,131 @@ function error(res: Response, causa: unknown): void {
     res.status(status).json({ error: { codigo: causa.codigo, mensaje: causa.message, detalles: {} } }); return;
   }
   res.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "Ocurrió un error interno.", detalles: {} } });
+}
+
+const CAMPOS_REGLA_PERMITIDOS = new Set([
+  "multiplicador_minimo",
+  "multiplicador_maximo",
+  "lluvia_con_precipitacion",
+  "lluvia_sin_precipitacion",
+  "disponibilidad",
+  "demanda_por_mil",
+  "horario"
+]);
+const FRANJAS_HORARIAS: readonly FranjaHoraria[] = ["MADRUGADA", "MANANA", "SIESTA", "TARDE", "NOCHE"];
+
+function escalarMultiplicador(valor: unknown, campo: string): number {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) {
+    throw new ErrorTarifas("ENTRADA_INVALIDA", `${campo} debe ser un número válido.`);
+  }
+  const escalado = Math.round(valor * 10_000);
+  if (Math.abs(valor * 10_000 - escalado) > 1e-6) {
+    throw new ErrorTarifas("ENTRADA_INVALIDA", `${campo} admite como máximo 4 decimales.`);
+  }
+  return escalado;
+}
+
+function parsearCurvaDto(valor: unknown, campo: string): FactorPorUmbral[] {
+  if (!Array.isArray(valor)) {
+    throw new ErrorTarifas("ENTRADA_INVALIDA", `${campo} debe ser una lista de tramos.`);
+  }
+  return valor.map((item, idx) => {
+    if (!objeto(item) || Object.keys(item).some((k) => k !== "hasta" && k !== "multiplicador")) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", `Tramo ${idx + 1} de ${campo} contiene campos inválidos.`);
+    }
+    const hastaCrudo = item.hasta;
+    let hasta: number;
+    if (hastaCrudo === null) {
+      hasta = Number.MAX_SAFE_INTEGER;
+    } else if (typeof hastaCrudo === "number" && Number.isSafeInteger(hastaCrudo) && hastaCrudo >= 0) {
+      hasta = hastaCrudo;
+    } else {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", `El umbral 'hasta' del tramo ${idx + 1} de ${campo} debe ser un entero >= 0 o null.`);
+    }
+    return {
+      hasta,
+      multiplicadorEscalado: escalarMultiplicador(item.multiplicador, `${campo}[${idx}].multiplicador`)
+    };
+  });
+}
+
+function parsearReglaDemandaBody(cuerpo: unknown): Partial<NuevaReglaDemandaInput> {
+  if (!objeto(cuerpo)) {
+    throw new ErrorTarifas("ENTRADA_INVALIDA", "El cuerpo debe ser un objeto JSON.");
+  }
+  const claves = Object.keys(cuerpo);
+  if (claves.length === 0 || claves.some((c) => !CAMPOS_REGLA_PERMITIDOS.has(c))) {
+    throw new ErrorTarifas(
+      "ENTRADA_INVALIDA",
+      "Solo se pueden editar los multiplicadores y umbrales dinámicos; autor, fecha, versión y precio son definidos por el servidor."
+    );
+  }
+  if (cuerpo.multiplicador_minimo === undefined || cuerpo.multiplicador_maximo === undefined || cuerpo.demanda_por_mil === undefined) {
+    throw new ErrorTarifas("ENTRADA_INVALIDA", "multiplicador_minimo, multiplicador_maximo y demanda_por_mil son obligatorios.");
+  }
+  const resultado: Partial<NuevaReglaDemandaInput> = {
+    multiplicadorMinimoEscalado: escalarMultiplicador(cuerpo.multiplicador_minimo, "multiplicador_minimo"),
+    multiplicadorMaximoEscalado: escalarMultiplicador(cuerpo.multiplicador_maximo, "multiplicador_maximo"),
+    demandaPorMil: parsearCurvaDto(cuerpo.demanda_por_mil, "demanda_por_mil")
+  };
+  if (cuerpo.lluvia_con_precipitacion !== undefined) {
+    resultado.lluviaConPrecipitacionEscalado = escalarMultiplicador(cuerpo.lluvia_con_precipitacion, "lluvia_con_precipitacion");
+  }
+  if (cuerpo.lluvia_sin_precipitacion !== undefined) {
+    resultado.lluviaSinPrecipitacionEscalado = escalarMultiplicador(cuerpo.lluvia_sin_precipitacion, "lluvia_sin_precipitacion");
+  }
+  if (cuerpo.disponibilidad !== undefined) {
+    resultado.disponibilidad = parsearCurvaDto(cuerpo.disponibilidad, "disponibilidad");
+  }
+  if (cuerpo.horario !== undefined) {
+    if (!objeto(cuerpo.horario)) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "horario debe ser un objeto con las franjas horarias.");
+    }
+    const horarioClaves = Object.keys(cuerpo.horario);
+    if (horarioClaves.some((k) => !FRANJAS_HORARIAS.includes(k as FranjaHoraria))) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "horario contiene una franja horaria desconocida.");
+    }
+    const horario = {} as Record<FranjaHoraria, number>;
+    for (const franja of FRANJAS_HORARIAS) {
+      if (cuerpo.horario[franja] === undefined) {
+        throw new ErrorTarifas("ENTRADA_INVALIDA", `Falta la franja horaria ${franja}.`);
+      }
+      horario[franja] = escalarMultiplicador(cuerpo.horario[franja], `horario.${franja}`);
+    }
+    resultado.horario = horario;
+  }
+  return resultado;
+}
+
+function reglaDto(r: ReglaTarifa) {
+  return {
+    version: r.version,
+    autor: r.autorId ?? "sistema",
+    creada_en: (r.creadaEn ?? new Date(0)).toISOString(),
+    activa: r.activa ?? true,
+    tarifa_base_pesos: r.tarifaBasePesos.toString(),
+    precio_por_kilometro_pesos: r.precioPorKilometroPesos.toString(),
+    precio_por_minuto_pesos: r.precioPorMinutoPesos.toString(),
+    multiplicador_minimo: r.multiplicadorMinimoEscalado / 10_000,
+    multiplicador_maximo: r.multiplicadorMaximoEscalado / 10_000,
+    lluvia_con_precipitacion: r.lluviaConPrecipitacionEscalado / 10_000,
+    lluvia_sin_precipitacion: r.lluviaSinPrecipitacionEscalado / 10_000,
+    disponibilidad: r.disponibilidad.map((u) => ({
+      hasta: u.hasta >= Number.MAX_SAFE_INTEGER ? null : u.hasta,
+      multiplicador: u.multiplicadorEscalado / 10_000
+    })),
+    demanda_por_mil: r.demandaPorMil.map((u) => ({
+      hasta: u.hasta >= Number.MAX_SAFE_INTEGER ? null : u.hasta,
+      multiplicador: u.multiplicadorEscalado / 10_000
+    })),
+    horario: {
+      MADRUGADA: r.horario.MADRUGADA / 10_000,
+      MANANA: r.horario.MANANA / 10_000,
+      SIESTA: r.horario.SIESTA / 10_000,
+      TARDE: r.horario.TARDE / 10_000,
+      NOCHE: r.horario.NOCHE / 10_000
+    }
+  };
 }
 function dto(e: NonNullable<Awaited<ReturnType<RepositorioEstimaciones["obtener"]>>>) {
   const f = e.factoresPrecio;
@@ -77,6 +213,35 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       if (req.actor?.idUsuario !== e.pasajeroId && !["SOPORTE", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) { res.status(403).json({ error: { codigo: "ESTIMACION_NO_AUTORIZADA", mensaje: "No podés consultar esta estimación.", detalles: {} } }); return; }
       if (e.vigenteHasta.getTime() <= Date.now()) { res.status(409).json({ error: { codigo: "ESTIMACION_VENCIDA", mensaje: "La estimación ya venció.", detalles: {} } }); return; }
       res.json(dto(e));
+    } catch (causa) { error(res, causa); }
+  });
+  router.get("/reglas/demanda", async (req, res) => {
+    if (req.actor?.rol !== "ADMINISTRADOR") {
+      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un administrador puede consultar la configuración de reglas de demanda.", detalles: {} } });
+      return;
+    }
+    if (!deps.reglas) {
+      res.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "La gestión de reglas de demanda no está configurada.", detalles: {} } });
+      return;
+    }
+    try {
+      const snapshot = await deps.reglas.consultar();
+      res.json({ activa: reglaDto(snapshot.activa), historial: snapshot.historial.map(reglaDto) });
+    } catch (causa) { error(res, causa); }
+  });
+  router.put("/reglas/demanda", async (req, res) => {
+    if (req.actor?.rol !== "ADMINISTRADOR" || !req.actor.idUsuario) {
+      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un administrador puede modificar las reglas de demanda.", detalles: {} } });
+      return;
+    }
+    if (!deps.reglas) {
+      res.status(500).json({ error: { codigo: "ERROR_INTERNO", mensaje: "La gestión de reglas de demanda no está configurada.", detalles: {} } });
+      return;
+    }
+    try {
+      const entrada = parsearReglaDemandaBody(req.body);
+      const snapshot = await deps.reglas.actualizar(req.actor.idUsuario, entrada);
+      res.json({ activa: reglaDto(snapshot.activa), historial: snapshot.historial.map(reglaDto) });
     } catch (causa) { error(res, causa); }
   });
   return router;
