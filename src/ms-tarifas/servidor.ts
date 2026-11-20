@@ -8,8 +8,7 @@ import { randomUUID } from "node:crypto";
 import { crearPoolTarifas, RepositorioEstimacionesPostgres, RepositorioReglasPostgres, RepositorioZonasPostgres } from "./postgres";
 import { CrearEstimacion, GestionarReglaDemanda, type PuntoUbicacion } from "./dominio";
 import { FuenteClimaFalsa, FuenteClimaOpenMeteo, FuenteDemandaHttp, FuenteFlotaHttp, crearCalculadorRuta, crearGeocodificador } from "./proveedores";
-import { ValidadorJwtJwks } from "../compartido/jwt";
-import { ValidadorJwtFalso } from "../compartido/jwt-falso";
+import { crearValidadorJwtDesdeEntorno } from "../compartido/jwt-falso";
 import { exigirBaseInterna } from "../compartido/cliente-servicios";
 import { crearRouterTarifas } from "./http";
 
@@ -19,7 +18,7 @@ const pool = crearPoolTarifas();
 const estimaciones = new RepositorioEstimacionesPostgres(pool);
 const repositorioReglas = new RepositorioReglasPostgres(pool);
 const gestionarRegla = new GestionarReglaDemanda(repositorioReglas);
-const validador = crearValidador();
+const validador = crearValidadorJwtDesdeEntorno();
 const timeoutServicio = Number(process.env.TIMEOUT_SERVICIO_MS ?? "1500");
 const timeoutProveedor = Number(process.env.TIMEOUT_PROVEEDOR_MS ?? "1800");
 const reintentos = Number(process.env.REINTENTOS_SERVICIO ?? "1");
@@ -48,11 +47,3 @@ const servidor = app.listen(puerto, () => console.log(`ms-tarifas disponible en 
 async function cerrar(): Promise<void> { servidor.close(); await pool.end(); }
 process.once("SIGTERM", () => { void cerrar(); });
 process.once("SIGINT", () => { void cerrar(); });
-function requerido(nombre: string): string { const valor = process.env[nombre]; if (!valor) throw new Error(`${nombre} es obligatoria.`); return valor; }
-function crearValidador() {
-  if (process.env.JWT_MODO === "falso") {
-    if (process.env.NODE_ENV === "production") throw new Error("JWT_MODO=falso no está permitido en producción.");
-    return new ValidadorJwtFalso();
-  }
-  return new ValidadorJwtJwks({ jwksUrl: requerido("JWT_JWKS_URL"), emisor: requerido("JWT_ISSUER"), audiencia: requerido("JWT_AUDIENCE"), campoRol: process.env.JWT_ROLE_CLAIM ?? "rol" });
-}

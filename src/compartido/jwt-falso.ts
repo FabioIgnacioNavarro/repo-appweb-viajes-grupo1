@@ -1,4 +1,4 @@
-import type { ActorJWT, RolJWT, ValidadorToken } from "./jwt";
+import { ValidadorJwtJwks, type ActorJWT, type RolJWT, type ValidadorToken } from "./jwt";
 
 const ROLES: RolJWT[] = ["PASAJERO", "CHOFER", "SOPORTE", "ADMINISTRADOR"];
 
@@ -22,6 +22,27 @@ export class ValidadorJwtFalso implements ValidadorToken {
     validarActor(actor);
     return actor;
   }
+}
+
+/** Construye el validador de JWT según variables de entorno, bloqueando `JWT_MODO=falso` en producción. */
+export function crearValidadorJwtDesdeEntorno(env: NodeJS.ProcessEnv = process.env): ValidadorToken {
+  if (env.JWT_MODO === "falso") {
+    if (env.NODE_ENV === "production") {
+      throw new Error("JWT_MODO=falso no está permitido en producción.");
+    }
+    return new ValidadorJwtFalso();
+  }
+  const requerido = (nombre: string): string => {
+    const valor = env[nombre];
+    if (!valor) throw new Error(`${nombre} es obligatoria cuando JWT_MODO no es falso.`);
+    return valor;
+  };
+  return new ValidadorJwtJwks({
+    jwksUrl: requerido("JWT_JWKS_URL"),
+    emisor: requerido("JWT_ISSUER"),
+    audiencia: requerido("JWT_AUDIENCE"),
+    campoRol: env.JWT_ROLE_CLAIM ?? "rol"
+  });
 }
 
 function esObjeto(valor: unknown): valor is Record<string, unknown> { return typeof valor === "object" && valor !== null; }

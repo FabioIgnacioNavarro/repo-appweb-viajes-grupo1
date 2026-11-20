@@ -55,22 +55,20 @@ Las operaciones con efectos no repetibles deben aceptar `Clave-Idempotencia`. La
 
 Un cambio incompatible requiere actualizar `docs/api.md`, agregar o modificar un ADR y registrar pruebas de contrato. Si el cambio afecta otro módulo, debe explicitarse en el pull request.
 
-## Servicios y actor autenticado
+## Servicios, fronteras de datos y actor autenticado
 
-La primera separacion de responsabilidades queda definida por el ADR 0016. Los servicios no
-implementan login: reciben un JWT en `Authorization: Bearer <token>` y entregan sus claims a los
-casos de uso mediante un puerto de validacion. El contrato interno minimo del actor es:
+La separacion de responsabilidades y datos queda fijada en el ADR 0016 y el ADR 0030. Cada microservicio es dueño exclusivo de sus tablas/esquemas en PostgreSQL (`viajes` en `ms-viajes`, `tarifa` en `ms-tarifas`, y las tablas de flota en `ms-flota`); está prohibido ejecutar consultas SQL o definir claves foráneas entre tablas de distinto servicio. Toda coordinación ocurre por contratos HTTP internos detrás de la red privada de Compose.
+
+Los servicios no implementan login: reciben un JWT en `Authorization: Bearer <token>` y lo validan mediante el puerto `ValidadorToken`. En entorno real (`ValidadorJwtJwks` vía JWKS con algoritmo `RS256`), se exige firma asimétrica válida, emisor (`iss`), audiencia (`aud`), vigencia (`exp`/`nbf`), sujeto (`sub`) y rol (`JWT_ROLE_CLAIM`). El adaptador de desarrollo (`JWT_MODO=falso`) está **estrictamente bloqueado** cuando `NODE_ENV=production` tanto en la inicialización de cada servicio (`crearValidadorJwtDesdeEntorno`) como dentro de `ValidadorJwtFalso.validar()`. El contrato del actor entregado al dominio es:
 
 ```text
-ActorAutenticado {
-  id_usuario: string
-  rol: PASAJERO | CHOFER | SOPORTE | ADMINISTRADOR
+ActorJWT / ActorAutenticado {
+  idUsuario: string
+  rol: "PASAJERO" | "CHOFER" | "SOPORTE" | "ADMINISTRADOR"
 }
 ```
 
-Mientras no exista una especificacion oficial del emisor, algoritmo y claims, los adaptadores de
-prueba pueden construir este actor directamente. Un servicio debe rechazar el pedido si el token
-esta vencido, tiene un emisor o audiencia incorrectos, o no permite la operacion solicitada.
+Las llamadas servicio a servicio ejecutadas con `ClienteServiciosHttp` reenvían obligatoriamente el encabezado `Authorization: Bearer <token>` del actor y propagan el contexto de traza OpenTelemetry en el encabezado W3C `traceparent`. Un servicio debe rechazar el pedido (`401` o `403`) si el token falta, está vencido, tiene firma/emisor/audiencia incorrectos o no autoriza la operación solicitada.
 
 Los contratos de servicio se mantienen asi:
 

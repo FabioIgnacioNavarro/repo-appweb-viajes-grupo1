@@ -6,11 +6,9 @@ iniciarObservabilidad("ms-flota");
 
 import { randomUUID } from "node:crypto";
 import { crearRouterFlota } from "./http";
-import type { ValidadorToken } from "../compartido/jwt";
 import { AutorizadorUbicacionBasico, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioViajesActivosMemoria } from "./dominio";
 import { crearPoolPostgres, RepositorioChoferesPostgres, RepositorioUbicacionesPostgres } from "./postgres";
-import { ValidadorJwtFalso } from "../compartido/jwt-falso";
-import { ValidadorJwtJwks } from "../compartido/jwt";
+import { crearValidadorJwtDesdeEntorno } from "../compartido/jwt-falso";
 import { ClienteServiciosHttp, exigirBaseInterna } from "../compartido/cliente-servicios";
 import { RepositorioViajesActivosHttp } from "./viajes-http";
 import { iniciarMedicionProcesoFlota } from "./mediciones";
@@ -24,7 +22,7 @@ const detenerMedicionProceso = iniciarMedicionProcesoFlota();
 const posiciones = new Map();
 const choferes = pool ? new RepositorioChoferesPostgres(pool) : new RepositorioChoferesMemoria(posiciones);
 const ubicaciones = pool ? new RepositorioUbicacionesPostgres(pool, randomUUID) : new RepositorioUbicacionesMemoria(posiciones);
-const validador = crearValidador();
+const validador = crearValidadorJwtDesdeEntorno();
 const aplicacion = express();
 aplicacion.use(middlewareObservabilidad("ms-flota"));
 
@@ -42,12 +40,3 @@ const servidor = aplicacion.listen(puerto, () => console.log(`ms-flota disponibl
 async function cerrar(): Promise<void> { detenerMedicionProceso(); servidor.close(); await pool?.end(); }
 process.once("SIGTERM", () => { void cerrar(); });
 process.once("SIGINT", () => { void cerrar(); });
-
-function crearValidador(): ValidadorToken {
-  if (process.env.JWT_MODO === "falso") {
-    if (process.env.NODE_ENV === "production") throw new Error("JWT_MODO=falso no está permitido en producción.");
-    return new ValidadorJwtFalso();
-  }
-  return new ValidadorJwtJwks({ jwksUrl: requerido("JWT_JWKS_URL"), emisor: requerido("JWT_ISSUER"), audiencia: requerido("JWT_AUDIENCE"), campoRol: process.env.JWT_ROLE_CLAIM ?? "rol" });
-}
-function requerido(nombre: string): string { const valor = process.env[nombre]; if (!valor) throw new Error(`${nombre} es obligatoria cuando JWT_MODO no es falso.`); return valor; }

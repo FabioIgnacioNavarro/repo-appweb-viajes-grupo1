@@ -5,8 +5,7 @@ import { iniciarObservabilidad, middlewareObservabilidad } from "../compartido/o
 
 iniciarObservabilidad("ms-viajes");
 
-import { ValidadorJwtJwks } from "../compartido/jwt";
-import { ValidadorJwtFalso } from "../compartido/jwt-falso";
+import { crearValidadorJwtDesdeEntorno } from "../compartido/jwt-falso";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarCobro, ConsultarOfertasChofer, ConfirmarViaje,
   ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, ListarViajesOperador, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta, ReintentarCobro,
@@ -34,14 +33,7 @@ import { PasarelaPagosFalsa } from "./pasarela-pagos-falsa";
 
 const puerto = Number(process.env.PUERTO_MS_VIAJES ?? 3000);
 if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PUERTO_MS_VIAJES debe ser un entero entre 1 y 65535.");
-const requerido = (nombre: string): string => { const valor = process.env[nombre]; if (!valor) throw new Error(`${nombre} es obligatoria.`); return valor; };
-const token = (() => {
-  if (process.env.JWT_MODO === "falso") {
-    if (process.env.NODE_ENV === "production") throw new Error("JWT_MODO=falso no está permitido en producción.");
-    return new ValidadorJwtFalso();
-  }
-  return new ValidadorJwtJwks({ jwksUrl: requerido("JWT_JWKS_URL"), emisor: requerido("JWT_ISSUER"), audiencia: requerido("JWT_AUDIENCE"), campoRol: process.env.JWT_ROLE_CLAIM ?? "rol" });
-})();
+const token = crearValidadorJwtDesdeEntorno();
 const aplicacion = express();
 const servidor = createServer(aplicacion);
 const eventosTiempoReal = new AdaptadorWebSocketTiempoReal(servidor, token);
