@@ -11,6 +11,7 @@ import {
   type RepositorioEstimaciones
 } from "./dominio";
 import type { ActorJWT, ValidadorJwtJwks } from "../compartido/jwt";
+import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 
 export interface DependenciasTarifas {
   estimar: (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => ReturnType<CrearEstimacion["ejecutar"]>;
@@ -244,5 +245,6 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       res.json({ activa: reglaDto(snapshot.activa), historial: snapshot.historial.map(reglaDto) });
     } catch (causa) { error(res, causa); }
   });
+  router.use(manejarErrorCuerpoHttp);
   return router;
 }

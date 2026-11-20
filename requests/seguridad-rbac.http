@@ -174,3 +174,31 @@ Authorization: Bearer {{emitirTokenChofer.response.body.token}}
 # Esperado: Si el viaje existe retorna 200 OK, si no existe retorna 404 (NO retorna 403)
 GET {{gateway}}/viajes/viaje-privado-ajeno-999
 Authorization: Bearer {{emitirTokenAdmin.response.body.token}}
+
+
+### ----------------------------------------------------------------------------
+### SECCIÓN 4: SEG-003 - Encabezados de seguridad, rutas internas y límites de entrada
+### ----------------------------------------------------------------------------
+
+### 4.1 Verificar encabezados CSP, X-Frame-Options, nosniff y Referrer-Policy en Gateway
+# Esperado: HTTP 200 OK con Content-Security-Policy, X-Frame-Options: DENY, X-Content-Type-Options: nosniff
+GET {{gateway}}/health
+
+### 4.2 Bloqueo de ruta interna desde el exterior (Gateway Nginx)
+# Esperado: HTTP 404 Not Found -> error.codigo = "RUTA_NO_ENCONTRADA"
+GET {{gateway}}/interno/demanda-por-zona?zona_id=resistencia
+Authorization: Bearer {{emitirTokenPasajero.response.body.token}}
+
+### 4.3 Bloqueo de consulta interna de estimaciones desde el exterior (Gateway Nginx)
+# Esperado: HTTP 404 Not Found -> error.codigo = "RUTA_NO_ENCONTRADA"
+GET {{gateway}}/estimaciones/est-inexistente-1
+Authorization: Bearer {{emitirTokenPasajero.response.body.token}}
+
+### 4.4 Rechazo de JSON malformado sin filtrar trazas de Express
+# Esperado: HTTP 400 Bad Request -> error.codigo = "ENTRADA_INVALIDA"
+POST {{gateway}}/viajes/estimacion
+Authorization: Bearer {{emitirTokenPasajero.response.body.token}}
+Content-Type: application/json
+
+{"origen":
+

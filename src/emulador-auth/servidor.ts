@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 import {
   ACTORES_DEMO,
   emitirTokenJwt,
@@ -13,7 +14,8 @@ const audiencia = process.env.JWT_AUDIENCE ?? "demo-viajes-grupo1";
 
 export function crearAplicacionEmulador() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "10kb" }));
+  app.use(manejarErrorCuerpoHttp);
 
   // Inicializa las claves RSA al arrancar
   const claves = obtenerOInicializarClaves();

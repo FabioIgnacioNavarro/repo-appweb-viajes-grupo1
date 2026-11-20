@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import type { ValidadorToken } from "../compartido/jwt";
+import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 import { BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, type ActorAutenticado, type AutorizadorUbicacion, type RepositorioChoferes, type RepositorioUbicaciones, type RepositorioViajesActivos } from "./dominio";
 
 export interface PublicadorUbicacionViaje { publicar(actor: ActorAutenticado, ubicacion: { latitud: number; longitud: number; actualizadoAt: Date }, jwt: string): Promise<void>; }
@@ -50,6 +51,7 @@ export function crearRouterFlota(dependencias: DependenciasFlota): express.Route
   router.get("/choferes/:idChofer", async (pedido, respuesta) => {
     try { const resultado = await new ConsultarUbicacionChofer(dependencias.choferes, dependencias.ubicaciones, dependencias.autorizador).ejecutar(actorDe(pedido), pedido.params.idChofer); respuesta.status(200).json({ chofer: serializarChofer(resultado.chofer), ubicacion: resultado.ubicacion ? serializarUbicacion(resultado.ubicacion) : null }); } catch (error) { errorHttp(error, respuesta); }
   });
+  router.use(manejarErrorCuerpoHttp);
   return router;
 }
 

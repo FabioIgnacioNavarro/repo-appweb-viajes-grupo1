@@ -322,7 +322,9 @@ Las siguientes rutas **no deben ser accesibles desde el exterior**. El API Gatew
 | **`409`** | Conflict | `CHOFER_NO_HABILITADO` | Chofer con carnet no validado o inhabilitado administrativamente. |
 | **`409`** | Conflict | `TRANSICION_ESTADO_INVALIDA` | Transición no permitida por la máquina de estados o intento de cambiar un estado terminal. |
 | **`409`** | Conflict | `COBRO_NO_REINTENTABLE` | El viaje no finalizó o el cobro no está en estado `fallido`. |
+| **`413`** | Payload Too Large | `PAYLOAD_DEMASIADO_GRANDE` | El cuerpo supera el límite configurado (16 KB en Gateway, 10–20 KB en servicios). |
 | **`422`** | Unprocessable Entity | `IMPORTE_INVALIDO` / `REGLA_INVALIDA` | Parámetros matemáticos o de regla fuera de rango permitido. |
 | **`422`** | Unprocessable Entity | `ZONA_NO_ENCONTRADA` | Coordenadas fuera de cobertura de las zonas tarifarias activas. |
+| **`429`** | Too Many Requests | `DEMASIADAS_SOLICITUDES` | Superación del límite razonable de tasa (`rate limiting`) en Gateway Nginx. |
 | **`503`** | Service Unavailable | `DEPENDENCIA_NO_DISPONIBLE` | Falla o timeout al consultar PostgreSQL, OSRM, Google Routes, Open-Meteo o microservicio hermano. |
 | **`500`** | Internal Server Error | `ERROR_INTERNO` | Error imprevisto en la ejecución del servidor. |
