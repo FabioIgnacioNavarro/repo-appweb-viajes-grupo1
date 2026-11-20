@@ -17,6 +17,14 @@ interface MapaLeafletProps {
   onSeleccionarPunto?: (tipo: "origen" | "destino", coords: [number, number]) => void;
 }
 
+function construirContenidoPopup(etiqueta: string, texto: string): HTMLElement {
+  const contenedor = document.createElement("div");
+  const fuerte = document.createElement("strong");
+  fuerte.textContent = `${etiqueta}:`;
+  contenedor.append(fuerte, document.createElement("br"), document.createTextNode(texto));
+  return contenedor;
+}
+
 export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   origen = { latitud: -27.4514, longitud: -58.9866, titulo: "Plaza 25 de Mayo, Resistencia", tipo: "origen" },
   destino = { latitud: -27.4385, longitud: -58.9723, titulo: "Av. Sarmiento y Ruta 16", tipo: "destino" },
@@ -116,7 +124,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
         }).addTo(mapa);
 
         if (origen.titulo) {
-          marker.bindPopup(`<strong>Origen:</strong><br>${origen.titulo}`);
+          marker.bindPopup(construirContenidoPopup("Origen", origen.titulo));
         }
 
         if (onSeleccionarPunto) {
@@ -140,7 +148,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
         }).addTo(mapa);
 
         if (destino.titulo) {
-          marker.bindPopup(`<strong>Destino:</strong><br>${destino.titulo}`);
+          marker.bindPopup(construirContenidoPopup("Destino", destino.titulo));
         }
 
         if (onSeleccionarPunto) {
@@ -161,7 +169,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
         const marker = L.marker([posicionChofer.latitud, posicionChofer.longitud], {
           icon: crearIconoPin("chofer"),
         }).addTo(mapa);
-        marker.bindPopup(`<strong>Chofer asignado</strong><br>${posicionChofer.titulo || "En camino"}`);
+        marker.bindPopup(construirContenidoPopup("Chofer asignado", posicionChofer.titulo || "En camino"));
         marcadoresRef.current.chofer = marker;
       }
     }

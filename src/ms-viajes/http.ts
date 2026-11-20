@@ -9,6 +9,7 @@ import {
   type PublicarUbicacionChoferEnViaje, type ConsultarOfertasChofer
 } from "./dominio";
 import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
+import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 
 export interface ValidadorToken {
   validar(token: string): Promise<ActorAutenticado>;
@@ -337,6 +338,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     } catch (error) { errorHttp(error, respuesta); }
   });
 
+  router.use(manejarErrorCuerpoHttp);
   return router;
 }
 
