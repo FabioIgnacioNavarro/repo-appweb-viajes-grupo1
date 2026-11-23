@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clienteApi, ErrorHttpApi, generarClaveIdempotencia } from "../../nucleo/api";
 import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal } from "../../nucleo/ws";
 import { InsigniaEstadoViaje } from "../../componentes/comunes";
-import { MapaLeaflet } from "../../componentes/mapa/MapaLeaflet";
+import { MapaLeaflet, type PuntoMapa } from "../../componentes/mapa/MapaLeaflet";
 
 interface Coordenada {
   latitud: number;
@@ -16,6 +16,7 @@ interface EstimacionDto {
   moneda: "ARS";
   distancia_metros: number;
   duracion_segundos: number;
+  proveedor_ruta?: "OSRM" | "GOOGLE" | "HAVERSINE";
   multiplicador_demanda: number;
   zona: string;
   factores_precio: Record<string, unknown>;
@@ -103,20 +104,30 @@ function decodificarPolilinea(polilinea: string, precision: number): Coordenada[
 }
 
 function puntosDeRuta(estimacion: EstimacionDto): Coordenada[] {
-  if (!estimacion.polilinea) return [estimacion.origen, estimacion.destino];
-  const opciones = [5, 6].flatMap((precision) => {
+  if (!estimacion.polilinea || estimacion.proveedor_ruta === "HAVERSINE") return [];
+  if (estimacion.proveedor_ruta === "GOOGLE" || estimacion.proveedor_ruta === "OSRM") {
+    try {
+      const precision = estimacion.proveedor_ruta === "GOOGLE" ? 5 : 6;
+      return decodificarPolilinea(estimacion.polilinea, precision);
+    } catch {
+      return [];
+    }
+  }
+  const opciones = [6, 5].flatMap((precision) => {
     try {
       const puntos = decodificarPolilinea(estimacion.polilinea!, precision);
       if (puntos.length < 2) return [];
-      const errorExtremos = (a: Coordenada, b: Coordenada) => Math.abs(a.latitud - b.latitud) + Math.abs(a.longitud - b.longitud);
-      const normal = errorExtremos(puntos[0], estimacion.origen) + errorExtremos(puntos[puntos.length - 1], estimacion.destino);
-      const inversa = errorExtremos(puntos[0], estimacion.destino) + errorExtremos(puntos[puntos.length - 1], estimacion.origen);
-      return [{ puntos: inversa < normal ? [...puntos].reverse() : puntos, error: Math.min(normal, inversa) }];
+      const errorDirecto =
+        Math.abs(puntos[0].latitud - estimacion.origen.latitud) +
+        Math.abs(puntos[0].longitud - estimacion.origen.longitud) +
+        Math.abs(puntos[puntos.length - 1].latitud - estimacion.destino.latitud) +
+        Math.abs(puntos[puntos.length - 1].longitud - estimacion.destino.longitud);
+      return [{ puntos, error: errorDirecto }];
     } catch {
       return [];
     }
   });
-  return opciones.sort((a, b) => a.error - b.error)[0]?.puntos ?? [estimacion.origen, estimacion.destino];
+  return opciones.sort((a, b) => a.error - b.error)[0]?.puntos ?? [];
 }
 
 function etiquetaEstado(estado: string): string {
@@ -147,21 +158,35 @@ const camposFactor = [
   { clave: "franja_horaria", etiqueta: "Franja horaria", mostrar: (valor: unknown) => String(valor ?? "—") }
 ];
 
+type PuntoSolicitud = { direccion: string } | Coordenada;
+
+const ORIGEN_INICIAL_COORDENADA: Coordenada = {
+  latitud: -27.4521295,
+  longitud: -58.9873752
+};
+
 export const VistaPasajero: React.FC = () => {
   const sesion = obtenerSesion();
-  const [origen, setOrigen] = useState("Plaza 25 de Mayo, Resistencia");
-  const [destino, setDestino] = useState("Av. Sarmiento y Ruta 16, Resistencia");
+  const [origen, setOrigen] = useState("Juan B. Justo 4, Resistencia");
+  const [destino, setDestino] = useState("");
+  const [pinManualOrigen, setPinManualOrigen] = useState<Coordenada | null>(null);
+  const [pinManualDestino, setPinManualDestino] = useState<Coordenada | null>(null);
   const [estimacion, setEstimacion] = useState<EstimacionDto | null>(null);
+  const [polilineaViaje, setPolilineaViaje] = useState<[number, number][] | undefined>(undefined);
   const [viaje, setViaje] = useState<ViajeDto | null>(null);
   const [cobro, setCobro] = useState<CobroDto | null>(null);
   const [ahora, setAhora] = useState(Date.now());
   const [procesando, setProcesando] = useState(false);
+  const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [error, setError] = useState<ErrorVisible | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const claveConfirmacion = useRef<string | null>(null);
   const claveReintentoCobro = useRef<{ viajeId: string; valor: string } | null>(null);
   const bloqueoEnvio = useRef(false);
   const viajeActualRef = useRef<ViajeDto | null>(null);
+  const secuenciaGeoInversaRef = useRef<{ origen: number; destino: number }>({ origen: 0, destino: 0 });
+  const secuenciaEstimacionRef = useRef(0);
+  const debounceEstimacionRef = useRef<number | null>(null);
 
   useEffect(() => {
     viajeActualRef.current = viaje;
@@ -222,37 +247,76 @@ export const VistaPasajero: React.FC = () => {
   const segundosVigencia = estimacion
     ? Math.max(0, Math.ceil((Date.parse(estimacion.vigente_hasta) - ahora) / 1000))
     : 0;
-  const puntos = estimacion ? puntosDeRuta(estimacion) : [];
-  const rutaMapa: [number, number][] | undefined =
-    puntos.length > 1 ? puntos.map((p) => [p.latitud, p.longitud] as [number, number]) : undefined;
-  const origenMapa = estimacion?.origen ?? viaje?.origen;
-  const destinoMapa = estimacion?.destino ?? viaje?.destino;
   const estadoViaje = viaje?.estado.toLowerCase() ?? "";
+  const hayViajeEnCurso = Boolean(viaje && ESTADOS_ACTIVOS.has(estadoViaje));
+  const origenMapa =
+    estimacion?.origen ??
+    pinManualOrigen ??
+    (hayViajeEnCurso && viaje ? viaje.origen : ORIGEN_INICIAL_COORDENADA);
+  const destinoMapa = estimacion?.destino ?? pinManualDestino ?? (hayViajeEnCurso && viaje ? viaje.destino : undefined);
   const puedeCancelar = Boolean(viaje && ESTADOS_CANCELABLES_PASAJERO.has(estadoViaje));
 
-  const invalidarEstimacion = () => {
+  const cancelarDebounceEstimacion = useCallback(() => {
+    if (debounceEstimacionRef.current !== null) {
+      window.clearTimeout(debounceEstimacionRef.current);
+      debounceEstimacionRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => cancelarDebounceEstimacion(), [cancelarDebounceEstimacion]);
+
+  const rutaMapa = useMemo<[number, number][] | undefined>(() => {
+    if (estimacion) {
+      const puntos = puntosDeRuta(estimacion);
+      return puntos.length >= 2
+        ? puntos.map((p) => [p.latitud, p.longitud] as [number, number])
+        : undefined;
+    }
+    if (polilineaViaje && polilineaViaje.length >= 2) {
+      return polilineaViaje;
+    }
+    return undefined;
+  }, [estimacion, polilineaViaje]);
+
+  const origenPinMapa = useMemo<PuntoMapa | undefined>(
+    () =>
+      origenMapa
+        ? { latitud: origenMapa.latitud, longitud: origenMapa.longitud, titulo: origen, tipo: "origen" }
+        : undefined,
+    [origenMapa?.latitud, origenMapa?.longitud, origen]
+  );
+
+  const destinoPinMapa = useMemo<PuntoMapa | undefined>(
+    () =>
+      destinoMapa
+        ? { latitud: destinoMapa.latitud, longitud: destinoMapa.longitud, titulo: destino, tipo: "destino" }
+        : undefined,
+    [destinoMapa?.latitud, destinoMapa?.longitud, destino]
+  );
+
+  const invalidarEstimacion = useCallback(() => {
+    cancelarDebounceEstimacion();
+    secuenciaEstimacionRef.current += 1;
+    setCalculandoEstimacion(false);
     setEstimacion(null);
+    setPolilineaViaje(undefined);
     claveConfirmacion.current = null;
     setError(null);
     setAviso(null);
-  };
+  }, [cancelarDebounceEstimacion]);
 
-  const solicitarEstimacion = async (evento: React.FormEvent<HTMLFormElement>) => {
-    evento.preventDefault();
-    if (!origen.trim() || !destino.trim()) {
-      setError({ codigo: "ENTRADA_INVALIDA", mensaje: "Completá el origen y el destino para calcular el precio." });
-      return;
-    }
-    if (bloqueoEnvio.current) return;
-    bloqueoEnvio.current = true;
-    setProcesando(true);
+  const ejecutarEstimacion = useCallback(async (puntoOrigen: PuntoSolicitud, puntoDestino: PuntoSolicitud) => {
+    secuenciaEstimacionRef.current += 1;
+    const turno = secuenciaEstimacionRef.current;
+    setCalculandoEstimacion(true);
     setError(null);
     setAviso(null);
     try {
       const respuesta = await clienteApi.post<EstimacionDto>("/viajes/estimacion", {
-        origen: { direccion: origen.trim() },
-        destino: { direccion: destino.trim() }
+        origen: puntoOrigen,
+        destino: puntoDestino
       });
+      if (secuenciaEstimacionRef.current !== turno) return;
       setEstimacion(respuesta);
       claveConfirmacion.current = null;
       claveReintentoCobro.current = null;
@@ -260,11 +324,109 @@ export const VistaPasajero: React.FC = () => {
       setViaje(null);
       setAviso("Precio calculado. Se mantiene vigente durante tres minutos.");
     } catch (causa) {
+      if (secuenciaEstimacionRef.current !== turno) return;
       setError(errorVisible(causa, "ESTIMACION_NO_DISPONIBLE", "No se pudo calcular el precio. Revisá las direcciones e intentá nuevamente."));
     } finally {
-      bloqueoEnvio.current = false;
-      setProcesando(false);
+      if (secuenciaEstimacionRef.current === turno) {
+        setCalculandoEstimacion(false);
+      }
     }
+  }, []);
+
+  const programarEstimacionAutomatica = useCallback(
+    (textoOrigen: string, textoDestino: string, pinOrig: Coordenada | null, pinDest: Coordenada | null) => {
+      invalidarEstimacion();
+      if (puedeCancelar) return;
+      const oTexto = textoOrigen.trim();
+      const dTexto = textoDestino.trim();
+      const origenValido = Boolean(pinOrig) || (oTexto.length >= 3 && oTexto !== "Buscando dirección...");
+      const destinoValido = Boolean(pinDest) || (dTexto.length >= 3 && dTexto !== "Buscando dirección...");
+      if (!origenValido || !destinoValido) return;
+
+      const puntoOrigen: PuntoSolicitud = pinOrig ?? { direccion: oTexto };
+      const puntoDestino: PuntoSolicitud = pinDest ?? { direccion: dTexto };
+
+      debounceEstimacionRef.current = window.setTimeout(() => {
+        debounceEstimacionRef.current = null;
+        void ejecutarEstimacion(puntoOrigen, puntoDestino);
+      }, 750);
+    },
+    [invalidarEstimacion, puedeCancelar, ejecutarEstimacion]
+  );
+
+  const manejarPinArrastrado = useCallback(
+    (tipo: "origen" | "destino", coords: [number, number]) => {
+      if (puedeCancelar) return;
+      const coordenada: Coordenada = { latitud: coords[0], longitud: coords[1] };
+      const origenPrevioPin = pinManualOrigen ?? (estimacion?.origen ?? null);
+      const destinoPrevioPin = pinManualDestino ?? (estimacion?.destino ?? null);
+
+      if (tipo === "origen") {
+        setPinManualOrigen(coordenada);
+        setOrigen("Buscando dirección...");
+        if (!pinManualDestino && estimacion?.destino) {
+          setPinManualDestino(estimacion.destino);
+        }
+      } else {
+        setPinManualDestino(coordenada);
+        setDestino("Buscando dirección...");
+        if (!pinManualOrigen && estimacion?.origen) {
+          setPinManualOrigen(estimacion.origen);
+        }
+      }
+      invalidarEstimacion();
+
+      secuenciaGeoInversaRef.current[tipo] += 1;
+      const turno = secuenciaGeoInversaRef.current[tipo];
+
+      void clienteApi
+        .post<{ direccion: string }>("/tarifas/geocodificacion-inversa", coordenada)
+        .then((res) => {
+          if (secuenciaGeoInversaRef.current[tipo] !== turno) return;
+          const texto = res.direccion?.trim() || `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
+          if (tipo === "origen") setOrigen(texto);
+          else setDestino(texto);
+        })
+        .catch(() => {
+          if (secuenciaGeoInversaRef.current[tipo] !== turno) return;
+          const fallback = `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
+          if (tipo === "origen") setOrigen(fallback);
+          else setDestino(fallback);
+        });
+
+      const puntoOrigenAuto: PuntoSolicitud | null =
+        tipo === "origen"
+          ? coordenada
+          : origenPrevioPin ??
+            (origen.trim() && origen !== "Buscando dirección..." ? { direccion: origen.trim() } : null);
+      const puntoDestinoAuto: PuntoSolicitud | null =
+        tipo === "destino"
+          ? coordenada
+          : destinoPrevioPin ??
+            (destino.trim() && destino !== "Buscando dirección..." ? { direccion: destino.trim() } : null);
+
+      if (puntoOrigenAuto && puntoDestinoAuto) {
+        void ejecutarEstimacion(puntoOrigenAuto, puntoDestinoAuto);
+      }
+    },
+    [puedeCancelar, invalidarEstimacion, pinManualOrigen, pinManualDestino, estimacion, origen, destino, ejecutarEstimacion]
+  );
+
+  const solicitarEstimacion = (evento: React.FormEvent<HTMLFormElement>) => {
+    evento.preventDefault();
+    if (puedeCancelar) return;
+    const oTexto = origen.trim();
+    const dTexto = destino.trim();
+    if (!oTexto || !dTexto || oTexto === "Buscando dirección..." || dTexto === "Buscando dirección...") {
+      if (!pinManualOrigen && !oTexto) {
+        setError({ codigo: "ENTRADA_INVALIDA", mensaje: "Completá el origen y el destino para calcular el precio." });
+      }
+      return;
+    }
+    cancelarDebounceEstimacion();
+    const puntoOrigen: PuntoSolicitud = pinManualOrigen ?? { direccion: oTexto };
+    const puntoDestino: PuntoSolicitud = pinManualDestino ?? { direccion: dTexto };
+    void ejecutarEstimacion(puntoOrigen, puntoDestino);
   };
 
   const confirmarViaje = async () => {
@@ -277,6 +439,8 @@ export const VistaPasajero: React.FC = () => {
     claveConfirmacion.current = clave;
     try {
       const confirmado = await clienteApi.post<ViajeDto>("/viajes", { id_estimacion: estimacion.id_estimacion }, { claveIdempotencia: clave });
+      const rutaConfirmada = puntosDeRuta(estimacion).map((p) => [p.latitud, p.longitud] as [number, number]);
+      setPolilineaViaje(rutaConfirmada.length >= 2 ? rutaConfirmada : undefined);
       setViaje(confirmado);
       setAviso(confirmado.estado.toLowerCase() === "sin_choferes_disponibles"
         ? "No hay choferes disponibles en este momento. El precio de esta estimación se conserva."
@@ -366,19 +530,64 @@ export const VistaPasajero: React.FC = () => {
           <form onSubmit={solicitarEstimacion} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Calcular estimación del viaje">
             <div>
               <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900">Tu recorrido</h2>
-              <p className="mt-1 text-xs text-slate-500">Ingresá una dirección en Resistencia o alrededores.</p>
+              <p className="mt-1 text-xs text-slate-500">Ingresá un destino o tocá el mapa para cotizar al instante.</p>
             </div>
             <label className="block text-xs font-semibold text-slate-700" htmlFor="origen-viaje">
               Origen
-              <input id="origen-viaje" name="origen" autoComplete="street-address" value={origen} onChange={(evento) => { setOrigen(evento.target.value); invalidarEstimacion(); }} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" placeholder="Plaza 25 de Mayo, Resistencia" required />
+              <input
+                id="origen-viaje"
+                name="origen"
+                autoComplete="street-address"
+                value={origen}
+                onChange={(evento) => {
+                  const nuevoOrigen = evento.target.value;
+                  setOrigen(nuevoOrigen);
+                  setPinManualOrigen(null);
+                  programarEstimacionAutomatica(nuevoOrigen, destino, null, pinManualDestino);
+                }}
+                disabled={puedeCancelar}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                placeholder="Juan B. Justo 4, Resistencia"
+                required
+              />
             </label>
             <label className="block text-xs font-semibold text-slate-700" htmlFor="destino-viaje">
               Destino
-              <input id="destino-viaje" name="destino" autoComplete="street-address" value={destino} onChange={(evento) => { setDestino(evento.target.value); invalidarEstimacion(); }} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" placeholder="Av. Sarmiento y Ruta 16, Resistencia" required />
+              <input
+                id="destino-viaje"
+                name="destino"
+                autoComplete="street-address"
+                value={destino}
+                onChange={(evento) => {
+                  const nuevoDestino = evento.target.value;
+                  setDestino(nuevoDestino);
+                  setPinManualDestino(null);
+                  programarEstimacionAutomatica(origen, nuevoDestino, pinManualOrigen, null);
+                }}
+                onBlur={() => {
+                  if (debounceEstimacionRef.current === null || puedeCancelar) return;
+                  const oTexto = origen.trim();
+                  const dTexto = destino.trim();
+                  const origenValido = Boolean(pinManualOrigen) || (oTexto.length >= 3 && oTexto !== "Buscando dirección...");
+                  const destinoValido = Boolean(pinManualDestino) || (dTexto.length >= 3 && dTexto !== "Buscando dirección...");
+                  if (!origenValido || !destinoValido) return;
+                  cancelarDebounceEstimacion();
+                  void ejecutarEstimacion(
+                    pinManualOrigen ?? { direccion: oTexto },
+                    pinManualDestino ?? { direccion: dTexto }
+                  );
+                }}
+                disabled={puedeCancelar}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                placeholder="Ej.: Shopping Sarmiento, Resistencia"
+                required
+              />
             </label>
-            <button type="submit" disabled={procesando || puedeCancelar} className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
-              {procesando ? "Calculando…" : "Calcular precio"}
-            </button>
+            {calculandoEstimacion && (
+              <p className="text-xs font-medium text-indigo-600" role="status">
+                Calculando ruta y precio…
+              </p>
+            )}
             {puedeCancelar && <p className="text-xs text-amber-700">Terminá o cancelá el viaje activo antes de solicitar otro.</p>}
           </form>
 
@@ -411,10 +620,10 @@ export const VistaPasajero: React.FC = () => {
               </div>
 
               <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${segundosVigencia > 0 ? "bg-white text-indigo-700" : "bg-red-100 text-red-800"}`} aria-live="polite">
-                {segundosVigencia > 0 ? `Este precio vence en ${formatearTiempo(segundosVigencia)}` : "La estimación venció. Calculá el precio otra vez."}
+                {segundosVigencia > 0 ? `Este precio vence en ${formatearTiempo(segundosVigencia)}` : "La estimación venció. Volvé a elegir destino para recalcular."}
               </div>
-              <button type="button" onClick={() => void confirmarViaje()} disabled={procesando || segundosVigencia <= 0} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
-                {procesando ? "Confirmando…" : "Confirmar viaje y congelar precio"}
+              <button type="button" onClick={() => void confirmarViaje()} disabled={procesando || calculandoEstimacion || segundosVigencia <= 0} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {procesando ? "Confirmando…" : "Confirmar viaje"}
               </button>
             </section>
           )}
@@ -477,13 +686,14 @@ export const VistaPasajero: React.FC = () => {
           <div className="relative min-h-[360px] bg-slate-100 sm:min-h-[440px]">
             <MapaLeaflet
               altura="440px"
-              origen={origenMapa ? { latitud: origenMapa.latitud, longitud: origenMapa.longitud, titulo: origen, tipo: "origen" } : undefined}
-              destino={destinoMapa ? { latitud: destinoMapa.latitud, longitud: destinoMapa.longitud, titulo: destino, tipo: "destino" } : undefined}
+              origen={origenPinMapa}
+              destino={destinoPinMapa}
               rutaGeoJson={rutaMapa}
+              onSeleccionarPunto={puedeCancelar ? undefined : manejarPinArrastrado}
             />
             {!estimacion && !viaje && (
               <div className="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-[400] rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-xs">
-                Ingresá origen y destino para trazar la ruta y calcular el precio dinámico.
+                Elegí un destino escribiendo la dirección o tocando el mapa para calcular el precio automáticamente.
               </div>
             )}
             {estimacion && (
