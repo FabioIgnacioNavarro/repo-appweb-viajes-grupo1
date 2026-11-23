@@ -100,6 +100,7 @@ Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, d
     "moneda": "ARS",
     "distancia_metros": 2500,
     "duracion_segundos": 300,
+    "proveedor_ruta": "OSRM",
     "multiplicador_demanda": 1.2,
     "zona": "Resistencia",
     "factores_precio": {
@@ -169,6 +170,12 @@ Valida la curva de demanda y los multiplicadores, y crea una nueva versión acti
 - **Cuerpo recibido:** Campos editables de factores dinámicos (`multiplicador_minimo`, `multiplicador_maximo`, `lluvia_con_precipitacion`, `lluvia_sin_precipitacion`, `disponibilidad`, `demanda_por_mil`, `horario`), con multiplicadores entre `0.5` y `5.0` (máximo 4 decimales), límites coherentes (`minimo <= maximo`), umbrales estrictamente crecientes terminados en `hasta: null` y curva de demanda no decreciente.
 - **Respuesta (`200 OK`):** `{ "activa": { ... }, "historial": [ ... ] }`.
 - **Entrada inválida (`400` / `422`):** `400 ENTRADA_INVALIDA` si incluye campos no permitidos (`autor`, `version`, `creada_en`, `precio`, etc.) o tipos erróneos; `422 REGLA_INVALIDA` si la curva o los límites no son válidos.
+
+#### `POST /tarifas/geocodificacion-inversa`
+Convierte coordenadas seleccionadas manualmente en el mapa a una dirección legible usando el geocodificador configurado (`Nominatim`, `Google` o semilla de desarrollo).
+- **Autorización:** Requiere rol `PASAJERO` o `ADMINISTRADOR`.
+- **Cuerpo recibido:** `{"latitud": -27.45213, "longitud": -58.98738}`.
+- **Respuesta (`200 OK`):** `{"direccion": "Juan B. Justo 4, Resistencia", "coordenada": {"latitud": -27.45213, "longitud": -58.98738}}`.
 
 ---
 
