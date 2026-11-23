@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit-integracion:
+    name: Build, Unit e Integración PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: viajes
+          POSTGRES_USER: viajes
+          POSTGRES_PASSWORD: viajes_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U viajes -d viajes"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar tipos del frontend
+        run: npx tsc --noEmit -p web/tsconfig.json
+
+      - name: Aplicar esquemas SQL iniciales en PostgreSQL
+        env:
+          DATABASE_URL: postgresql://viajes:viajes_dev_only@127.0.0.1:5432/viajes
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const { Pool } = require("pg");
+            (async () => {
+              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              try {
+                for (const archivo of ["src/ms-flota/schema.sql", "src/ms-tarifas/schema.sql", "src/ms-viajes/schema.sql"]) {
+                  await pool.query(fs.readFileSync(archivo, "utf8"));
+                }
+              } finally {
+                await pool.end();
+              }
+            })();
+          '
+
+      - name: Ejecutar compilación y suite unitaria + integración PostgreSQL
+        env:
+          DATABASE_URL: postgresql://viajes:viajes_dev_only@127.0.0.1:5432/viajes
+        run: npm test
+
+  playwright-e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar backend y frontend
+        run: npm run build
+
+      - name: Instalar navegador Chromium de Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Ejecutar tests E2E Playwright
+        run: npx playwright test
+
+      - name: Subir reporte y trazas Playwright si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  gateway-e2e:
+    name: Docker Compose Gateway E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Preparar .env controlado para Gateway E2E
+        run: |
+          cp .env.example .env
+          echo "JWT_MODO=falso" >> .env
+          echo "PROVEEDORES_MODO=falso" >> .env
+          echo "RUTA_PROVEEDOR=HAVERSINE" >> .env
+
+      - name: Levantar pila completa en Docker Compose
+        run: docker compose up -d --build --wait
+
+      - name: Ejecutar suite E2E contra Nginx Gateway
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8080
+        run: npm run test:e2e
+
+      - name: Mostrar logs de contenedores si falla
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Limpiar contenedores y volúmenes
+        if: always()
+        run: docker compose down -v
