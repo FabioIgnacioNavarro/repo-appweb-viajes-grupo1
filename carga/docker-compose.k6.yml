@@ -1,0 +1,19 @@
+services:
+  ms-tarifas:
+    environment:
+      RUTA_PROVEEDOR: HAVERSINE
+      GEOCODIFICADOR_PROVEEDOR: ""
+      PROVEEDORES_MODO: falso
+
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["k6"]
+    depends_on:
+      nginx:
+        condition: service_healthy
+    volumes:
+      - ./carga/k6:/scripts:ro
+      - ./carga/resultados:/resultados
+    environment:
+      BASE_URL: http://nginx:8080
+      K6_MODO: ${K6_MODO:-stress}
