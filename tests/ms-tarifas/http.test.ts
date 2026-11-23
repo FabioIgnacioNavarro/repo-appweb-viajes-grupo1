@@ -75,6 +75,7 @@ async function iniciarServidorTarifas(opciones: {
     estimar: (pasajeroId, origen, destino) => caso.ejecutar(pasajeroId, origen, destino),
     estimaciones,
     reglas: gestionarRegla,
+    geocodificarInversa: async (c) => `Juan B. Justo 4, Resistencia (${c.latitud.toFixed(3)})`,
     validador: {
       async validar(token: string) {
         const actor = actores[token];
@@ -358,6 +359,37 @@ test("ms-tarifas HTTP: GET/PUT /reglas/demanda aplica RBAC, valida curva y regis
     assert.equal(actualizada.historial.length, 2);
     assert.equal(actualizada.historial[0]?.activa, true);
     assert.equal(actualizada.historial[1]?.activa, false);
+  } finally {
+    await cerrar(ctx.servidor);
+  }
+});
+
+test("ms-tarifas HTTP: POST /tarifas/geocodificacion-inversa devuelve dirección legible y aplica RBAC", async () => {
+  const ctx = await iniciarServidorTarifas();
+  try {
+    const okRes = await fetch(`${ctx.base}/tarifas/geocodificacion-inversa`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-pasajero-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ latitud: -27.45213, longitud: -58.98738 })
+    });
+    assert.equal(okRes.status, 200);
+    const okBody = await okRes.json() as { direccion: string; coordenada: { latitud: number; longitud: number } };
+    assert.match(okBody.direccion, /Juan B\. Justo 4, Resistencia/);
+    assert.equal(okBody.coordenada.latitud, -27.45213);
+
+    const forbiddenRes = await fetch(`${ctx.base}/tarifas/geocodificacion-inversa`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-chofer-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ latitud: -27.45213, longitud: -58.98738 })
+    });
+    assert.equal(forbiddenRes.status, 403);
+
+    const badRes = await fetch(`${ctx.base}/tarifas/geocodificacion-inversa`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-pasajero-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ latitud: 999, longitud: -58.98738 })
+    });
+    assert.equal(badRes.status, 400);
   } finally {
     await cerrar(ctx.servidor);
   }

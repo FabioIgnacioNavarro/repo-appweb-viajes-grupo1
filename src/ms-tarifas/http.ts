@@ -3,6 +3,8 @@ import {
   CrearEstimacion,
   ErrorTarifas,
   GestionarReglaDemanda,
+  validarCoordenada,
+  type Coordenada,
   type FactorPorUmbral,
   type FranjaHoraria,
   type NuevaReglaDemandaInput,
@@ -17,6 +19,7 @@ export interface DependenciasTarifas {
   estimar: (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => ReturnType<CrearEstimacion["ejecutar"]>;
   estimaciones: RepositorioEstimaciones;
   reglas?: GestionarReglaDemanda;
+  geocodificarInversa?: (coordenada: Coordenada) => Promise<string>;
   validador: Pick<ValidadorJwtJwks, "validar">;
   comprobarBase: () => Promise<void>;
 }
@@ -186,6 +189,7 @@ function reglaDto(r: ReglaTarifa) {
 function dto(e: NonNullable<Awaited<ReturnType<RepositorioEstimaciones["obtener"]>>>) {
   const f = e.factoresPrecio;
   return { id_estimacion: e.id, precio_estimado: e.precioEstimado.toString(), moneda: e.moneda, distancia_metros: e.distanciaMetros, duracion_segundos: e.duracionSegundos,
+    proveedor_ruta: e.proveedorRuta,
     multiplicador_demanda: e.multiplicadorDemandaEscalado / 10_000, zona: e.zona.nombre,
     factores_precio: { zona_id: e.zona.id, choferes_disponibles: f.choferesDisponibles, solicitudes_activas: f.solicitudesActivas, precipitacion_mm: f.precipitacionMm, llueve: f.llueve, fuente_clima: f.fuenteClima, clima_observado_en: f.climaObservadoEn.toISOString(), franja_horaria: f.franjaHoraria.toLowerCase(), factor_lluvia: f.factorLluviaEscalado / 10_000, factor_disponibilidad: f.factorDisponibilidadEscalado / 10_000, factor_demanda: f.factorDemandaEscalado / 10_000, factor_horario: f.factorHorarioEscalado / 10_000 },
     version_regla: e.versionRegla, creada_en: e.creadaEn.toISOString(), vigente_hasta: e.vigenteHasta.toISOString(), origen: e.origen, destino: e.destino, polilinea: e.polilinea ?? null };
@@ -243,6 +247,24 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       const entrada = parsearReglaDemandaBody(req.body);
       const snapshot = await deps.reglas.actualizar(req.actor.idUsuario, entrada);
       res.json({ activa: reglaDto(snapshot.activa), historial: snapshot.historial.map(reglaDto) });
+    } catch (causa) { error(res, causa); }
+  });
+  router.post("/tarifas/geocodificacion-inversa", async (req, res) => {
+    if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
+      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros o administración pueden resolver direcciones en el mapa.", detalles: {} } });
+      return;
+    }
+    if (!objeto(req.body) || Object.keys(req.body).some((k) => k !== "latitud" && k !== "longitud") || typeof req.body.latitud !== "number" || typeof req.body.longitud !== "number") {
+      res.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "Indicá latitud y longitud numéricas válidas.", detalles: {} } });
+      return;
+    }
+    try {
+      const coordenada: Coordenada = { latitud: req.body.latitud, longitud: req.body.longitud };
+      validarCoordenada(coordenada);
+      const direccion = deps.geocodificarInversa
+        ? await deps.geocodificarInversa(coordenada)
+        : `Ubicación (${coordenada.latitud.toFixed(5)}, ${coordenada.longitud.toFixed(5)})`;
+      res.json({ direccion, coordenada });
     } catch (causa) { error(res, causa); }
   });
   router.use(manejarErrorCuerpoHttp);

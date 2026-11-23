@@ -504,6 +504,18 @@ interface SemillaGeografica {
 export class GeocodificadorFalso implements Geocodificador {
   private readonly catalogo: SemillaGeografica[] = [
     {
+      claves: [
+        "juan b. justo 4",
+        "juan b. justo 4, resistencia",
+        "juan b. justo y av. 25 de mayo",
+        "juan b. justo y av. 25 de mayo, resistencia",
+        "plaza 25 de mayo (vereda juan b. justo)",
+        "plaza 25 de mayo (vereda juan b. justo), resistencia"
+      ],
+      nombreVisible: "Juan B. Justo 4 (Plaza 25 de Mayo), Resistencia",
+      coordenada: { latitud: -27.4521295, longitud: -58.9873752 }
+    },
+    {
       claves: ["plaza 25 de mayo", "plaza 25 de mayo, resistencia", "resistencia"],
       nombreVisible: "Plaza 25 de Mayo, Resistencia",
       coordenada: { latitud: -27.451, longitud: -58.986 }
@@ -529,17 +541,24 @@ export class GeocodificadorFalso implements Geocodificador {
       coordenada: { latitud: -27.433, longitud: -58.966 }
     },
     {
-      claves: ["shopping sarmiento", "sarmiento"],
-      nombreVisible: "Shopping Sarmiento, Resistencia",
-      coordenada: { latitud: -27.438, longitud: -58.972 }
+      claves: [
+        "shopping sarmiento",
+        "shopping sarmiento, resistencia",
+        "av. sarmiento y ruta 16",
+        "av. sarmiento y ruta 16, resistencia",
+        "sarmiento y ruta 16",
+        "sarmiento"
+      ],
+      nombreVisible: "Av. Sarmiento y Ruta 16, Resistencia",
+      coordenada: { latitud: -27.4381, longitud: -58.9722 }
     },
     {
-      claves: ["facultad de ingenieria unne", "campus unne", "unne campus resistencia", "unne"],
+      claves: ["facultad de ingenieria unne", "campus unne", "unne campus resistencia", "unne", "unne, resistencia"],
       nombreVisible: "Campus UNNE, Resistencia",
       coordenada: { latitud: -27.466, longitud: -58.979 }
     },
     {
-      claves: ["hospital perrando", "perrando"],
+      claves: ["hospital julio c. perrando", "hospital perrando, resistencia", "hospital perrando", "perrando"],
       nombreVisible: "Hospital Julio C. Perrando, Resistencia",
       coordenada: { latitud: -27.449, longitud: -58.976 }
     },
@@ -694,8 +713,8 @@ export function crearGeocodificador(
     throw new Error("GEO_RADIO_NIVEL1_KM y GEO_RADIO_NIVEL2_KM deben ser números positivos con nivel 2 > nivel 1.");
   }
 
-  // 1. Modo falso explícito para tests unitarios / offline
-  if (modo === "falso" || proveedorGeo === "FALSO" || (proveedorRuta === "HAVERSINE" && !proveedorGeo)) {
+  // 1. Modo falso explícito para tests unitarios / offline (salvo GEOCODIFICADOR_PROVEEDOR explícito)
+  if (proveedorGeo === "FALSO" || (modo === "falso" && !proveedorGeo) || (proveedorRuta === "HAVERSINE" && !proveedorGeo)) {
     return new GeocodificadorFalso(undefined, radioNivel1Km, radioNivel2Km);
   }
 
@@ -732,7 +751,7 @@ export class FuenteClimaOpenMeteo implements FuenteClima {
 /** Fuente determinista para Compose y E2E; no realiza llamadas a servicios públicos. */
 export class FuenteClimaFalsa implements FuenteClima {
   async consultar(_zona: ZonaTarifaria): Promise<ObservacionClima> {
-    return { precipitacionMm: 0, observadaEn: new Date(Date.now() - 1000), fuente: "FAKE" };
+    return { precipitacionMm: 0, observadaEn: new Date(Date.now() - 60_000), fuente: "FAKE" };
   }
 }
 

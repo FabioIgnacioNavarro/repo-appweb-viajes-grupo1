@@ -25,9 +25,9 @@ const reintentos = Number(process.env.REINTENTOS_SERVICIO ?? "1");
 if (!Number.isInteger(timeoutServicio) || timeoutServicio < 1 || !Number.isInteger(timeoutProveedor) || timeoutProveedor < 1 || !Number.isInteger(reintentos) || reintentos < 0 || reintentos > 1) throw new Error("Los timeouts o reintentos configurados son inválidos.");
 const urlFlota = exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL");
 const urlViajes = exigirBaseInterna(process.env.MS_VIAJES_URL, "MS_VIAJES_URL");
+const geocodificador = crearGeocodificador(process.env, timeoutProveedor);
 const crear = (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => {
   const clima = process.env.PROVEEDORES_MODO === "falso" ? new FuenteClimaFalsa() : new FuenteClimaOpenMeteo(timeoutProveedor);
-  const geocodificador = crearGeocodificador(process.env, timeoutProveedor);
   return new CrearEstimacion(
     crearCalculadorRuta(process.env, timeoutProveedor),
     clima,
@@ -42,7 +42,17 @@ const crear = (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicaci
 };
 const app = express();
 app.use(middlewareObservabilidad("ms-tarifas"));
-app.use(crearRouterTarifas({ estimar: crear, estimaciones, reglas: gestionarRegla, validador, comprobarBase: async () => { await pool.query("SELECT 1"); } }));
+app.use(crearRouterTarifas({
+  estimar: crear,
+  estimaciones,
+  reglas: gestionarRegla,
+  geocodificarInversa: (coord) =>
+    geocodificador.geocodificarInversa
+      ? geocodificador.geocodificarInversa(coord)
+      : Promise.resolve(`Ubicación (${coord.latitud.toFixed(5)}, ${coord.longitud.toFixed(5)})`),
+  validador,
+  comprobarBase: async () => { await pool.query("SELECT 1"); }
+}));
 const servidor = app.listen(puerto, () => console.log(`ms-tarifas disponible en puerto ${puerto}`));
 async function cerrar(): Promise<void> { servidor.close(); await pool.end(); }
 process.once("SIGTERM", () => { void cerrar(); });
