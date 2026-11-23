@@ -16,11 +16,12 @@ test("OPS-004: nginx.conf entrega la SPA, proxea WebSocket y protege rutas inter
   assert.match(nginx, /add_header\s+Referrer-Policy\s+"strict-origin-when-cross-origin"\s+always;/);
   assert.match(nginx, /add_header\s+X-Frame-Options\s+"DENY"\s+always;/);
   assert.match(nginx, /add_header\s+Permissions-Policy\s+"camera=\(\),\s*microphone=\(\),\s*geolocation=\(self\)"\s+always;/);
-  assert.match(nginx, /add_header\s+Content-Security-Policy\s+"[^"]*default-src\s+'self'[^"]*script-src\s+'self'[^"]*frame-ancestors\s+'none'[^"]*"\s+always;/);
+  assert.match(nginx, /add_header\s+Content-Security-Policy\s+"[^"]*default-src\s+'self'[^"]*script-src\s+'self'[^"]*https:\/\/tile\.openstreetmap\.org[^"]*frame-ancestors\s+'none'[^"]*"\s+always;/);
   assert.match(nginx, /client_max_body_size\s+16k;/);
   assert.match(nginx, /limit_req_zone\s+\$binary_remote_addr\s+zone=api_general:10m\s+rate=30r\/s;/);
   assert.match(nginx, /limit_req_zone\s+\$binary_remote_addr\s+zone=auth_tokens:10m\s+rate=10r\/s;/);
   assert.match(nginx, /limit_req_status\s+429;/);
+  assert.match(nginx, /location\s+=\s+\/tarifas\/geocodificacion-inversa/);
   assert.match(nginx, /location\s+=\s+\/tiempo-real\s*\{[^}]*proxy_set_header\s+Upgrade\s+\$http_upgrade;/s);
   assert.match(nginx, /location\s+=\s+\/ws\s*\{[^}]*proxy_set_header\s+Upgrade\s+\$http_upgrade;/s);
   assert.match(nginx, /location\s+\^~\s+\/interno\/\s*\{[^}]*return\s+404/s);
