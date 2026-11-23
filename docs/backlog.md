@@ -2,7 +2,7 @@
 
 Estados permitidos: `pendiente`, `en progreso`, `bloqueado`, `en revisión`, `terminado`.
 
-Sprint activo: [docs/sprint-01.md](sprint-01.md) (3 al 9 de noviembre).
+Sprint activo: [docs/sprint-02.md](sprint-02.md) (Sprint anterior cerrado: [docs/sprint-01.md](sprint-01.md)).
 
 ## Asignación de flujos de trabajo
 
@@ -69,6 +69,16 @@ Para permitir el trabajo simultáneo sin colisiones, el trabajo se divide en:
 | FAL-001 | Pruebas de falla de dependencias y recuperación | Media | terminado | Flujo B | Sprint 1 (Valentino, Días 6-7). PR #60 mergeado (Closes #52). Pruebas de servicio caído, timeout y recuperación con trazas en Jaeger. requests/fallas.http y tests/ms-viajes/fallas-dependencias.test.ts. |
 | DOC-001 | Informe, guion de demo y verificación de clon limpio | Alta | en revisión | Flujo A | Issue #53. Informe y guion en `docs/informe.md` y `docs/guion-demo.md`; README, índice, requests y backlog sincronizados. `npm.cmd test`: 129 pasan, 0 fallan, 6 se omiten. `docker compose config --quiet` pasa. Antes del merge, una persona distinta debe levantar Compose desde un clon limpio, ejecutar datos de prueba, tests y demo REST; el motor Docker no estuvo disponible en la sesión que preparó el PR. La ruta WebSocket web/gateway también queda señalada como limitación conocida. |
 | WEB-009 | Mapa interactivo Leaflet, ruta OSRM, geocodificación inversa y cotización automática | Alta | terminado | Común | PR #78 mergeado (Closes #77). Mosaicos OSM habilitados en CSP de Nginx, origen inicial en vereda (`Juan B. Justo 4`), zoom libre con `"Ver recorrido"`, decodificación de polilínea OSRM corregida, `POST /tarifas/geocodificacion-inversa` con RBAC al arrastrar/tocar pines, destino inicial en blanco, cotización automática sin botón y botón `"Confirmar viaje"`. Verificado con `npm.cmd test` (`138 pasan`), Docker (`http://localhost:8080`) y Playwright (`12 passed`). |
+| DEV-001 | Modo desarrollador: simulación de hora, modificadores en vivo y recomendaciones | Alta | pendiente | Flujo A | Issue #79 (Joel). Plan en `docs/sprint-02.md`. Simulación de hora/clima/demanda en `ms-tarifas` bajo `MODO_DESARROLLADOR=true` (bloqueado en producción), panel UI con todos los modificadores aplicados y recomendaciones. |
+| WEB-010 | Modo oscuro completo en UI y mapa Leaflet | Media | pendiente | Flujo A | Issue #80 (Joel). Plan en `docs/sprint-02.md`. Toggle Claro/Oscuro persistido en `localStorage`, paleta accesible en todas las vistas y adaptación visual de Leaflet sin romper CSP. |
+| WEB-011 | Control explícito Centrar mapa y mejoras de UX en recorrido | Media | pendiente | Flujo A | Issue #81 (Joel). Plan en `docs/sprint-02.md`. Botón explícito `"Centrar mapa"` en `MapaLeaflet.tsx` para encuadrar origen o recorrido completo sin robar zoom/pan manual. |
+| SEG-004 | Login apropiado con usuario y contraseña sobre emulador OIDC/JWKS | Alta | pendiente | Flujo C | Issue #82 (Fabio). Plan en `docs/sprint-02.md`. `POST /auth/login` en `auth-emulator` emitiendo JWT RS256 estándar + formulario usuario/contraseña en `VistaLogin.tsx` y proxy en Nginx. |
+| SEG-005 | Auditoría y endurecimiento de CSP en Nginx para nuevas funcionalidades | Alta | pendiente | Flujo C | Issue #83 (Fabio). Plan en `docs/sprint-02.md`. Validación estricta de CSP (sin `'unsafe-inline'`), nuevas rutas en `nginx.conf` y cero violaciones en navegador. |
+| OBS-002 | Observabilidad distribuida en Grafana Cloud (trazas, métricas y logs) | Alta | pendiente | Flujo C | Issue #84 (Fabio). Plan en `docs/sprint-02.md`. Exportación OTLP hacia Grafana Cloud (trazas, métricas y logs correlacionados), sin secretos versionados, y actualización de `docs/demo-observabilidad.md` y `docs/temas-catedra.md`. |
+| TEST-002 | Ampliación de tests E2E Playwright (flujo pasajero nuevo, login, modo oscuro y modo dev) | Alta | pendiente | Flujo B | Issue #85 (Valen). Plan en `docs/sprint-02.md`. Cobertura Playwright de `WEB-009`, `SEG-004`, `WEB-010`, `WEB-011` y `DEV-001` en 360px/768px/1024px. |
+| OPS-005 | Pipeline CI en GitHub Actions (build, unit/integración y E2E Playwright) | Alta | pendiente | Flujo B | Issue #86 (Valen). Plan en `docs/sprint-02.md`. `.github/workflows/ci.yml` corriendo build, `npm test` con PostgreSQL y Playwright E2E en cada push/PR a `main`. |
+| MED-003 | Suite de pruebas de stress con k6 y actualización de mediciones | Alta | pendiente | Flujo B | Issue #87 (Valen). Plan en `docs/sprint-02.md`. Scripts reproducibles en `carga/k6/` con `thresholds` SLA contra Nginx controlado y registro de resultados en `docs/mediciones.md`. |
+| DOC-002 | Cierre Sprint 2: clon limpio Docker, actualización de informe/guión y ensayo de los 3 temas | Alta | pendiente | Común | Issue #88 (Los tres, lidera Joel). Plan en `docs/sprint-02.md`. Clon limpio desde volumen vacío, actualización de `docs/informe.md` y `docs/guion-demo.md` reemplazando ataque cruzado por k6 y Grafana Cloud, y cierre de filas heredadas en `docs/backlog.md`. |
 
 ## Regla de actualización
 
