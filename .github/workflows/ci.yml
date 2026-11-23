@@ -89,6 +89,13 @@ jobs:
       - name: Compilar backend y frontend
         run: npm run build
 
+      - name: Cachear navegadores de Playwright
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
       - name: Instalar navegador Chromium de Playwright
         run: npx playwright install --with-deps chromium
 
