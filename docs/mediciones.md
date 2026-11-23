@@ -269,3 +269,52 @@ Se realizaron tres repeticiones completas por escenario con la carga estándar d
 1. **Validación de la Arquitectura:** La arquitectura hexagonal con persistencia PostgreSQL directa y pool optimizado demuestra capacidad holgada para sostener los 500 choferes concurrentes exigidos por el enunciado, manteniendo latencias inferiores al 15 % del umbral permitido.
 2. **Descarte definitivo de extensiones pesadas:** Los resultados demuestran empíricamente que la inclusión de PostGIS o indexación geohash en memoria no es necesaria para la escala requerida por la cátedra, protegiendo al proyecto de mayor consumo de memoria y complejidad de despliegue.
 3. **Cierre de Issue #51:** Con tres repeticiones consistentes por escenario y todos los umbrales de latencia, event loop y memoria en verde, la tarea **MED-002** queda formalmente terminada y aprobada para el informe final del Sprint 1.
+
+---
+
+## Pruebas de stress con `k6` (MED-003 / Sprint 2)
+
+### Hipótesis, entorno controlado y alcance
+
+Para validar el comportamiento de todo el gateway (`nginx`) y los tres microservicios (`ms-tarifas`, `ms-viajes`, `ms-flota`) frente a ráfagas y picos de concurrencia sin realizar ataques cruzados externos, se incorporó una suite reproducible con **Grafana k6 (`0.54.0`)** en `carga/k6/` acompañada de la extensión `carga/docker-compose.k6.yml`.
+
+- **Aislamiento de proveedores externos:** `carga/docker-compose.k6.yml` configura explícitamente `ms-tarifas` con `RUTA_PROVEEDOR=HAVERSINE`, `GEOCODIFICADOR_PROVEEDOR=""` y `PROVEEDORES_MODO=falso`, evitando enviar tráfico de stress hacia OSRM, Nominatim o Open-Meteo públicos.
+- **Defensa perimetral de Nginx (`nginx.conf`):** desde una única IP origen (`k6`), el API Gateway aplica `rate=30r/s` (`burst=60 nodelay`) devolviendo `429 RATE_LIMIT_EXCEEDED`. La suite distingue explícitamente entre `429` (protección activa del gateway) y `errores_5xx` (fallos de infraestructura o caídas, umbral `< 1 %`).
+- **Autenticación:** `carga/k6/comun.js` soporta automáticamente tanto tokens RS256 emitidos por `auth-emulator` (`JWT_MODO=real`) como tokens de desarrollo (`JWT_MODO=falso`).
+
+### Escenarios implementados
+
+| Script | Escenario | Objetivo |
+|---|---|---|
+| `carga/k6/stress-combinado.js` (`K6_MODO=smoke`) | Humo rápido (`10s`) | Verificar conectividad, latencia base y `0 %` errores debajo del rate limit (`~35 req/s` total entre viajes, flota y salud). |
+| `carga/k6/estimacion-y-viajes.js` | Stress viajes (`40s`, hasta `24 VUs`) | Medir `POST /viajes/estimacion` + `POST /viajes` con reintento idempotente (`Clave-Idempotencia`) bajo saturación. |
+| `carga/k6/flota-stress.js` | Stress flota (`40s`, hasta `32 VUs`) | Ráfagas de `POST /choferes/yo/ubicacion` + `GET /choferes/cercanos` + sondas `/health`. |
+| `carga/k6/stress-combinado.js` (`K6_MODO=stress`) | Stress combinado (`45s`, `3 scenarios` paralelos) | Competencia simultánea de cotizaciones/confirmaciones (`22 VUs`), ráfagas de flota (`50 iters/s`) y sondas de salud (`2 iters/s`). |
+
+### Comandos reproducibles
+
+```powershell
+# Verificación rápida (smoke ~10s)
+npm.cmd run carga:k6:smoke
+
+# Suite combinada de stress (~45s)
+npm.cmd run carga:k6
+
+# Escenarios individuales
+docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml run --rm -e K6_MODO=stress k6 run --summary-export=/resultados/k6-viajes.json /scripts/estimacion-y-viajes.js
+docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml run --rm -e K6_MODO=stress k6 run --summary-export=/resultados/k6-flota.json /scripts/flota-stress.js
+```
+
+### Resultados medidos en Docker Compose (`2026-11-23`)
+
+| Corrida | Requests totales | Throughput medio | Checks OK | `errores_5xx` | Gateway `429` | Latencias p95 (`2xx`) | Estado umbrales |
+|---|---:|---:|---:|---:|---:|---|---|
+| **Smoke combinado** (`10s`) | 377 | 34,88 req/s | 100,00 % (372/372) | **0,00 %** (0/330) | 0,00 % | Ubicación `18,36 ms` · Búsqueda `14,91 ms` · Estimación `27,07 ms` · Confirmación `35,24 ms` · `/health` `1,26 ms` | ✅ PASS |
+| **Stress viajes** (`estimacion-y-viajes.js`, `24 VUs`, `40s`) | 3.136 | 78,14 req/s | 100,00 % (4.670/4.670) | **0,00 %** (0/3.134) | 61,96 % (1.942/3.134) | Estimación `18,25 ms` (máx `50,80 ms`) · Confirmación `29,43 ms` (máx `52,25 ms`) | ✅ PASS |
+| **Stress flota** (`flota-stress.js`, `32 VUs`, `40s`) | 8.210 | 202,58 req/s | 100,00 % (15.328/15.328) | **0,00 %** (0/7.123) | 83,25 % (5.930/7.123) | Ubicación `17,81 ms` (máx `35,23 ms`) · Búsqueda `10,48 ms` (máx `27,47 ms`) · `/health` `1,09 ms` | ✅ PASS |
+| **Stress combinado** (`stress-combinado.js`, `32 VUs` + `50 iters/s`, `45s`) | 1.518 | 33,12 req/s | 100,00 % (1.495/1.495) | **0,00 %** (0/1.337) | 35,07 % (469/1.337) | Estimación `44,28 ms` · Confirmación `66,52 ms` · Ubicación `35,87 ms` · Búsqueda `32,51 ms` · `/health` `2,83 ms` | ✅ PASS |
+
+### Hallazgos técnicos observados bajo stress
+
+1. **Estabilidad de backend y gateway:** bajo ráfagas de hasta `202,58 req/s` desde una única fuente, Nginx absorbió el excedente con `429` mientras los tres microservicios y PostgreSQL mantuvieron **`0,00 %` de errores `5xx`**, `/health` y `/ready/flota` al `100 %` en `<= 2,83 ms` p95 y todas las latencias `2xx` muy por debajo de los SLA (`<= 66,52 ms` p95 frente a límites de `300–1500 ms`).
+2. **Condición de carrera en idempotencia paralela pre-commit (`POST /viajes`):** en una prueba exploratoria previa enviando dos `POST /viajes` simultáneos vía `http.batch()` antes de que la primera transacción haga `COMMIT`, se detectó una ventana TOCTOU entre `idempotencia.obtener` e `idempotencia.guardar` en `ConfirmarViaje` (`161/761` pares paralelos bajo `24 VUs` crearon viajes distintos antes de persistirse la clave, mientras los reintentos secuenciales posteriores devolvieron el mismo `id_viaje` en el `100 %` de los casos). Se registra este hallazgo como mejora recomendada en `ms-viajes` (reserva transaccional o lock por `(actor_id, operacion, clave)` antes de crear el viaje).
