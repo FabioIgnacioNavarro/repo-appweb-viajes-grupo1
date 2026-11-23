@@ -106,6 +106,7 @@ ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS cobro_estado_check;
 ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS ck_cobro_estado;
 ALTER TABLE viajes.cobro ADD CONSTRAINT ck_cobro_estado CHECK (estado IN ('PENDIENTE', 'FALLIDO', 'CONFIRMADO'));
 ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS cobro_intentos_check;
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS ck_cobro_intentos;
 ALTER TABLE viajes.cobro ADD CONSTRAINT ck_cobro_intentos CHECK (intentos >= 0);
 
 -- Idempotencia: la clave pertenece al actor y a la intención (operacion). Un reintento con la misma

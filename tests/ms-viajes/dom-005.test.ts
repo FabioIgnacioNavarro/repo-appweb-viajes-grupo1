@@ -62,7 +62,7 @@ test("DOM-005: confirma el snapshot aceptado aunque recalcular cambie clima y de
   const estimaciones = new RepositorioEstimacionesMemoria();
   const crearEstimacion = new CrearEstimacion(
     { async calcular() { return { distanciaMetros: 1000, duracionSegundos: 180, proveedor: "HAVERSINE" as const }; } },
-    { async consultar() { return { precipitacionMm, observadaEn: new Date(), fuente: "CLIMA_PRUEBA" }; } },
+    { async consultar() { return { precipitacionMm, observadaEn: new Date(Date.now() - 60_000), fuente: "CLIMA_PRUEBA" }; } },
     { async contarDisponibles() { return choferesDisponibles; } },
     { async contarSolicitudesActivas() { return solicitudesActivas; } },
     { async resolver() { return zona; } },
@@ -90,7 +90,7 @@ test("DOM-005: confirma el snapshot aceptado aunque recalcular cambie clima y de
   const estimacionLeida = new Promise<void>((resolver) => { senalLectura = resolver; });
   let liberarConfirmacion: () => void = () => undefined;
   const barreraConfirmacion = new Promise<void>((resolver) => { liberarConfirmacion = resolver; });
-  const clienteTarifas = new ClienteTarifasHttp(tarifas.base, new ClienteServiciosHttp({ reintentos: 0 }));
+  const clienteTarifas = new ClienteTarifasHttp(tarifas.base, new ClienteServiciosHttp({ timeoutMs: 5000, reintentos: 0 }));
   const appViajes = express();
   appViajes.use(crearRouterViajes({
     viajes,
