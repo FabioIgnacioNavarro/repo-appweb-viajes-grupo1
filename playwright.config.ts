@@ -3,6 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Configuración de Playwright para repo-appweb-viajes-grupo1
  */
+const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+
 export default defineConfig({
   testDir: "./tests/playwright",
   fullyParallel: true,
@@ -26,23 +28,23 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
-        channel: "chrome"
+        ...(process.env.CI ? {} : { channel: "chrome" })
       }
     }
   ],
   /* Levanta automáticamente el servidor web de desarrollo (React + Vite) y el servidor legacy si no están corriendo */
   webServer: [
     {
-      command: "npm.cmd run dev:web -- --host 127.0.0.1 --port 5173",
+      command: `${npmCmd} run dev:web -- --host 127.0.0.1 --port 5173`,
       url: "http://127.0.0.1:5173",
       reuseExistingServer: !process.env.CI,
-      timeout: 30 * 1000
+      timeout: 60 * 1000
     },
     {
-      command: "npm.cmd run demo:web",
+      command: `${npmCmd} run demo:web`,
       url: "http://127.0.0.1:3000/health",
       reuseExistingServer: !process.env.CI,
-      timeout: 30 * 1000,
+      timeout: 60 * 1000,
       env: {
         RUTA_PROVEEDOR: "HAVERSINE"
       }
