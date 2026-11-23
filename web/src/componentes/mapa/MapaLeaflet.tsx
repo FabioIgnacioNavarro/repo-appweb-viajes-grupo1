@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import L from "leaflet";
 
 export interface PuntoMapa {
@@ -17,6 +17,13 @@ interface MapaLeafletProps {
   onSeleccionarPunto?: (tipo: "origen" | "destino", coords: [number, number]) => void;
 }
 
+const ORIGEN_POR_DEFECTO: PuntoMapa = {
+  latitud: -27.4521295,
+  longitud: -58.9873752,
+  titulo: "Juan B. Justo 4 (Plaza 25 de Mayo), Resistencia",
+  tipo: "origen",
+};
+
 function construirContenidoPopup(etiqueta: string, texto: string): HTMLElement {
   const contenedor = document.createElement("div");
   const fuerte = document.createElement("strong");
@@ -25,9 +32,22 @@ function construirContenidoPopup(etiqueta: string, texto: string): HTMLElement {
   return contenedor;
 }
 
+function firmaEncuadre(
+  origen: PuntoMapa | undefined,
+  destino: PuntoMapa | undefined,
+  rutaGeoJson: [number, number][] | undefined
+): string {
+  const o = origen ? `${origen.latitud.toFixed(5)},${origen.longitud.toFixed(5)}` : "none";
+  const d = destino ? `${destino.latitud.toFixed(5)},${destino.longitud.toFixed(5)}` : "none";
+  const rLen = rutaGeoJson?.length ?? 0;
+  const rIni = rLen > 0 ? `${rutaGeoJson![0]![0].toFixed(5)},${rutaGeoJson![0]![1].toFixed(5)}` : "";
+  const rFin = rLen > 1 ? `${rutaGeoJson![rLen - 1]![0].toFixed(5)},${rutaGeoJson![rLen - 1]![1].toFixed(5)}` : "";
+  return `${o}|${d}|${rLen}:${rIni}->${rFin}`;
+}
+
 export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
-  origen = { latitud: -27.4514, longitud: -58.9866, titulo: "Plaza 25 de Mayo, Resistencia", tipo: "origen" },
-  destino = { latitud: -27.4385, longitud: -58.9723, titulo: "Av. Sarmiento y Ruta 16", tipo: "destino" },
+  origen = ORIGEN_POR_DEFECTO,
+  destino,
   posicionChofer,
   rutaGeoJson,
   altura = "100%",
@@ -37,6 +57,38 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   const mapaRef = useRef<L.Map | null>(null);
   const marcadoresRef = useRef<{ [key: string]: L.Marker }>({});
   const lineaRutaRef = useRef<L.Polyline | null>(null);
+  const ultimaFirmaEncuadreRef = useRef<string>("");
+  const onSeleccionarPuntoRef = useRef(onSeleccionarPunto);
+  const origenActualRef = useRef<PuntoMapa | undefined>(origen);
+  const destinoActualRef = useRef<PuntoMapa | undefined>(destino);
+  const rutaActualRef = useRef<[number, number][] | undefined>(rutaGeoJson);
+
+  useEffect(() => {
+    onSeleccionarPuntoRef.current = onSeleccionarPunto;
+  }, [onSeleccionarPunto]);
+
+  const encuadrarRecorridoCompleto = useCallback(() => {
+    const mapa = mapaRef.current;
+    if (!mapa) return;
+
+    const puntos: L.LatLngExpression[] = [];
+    if (rutaActualRef.current && rutaActualRef.current.length > 0) {
+      for (const p of rutaActualRef.current) puntos.push(p);
+    }
+    if (origenActualRef.current) {
+      puntos.push([origenActualRef.current.latitud, origenActualRef.current.longitud]);
+    }
+    if (destinoActualRef.current) {
+      puntos.push([destinoActualRef.current.latitud, destinoActualRef.current.longitud]);
+    }
+
+    if (puntos.length >= 2) {
+      const bounds = L.latLngBounds(puntos);
+      mapa.fitBounds(bounds, { padding: [70, 70], maxZoom: 15, animate: true });
+    } else if (puntos.length === 1) {
+      mapa.setView(puntos[0]!, 15, { animate: true });
+    }
+  }, []);
 
   // Inicializar mapa una sola vez
   useEffect(() => {
@@ -44,7 +96,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
 
     const mapa = L.map(contenedorRef.current, {
       zoomControl: false,
-    }).setView([-27.4514, -58.9866], 14);
+    }).setView([ORIGEN_POR_DEFECTO.latitud, ORIGEN_POR_DEFECTO.longitud], 14);
 
     L.control.zoom({ position: "bottomright" }).addTo(mapa);
 
@@ -55,7 +107,12 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
 
     mapaRef.current = mapa;
 
-    // Forzar recalculo de dimensiones del contenedor Leaflet
+    mapa.on("click", (evento: L.LeafletMouseEvent) => {
+      const cb = onSeleccionarPuntoRef.current;
+      if (!cb) return;
+      cb("destino", [evento.latlng.lat, evento.latlng.lng]);
+    });
+
     const timer = setTimeout(() => {
       mapa.invalidateSize();
     }, 150);
@@ -64,20 +121,22 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
       clearTimeout(timer);
       mapa.remove();
       mapaRef.current = null;
+      marcadoresRef.current = {};
+      lineaRutaRef.current = null;
+      ultimaFirmaEncuadreRef.current = "";
     };
   }, []);
 
-  // Función para crear pines personalizados con diseño SVG nítido
   const crearIconoPin = (tipo: "origen" | "destino" | "chofer") => {
-    let colorFondo = "#2563eb"; // Pasajero / Origen (Azul)
+    let colorFondo = "#2563eb";
     let etiqueta = "A";
 
     if (tipo === "destino") {
-      colorFondo = "#dc2626"; // Destino (Rojo)
+      colorFondo = "#dc2626";
       etiqueta = "B";
     } else if (tipo === "chofer") {
-      colorFondo = "#059669"; // Chofer (Verde)
-      etiqueta = "🚖";
+      colorFondo = "#059669";
+      etiqueta = "C";
     }
 
     const html = `
@@ -108,102 +167,108 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     });
   };
 
-  // Actualizar marcadores y polilínea cuando cambian las props
+  // Actualizar marcadores, popups y polilínea; encuadrar solo cuando cambian las coordenadas reales
   useEffect(() => {
     const mapa = mapaRef.current;
     if (!mapa) return;
 
-    // 1. Marcador Origen
-    if (origen) {
-      if (marcadoresRef.current.origen) {
-        marcadoresRef.current.origen.setLatLng([origen.latitud, origen.longitud]);
+    origenActualRef.current = origen;
+    destinoActualRef.current = destino;
+    rutaActualRef.current = rutaGeoJson;
+
+    const sincronizarMarcador = (
+      clave: "origen" | "destino" | "chofer",
+      punto: PuntoMapa | undefined,
+      etiquetaPopup: string,
+      arrastrable: boolean
+    ) => {
+      const existente = marcadoresRef.current[clave];
+      if (!punto) {
+        if (existente) {
+          mapa.removeLayer(existente);
+          delete marcadoresRef.current[clave];
+        }
+        return;
+      }
+
+      const textoPopup = punto.titulo || (clave === "chofer" ? "En camino" : etiquetaPopup);
+
+      if (existente) {
+        existente.setLatLng([punto.latitud, punto.longitud]);
+        existente.setPopupContent(construirContenidoPopup(etiquetaPopup, textoPopup));
+        if (arrastrable && existente.dragging) {
+          existente.dragging.enable();
+        } else if (existente.dragging) {
+          existente.dragging.disable();
+        }
       } else {
-        const marker = L.marker([origen.latitud, origen.longitud], {
-          icon: crearIconoPin("origen"),
-          draggable: !!onSeleccionarPunto,
+        const marker = L.marker([punto.latitud, punto.longitud], {
+          icon: crearIconoPin(clave),
+          draggable: arrastrable,
         }).addTo(mapa);
 
-        if (origen.titulo) {
-          marker.bindPopup(construirContenidoPopup("Origen", origen.titulo));
-        }
+        marker.bindPopup(construirContenidoPopup(etiquetaPopup, textoPopup));
 
-        if (onSeleccionarPunto) {
+        if (clave === "origen" || clave === "destino") {
           marker.on("dragend", (e) => {
+            const cb = onSeleccionarPuntoRef.current;
+            if (!cb) return;
             const ll = e.target.getLatLng();
-            onSeleccionarPunto("origen", [ll.lat, ll.lng]);
+            cb(clave, [ll.lat, ll.lng]);
           });
         }
-        marcadoresRef.current.origen = marker;
+
+        marcadoresRef.current[clave] = marker;
       }
-    }
+    };
 
-    // 2. Marcador Destino
-    if (destino) {
-      if (marcadoresRef.current.destino) {
-        marcadoresRef.current.destino.setLatLng([destino.latitud, destino.longitud]);
-      } else {
-        const marker = L.marker([destino.latitud, destino.longitud], {
-          icon: crearIconoPin("destino"),
-          draggable: !!onSeleccionarPunto,
-        }).addTo(mapa);
+    const draggable = Boolean(onSeleccionarPuntoRef.current);
+    sincronizarMarcador("origen", origen, "Origen", draggable);
+    sincronizarMarcador("destino", destino, "Destino", draggable);
+    sincronizarMarcador("chofer", posicionChofer, "Chofer asignado", false);
 
-        if (destino.titulo) {
-          marker.bindPopup(construirContenidoPopup("Destino", destino.titulo));
-        }
-
-        if (onSeleccionarPunto) {
-          marker.on("dragend", (e) => {
-            const ll = e.target.getLatLng();
-            onSeleccionarPunto("destino", [ll.lat, ll.lng]);
-          });
-        }
-        marcadoresRef.current.destino = marker;
-      }
-    }
-
-    // 3. Marcador Chofer en Vivo
-    if (posicionChofer) {
-      if (marcadoresRef.current.chofer) {
-        marcadoresRef.current.chofer.setLatLng([posicionChofer.latitud, posicionChofer.longitud]);
-      } else {
-        const marker = L.marker([posicionChofer.latitud, posicionChofer.longitud], {
-          icon: crearIconoPin("chofer"),
-        }).addTo(mapa);
-        marker.bindPopup(construirContenidoPopup("Chofer asignado", posicionChofer.titulo || "En camino"));
-        marcadoresRef.current.chofer = marker;
-      }
-    }
-
-    // 4. Trazado de Ruta
+    // 4. Trazado de Ruta completo (siempre dibuja si hay >= 2 puntos)
     if (lineaRutaRef.current) {
       mapa.removeLayer(lineaRutaRef.current);
       lineaRutaRef.current = null;
     }
 
-    if (rutaGeoJson && rutaGeoJson.length > 0) {
-      const polilinea = L.polyline(rutaGeoJson, {
+    const puntosLinea: [number, number][] =
+      rutaGeoJson && rutaGeoJson.length >= 2 ? rutaGeoJson : [];
+
+    if (puntosLinea.length >= 2) {
+      const polilinea = L.polyline(puntosLinea, {
         color: "#2563eb",
         weight: 5,
         opacity: 0.85,
         lineCap: "round",
         lineJoin: "round",
       }).addTo(mapa);
-
       lineaRutaRef.current = polilinea;
-      mapa.fitBounds(polilinea.getBounds(), { padding: [40, 40] });
-    } else if (origen && destino) {
-      // Ajustar vista para contener origen y destino
-      const bounds = L.latLngBounds([
-        [origen.latitud, origen.longitud],
-        [destino.latitud, destino.longitud],
-      ]);
-      mapa.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [origen, destino, posicionChofer, rutaGeoJson, onSeleccionarPunto]);
+
+    // 5. Encuadrar vista SOLO cuando cambian coordenadas/recorrido reales (evita robar zoom/pan al usuario)
+    const firmaActual = firmaEncuadre(origen, destino, puntosLinea);
+    if (firmaActual !== ultimaFirmaEncuadreRef.current) {
+      ultimaFirmaEncuadreRef.current = firmaActual;
+      encuadrarRecorridoCompleto();
+    }
+  }, [origen, destino, posicionChofer, rutaGeoJson, encuadrarRecorridoCompleto]);
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-xs" style={{ minHeight: "360px", height: altura }}>
+    <div
+      className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-xs"
+      style={{ minHeight: "360px", height: altura }}
+    >
       <div ref={contenedorRef} className="w-full h-full" style={{ minHeight: "360px" }} />
+      <button
+        type="button"
+        onClick={encuadrarRecorridoCompleto}
+        className="absolute top-3 right-3 z-[400] rounded-lg border border-slate-300 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-xs hover:bg-slate-50 cursor-pointer"
+        title="Alejar o acercar el mapa para ver el viaje completo"
+      >
+        Ver recorrido
+      </button>
     </div>
   );
 };

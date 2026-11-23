@@ -17,6 +17,7 @@ export default defineConfig({
       "/choferes": "http://localhost:8080",
       "/estimaciones": "http://localhost:8080",
       "/reglas": "http://localhost:8080",
+      "/tarifas": "http://localhost:8080",
       "/health": "http://localhost:8080",
       "/ready": "http://localhost:8080",
       "/auth": "http://localhost:9099",
