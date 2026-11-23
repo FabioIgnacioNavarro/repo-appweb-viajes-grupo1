@@ -97,6 +97,20 @@ el destino HTTP y el contexto de Docker deben ser locales. Los informes se guard
 `carga/resultados/`, excluida de Git. La prueba corta valida que el simulador funcione, pero no
 reemplaza las tres ejecuciones de aceptación.
 
+### Pruebas de stress con k6 (MED-003)
+
+Con el stack de Docker Compose levantado, podés ejecutar las pruebas de humo y stress con `grafana/k6` sin instalar binarios globales ni golpear APIs externas (`carga/docker-compose.k6.yml` fuerza proveedores internos):
+
+```powershell
+# Prueba rápida (~10 s)
+npm.cmd run carga:k6:smoke
+
+# Suite combinada de stress (~45 s): viajes + flota + sondas de salud
+npm.cmd run carga:k6
+```
+
+Los scripts están en `carga/k6/` (`estimacion-y-viajes.js`, `flota-stress.js`, `stress-combinado.js`) y sus métricas medidas figuran en [`docs/mediciones.md`](docs/mediciones.md).
+
 ---
 
 ## 🏛️ Topología de Servicios y Puertos
