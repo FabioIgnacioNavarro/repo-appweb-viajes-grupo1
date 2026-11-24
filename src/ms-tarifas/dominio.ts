@@ -196,15 +196,19 @@ function seleccionarFactor(valor: number, umbrales: FactorPorUmbral[]): number {
     ?? 10_000;
 }
 
-export function obtenerFranjaHoraria(fecha: Date, zonaHoraria: string): FranjaHoraria {
-  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: zonaHoraria, hour: "2-digit", hourCycle: "h23" }).formatToParts(fecha);
-  const hora = Number(partes.find((parte) => parte.type === "hour")?.value);
+export function franjaParaHora(hora: number): FranjaHoraria {
   if (!Number.isInteger(hora) || hora < 0 || hora > 23) throw new ErrorTarifas("ZONA_HORARIA_INVALIDA", "No se pudo resolver la hora local de la zona.");
   if (hora < 6) return "MADRUGADA";
   if (hora < 12) return "MANANA";
   if (hora < 16) return "SIESTA";
   if (hora < 20) return "TARDE";
   return "NOCHE";
+}
+
+export function obtenerFranjaHoraria(fecha: Date, zonaHoraria: string): FranjaHoraria {
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: zonaHoraria, hour: "2-digit", hourCycle: "h23" }).formatToParts(fecha);
+  const hora = Number(partes.find((parte) => parte.type === "hour")?.value);
+  return franjaParaHora(hora);
 }
 
 function combinarMultiplicadores(factores: number[], regla: ReglaTarifa): number {
@@ -342,20 +346,17 @@ export class CrearEstimacion {
       this.zonas.resolver(origen), this.reglas.obtenerActiva(), this.rutas.calcular(origen, destino)
     ]);
 
-    let fechaCalculo = ahora;
     if (simulacion?.hora !== undefined) {
       if (!Number.isInteger(simulacion.hora) || simulacion.hora < 0 || simulacion.hora > 23) {
         throw new ErrorTarifas("ENTRADA_INVALIDA", "La hora simulada debe ser un entero entre 0 y 23.");
       }
-      fechaCalculo = new Date(ahora);
-      fechaCalculo.setHours(simulacion.hora, 0, 0, 0);
     }
 
     const promesas: [Promise<ObservacionClima>, Promise<number>, Promise<number>] = [
       simulacion?.precipitacionMm !== undefined || simulacion?.llueve !== undefined
         ? Promise.resolve({
             precipitacionMm: simulacion.precipitacionMm ?? (simulacion.llueve ? 5 : 0),
-            observadaEn: fechaCalculo,
+            observadaEn: ahora,
             fuente: "simulada_modo_dev",
           })
         : this.clima.consultar(zona),
@@ -384,7 +385,9 @@ export class CrearEstimacion {
 
     const franjaHoraria = simulacion?.franjaHoraria && FRANJAS_VALIDAS.includes(simulacion.franjaHoraria)
       ? simulacion.franjaHoraria
-      : obtenerFranjaHoraria(fechaCalculo, zona.zonaHoraria);
+      : simulacion?.hora !== undefined
+        ? franjaParaHora(simulacion.hora)
+        : obtenerFranjaHoraria(ahora, zona.zonaHoraria);
 
     const factorLluviaEscalado = observacion.precipitacionMm > 0
       ? regla.lluviaConPrecipitacionEscalado : regla.lluviaSinPrecipitacionEscalado;
