@@ -12,13 +12,39 @@ function emitirJwt(id: string, rol: string, nombre: string): string {
   return `eyJhbGciOiJSUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.firma-demo`;
 }
 
-test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () => {
-  test("escapa payloads XSS en tablas, formularios, alertas y MapaLeaflet sin ejecutar HTML ni exponer el JWT en URLs", async ({ page }) => {
+test.describe("SEG-003 / SEG-005 - Hardening del front y CSP", () => {
+  test("escapa XSS, evita exponer JWT y mantiene el mapa sin violaciones CSP", async ({ page }) => {
+    const violacionesCsp: string[] = [];
+    const politicasRecibidas: string[] = [];
+    await page.exposeFunction("registrarViolacionCsp", (violacion: string) => {
+      violacionesCsp.push(violacion);
+    });
+    await page.addInitScript(() => {
+      document.addEventListener("securitypolicyviolation", (evento) => {
+        const registrar = (window as unknown as { registrarViolacionCsp?: (valor: string) => Promise<void> })
+          .registrarViolacionCsp;
+        void registrar?.(`${evento.violatedDirective}: ${evento.blockedURI}`);
+      });
+    });
+    page.on("console", (mensaje) => {
+      if (mensaje.type() === "error" && /content security policy|violates the following/i.test(mensaje.text())) {
+        violacionesCsp.push(mensaje.text());
+      }
+    });
+    page.on("response", (respuesta) => {
+      if (respuesta.request().isNavigationRequest()) {
+        const politica = respuesta.headers()["content-security-policy"];
+        if (politica) politicasRecibidas.push(politica);
+      }
+    });
+
     const payloadXssImg = `<img src=x onerror="window.__xssDisparado='img'">`;
     const payloadXssScript = `<script>window.__xssDisparado='script'</script>`;
     const wsUrls: string[] = [];
+    let solicitudesTiles = 0;
     const tokenSoporte = emitirJwt("op-1", "SOPORTE", "Lucía Operaciones");
     const tokenAdmin = emitirJwt("adm-1", "ADMINISTRADOR", "Martín Admin");
+    const tokenChofer = emitirJwt("cho-1", "CHOFER", "Carlos Maidana");
     const tokenPasajero = emitirJwt("pas-1", "PASAJERO", `Ana ${payloadXssImg}`);
 
     page.on("websocket", (ws) => {
@@ -29,7 +55,13 @@ test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () =
       const body = route.request().postDataJSON() as { rol?: string };
       const rol = (body.rol ?? "pasajero").toLowerCase();
       const token =
-        rol === "soporte" ? tokenSoporte : rol === "administrador" ? tokenAdmin : tokenPasajero;
+        rol === "soporte"
+          ? tokenSoporte
+          : rol === "administrador"
+            ? tokenAdmin
+            : rol === "chofer"
+              ? tokenChofer
+              : tokenPasajero;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -117,13 +149,28 @@ test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () =
     await page.route("**/ready/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ estado: "listo" }) })
     );
+    await page.route("**/choferes/**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ofertas: [] }) })
+    );
+    await page.route("https://tile.openstreetmap.org/**", async (route) => {
+      solicitudesTiles += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p8sAAAAASUVORK5CYII=",
+          "base64"
+        ),
+      });
+    });
 
     // 1. Verificar Operador con datos con payloads XSS -> escapado como texto, sin ejecución
     await page.goto("/#/login");
     await iniciarConPerfilDemo(page, /Lucía Operaciones/i);
     await expect(page).toHaveURL(/#\/operador/);
-    await expect(page.getByText(payloadXssImg).first()).toBeVisible();
-    await expect(page.getByText(payloadXssScript).first()).toBeVisible();
+    const filaXss = page.getByRole("row").filter({ hasText: payloadXssImg });
+    await expect(filaXss).toBeVisible();
+    await expect(filaXss).toContainText(payloadXssScript);
 
     let estadoSeguridad = await page.evaluate(() => ({
       xss: (window as unknown as { __xssDisparado?: string }).__xssDisparado ?? null,
@@ -146,6 +193,17 @@ test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () =
     await expect(page).toHaveURL(/#\/pasajero/);
     await page.reload();
     await expect(page).toHaveURL(/#\/pasajero/);
+    await expect(page.locator(".leaflet-container")).toBeVisible();
+    await expect(page.locator(".custom-leaflet-pin").first()).toBeVisible();
+    await expect.poll(() => solicitudesTiles).toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        page
+          .locator(".custom-leaflet-pin > div")
+          .first()
+          .evaluate((pin) => getComputedStyle(pin).width)
+      )
+      .toBe("32px");
     await expect.poll(() => wsUrls.filter((u) => u.includes("/ws") || u.includes("/tiempo-real")).length).toBeGreaterThan(0);
 
     estadoSeguridad = await page.evaluate(() => ({
@@ -162,5 +220,19 @@ test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () =
       expect(wsUrl).not.toContain("eyJhbGci");
       expect(wsUrl).not.toContain("token=");
     }
+
+    await page.getByRole("button", { name: "Salir" }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
+    await expect(page).toHaveURL(/#\/chofer/);
+    await expect(page.getByRole("banner")).toContainText("CHOFER");
+    await page.goto("/#/admin");
+    await expect(page).toHaveURL(/#\/no_autorizado/);
+    await expect(page.getByTestId("vista-no-autorizado")).toBeVisible();
+
+    if (process.env.PLAYWRIGHT_REQUIRE_CSP === "1") {
+      expect(politicasRecibidas.some((politica) => politica.includes("default-src 'self'"))).toBe(true);
+      expect(politicasRecibidas.some((politica) => /'unsafe-inline'|'unsafe-eval'/.test(politica))).toBe(false);
+    }
+    expect(violacionesCsp).toEqual([]);
   });
 });

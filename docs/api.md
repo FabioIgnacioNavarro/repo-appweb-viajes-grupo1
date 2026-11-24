@@ -55,6 +55,29 @@ Este documento consolida el contrato de la API HTTP de la plataforma para todos 
 | `POST` | `/auth/token` | `auth-emulator:9099` | Emite un JWT RS256 de desarrollo/demo para `{ id_usuario, rol }` (también acepta `idUsuario`). Solo entorno con emulador. |
 | `GET` | `/auth/tokens-demo` | `auth-emulator:9099` | Devuelve catálogo de tokens RS256 sintéticos de demostración por rol. |
 
+### Cabeceras y límites del API Gateway
+
+Nginx agrega cabeceras de seguridad a las respuestas del frontend y de la API. La CSP usa
+`default-src 'self'`, permite scripts y hojas de estilo solo desde el mismo origen, bloquea objetos
+con `object-src 'none'` y prohíbe que la aplicación se muestre dentro de marcos (`frame-ancestors
+'none'`). Los scripts no aceptan `'unsafe-inline'` ni `'unsafe-eval'`. Las imágenes externas se
+limitan a `https://tile.openstreetmap.org`; se permite `data:` solo porque Leaflet usa un GIF
+transparente como marcador temporal al cargar los mosaicos. Las conexiones WebSocket de la demo se
+limitan a `localhost:8080` y `127.0.0.1:8080`.
+
+Leaflet genera estilos en línea para los pines del mapa. Se permiten solo sus valores actuales,
+identificados por hashes SHA-256 en `style-src-attr`; no se habilita una excepción general para
+estilos en línea. La prueba de configuración del gateway compara los hashes con
+`web/src/componentes/mapa/MapaLeaflet.tsx`, así que cualquier cambio de esos estilos debe actualizar
+la CSP junto con la prueba. Si se agrega otro origen de tiles, fuentes o conexiones, debe agregarse
+explícitamente después de verificar que la interfaz lo necesita.
+
+| Grupo de rutas | Límite de Nginx | Tiempos máximos del proxy |
+|---|---|---|
+| API general | `30` solicitudes/segundo, ráfaga de `60` | Conexión `1,5 s` (`/viajes/estimacion`: `1,8 s`), lectura `4 s` (geocodificación inversa: `5 s`) |
+| `/auth/` | `10` solicitudes/segundo, ráfaga de `20` | Conexión `1,5 s`, lectura `4 s` |
+| WebSocket `/tiempo-real` y `/ws` | Sin límite HTTP de solicitudes mientras el socket permanece abierto | Lectura y escritura `1 h` |
+
 #### `POST /auth/login`
 Autentica una cuenta semilla del emulador de identidad. La contraseña se compara en el emulador y nunca se envía a los microservicios de negocio.
 - **Disponibilidad:** solo entorno local/de desarrollo; responde `404 RUTA_NO_ENCONTRADA` si `NODE_ENV=production`.
