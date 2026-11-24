@@ -27,6 +27,7 @@ test("OPS-004: nginx.conf entrega la SPA, proxea WebSocket y protege rutas inter
   assert.match(nginx, /location\s+\^~\s+\/interno\/\s*\{[^}]*return\s+404/s);
   assert.match(nginx, /location\s+\^~\s+\/estimaciones\/\s*\{[^}]*return\s+404/s);
   assert.match(nginx, /location\s+\^~\s+\/auth\/\s*\{[^}]*proxy_pass\s+http:\/\/auth_emulator;/s);
+  assert.match(nginx, /location\s+=\s+\/auth\/login\s*\{[^}]*limit_req\s+zone=auth_tokens[^}]*proxy_pass\s+http:\/\/auth_emulator;/s);
 });
 
 test("OPS-004: Dockerfile y docker-compose.yml compilan y publican dist/web en el gateway", () => {
@@ -38,4 +39,5 @@ test("OPS-004: Dockerfile y docker-compose.yml compilan y publican dist/web en e
   assert.match(dockerfile, /FROM\s+nginx:[^\s]+\s+AS\s+gateway/);
   assert.match(dockerfile, /COPY\s+--from=build\s+\/app\/dist\/web\s+\/usr\/share\/nginx\/html/);
   assert.match(compose, /nginx:[\s\S]*?target:\s*gateway/);
+  assert.match(compose, /AUTH_DEMO_PASSWORD:\s+\$\{AUTH_DEMO_PASSWORD:-[^}]+\}/);
 });

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { abrirAccesosDemo, iniciarConPerfilDemo } from "./ayudantes-login";
 
 test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403", () => {
   test("login por cada rol usando /auth/token, redirección, acceso denegado 403 y logout", async ({ page }) => {
@@ -40,7 +41,7 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     await page.goto("/#/login");
 
     // 1. PASAJERO -> #/pasajero + intento de ruta ajena #/admin -> 403 Forbidden
-    await page.getByRole("button", { name: /Ana Gómez/i }).click();
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.getByRole("banner")).toContainText("PASAJERO");
 
@@ -52,19 +53,19 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     await expect(page).toHaveURL(/#\/login/);
 
     // 2. CHOFER -> #/chofer
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page).toHaveURL(/#\/chofer/);
     await expect(page.getByRole("banner")).toContainText("CHOFER");
     await page.getByRole("button", { name: "Salir" }).click();
 
     // 3. SOPORTE -> #/operador
-    await page.getByRole("button", { name: /Lucía Operaciones/i }).click();
+    await iniciarConPerfilDemo(page, /Lucía Operaciones/i);
     await expect(page).toHaveURL(/#\/operador/);
     await expect(page.getByRole("banner")).toContainText("SOPORTE");
     await page.getByRole("button", { name: "Salir" }).click();
 
     // 4. ADMINISTRADOR -> #/admin
-    await page.getByRole("button", { name: /Martín Administrador/i }).click();
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
     await expect(page.getByRole("banner")).toContainText("ADMINISTRADOR");
     await page.getByRole("button", { name: "Salir" }).click();
@@ -105,7 +106,7 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     );
 
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Ana Gómez/i }).click();
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
 
     await expect(page).toHaveURL(/#\/login/);
     await expect(page.getByTestId("alerta-login")).toBeVisible();
@@ -122,6 +123,7 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     const tokenVencido = `falso.${Buffer.from(JSON.stringify(payloadVencido)).toString("base64url")}`;
 
     await page.goto("/#/login");
+    await abrirAccesosDemo(page);
     await page.getByTestId("input-token-manual").fill(tokenVencido);
     await page.getByTestId("boton-token-manual").click();
 

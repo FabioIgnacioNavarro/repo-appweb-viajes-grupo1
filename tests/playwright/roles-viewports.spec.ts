@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 
 test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewports Responsive", () => {
   test.beforeEach(async ({ page }) => {
@@ -88,7 +89,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page.locator("h1")).toContainText(/Bienvenido a la Plataforma de Viajes/i);
 
     // 1.2 PASAJERO: Ana Gómez
-    await page.click("button:has-text('Ana Gómez')");
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.locator("header")).toContainText("PASAJERO");
     await expect(page.locator("h1")).toContainText(/Hola, Ana Gómez/i);
@@ -99,7 +100,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page).toHaveURL(/#\/login/);
 
     // 1.3 CHOFER: Carlos Maidana
-    await page.click("button:has-text('Carlos Maidana')");
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page).toHaveURL(/#\/chofer/);
     await expect(page.locator("header")).toContainText("CHOFER");
     await expect(page.locator("h1")).toContainText(/Hola, Carlos Maidana/i);
@@ -110,7 +111,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page).toHaveURL(/#\/login/);
 
     // 1.4 SOPORTE: Lucía Operaciones
-    await page.click("button:has-text('Lucía Operaciones')");
+    await iniciarConPerfilDemo(page, /Lucía Operaciones/i);
     await expect(page).toHaveURL(/#\/operador/);
     await expect(page.locator("header")).toContainText("SOPORTE");
     await expect(page.locator("h1")).toContainText(/Supervisión de Viajes en Tiempo Real/i);
@@ -120,7 +121,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page).toHaveURL(/#\/login/);
 
     // 1.5 ADMINISTRADOR: Martín Administrador
-    await page.click("button:has-text('Martín Administrador')");
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
     await expect(page.locator("header")).toContainText("ADMINISTRADOR");
     await expect(page.locator("h1")).toContainText(/Configuración Global y Reglas de Demanda/i);
@@ -145,7 +146,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
 
     // 2.2 Iniciar sesión como PASAJERO
     await page.goto("/#/login");
-    await page.click("button:has-text('Ana Gómez')");
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
 
     // Pasajero intenta forzar acceso a /admin o /operador -> Redirige a /no_autorizado (403 Forbidden)
@@ -160,7 +161,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
 
     // 2.3 Chofer intenta forzar acceso a /admin -> Redirige a /no_autorizado
     await page.click("button:has-text('Salir')");
-    await page.click("button:has-text('Carlos Maidana')");
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page).toHaveURL(/#\/chofer/);
 
     await page.goto("/#/admin");
@@ -170,7 +171,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
 
   test("3. Navegación global del Administrador: acceso fluido a todos los paneles", async ({ page }) => {
     await page.goto("/#/login");
-    await page.click("button:has-text('Martín Administrador')");
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
 
     // El admin ve la barra de navegación completa en el header
@@ -222,7 +223,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
       expect(desbordeLogin, `Desborde horizontal detectado en Login a ${vp.nombre}`).toBe(true);
 
       // 4.2 Pasajero Responsive
-      await page.click("button:has-text('Ana Gómez')");
+      await iniciarConPerfilDemo(page, /Ana Gómez/i);
       await page.waitForLoadState("networkidle");
       const desbordePasajero = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1
@@ -231,7 +232,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
 
       // 4.3 Salir y verificar Chofer Responsive
       await page.click("button:has-text('Salir')");
-      await page.click("button:has-text('Carlos Maidana')");
+      await iniciarConPerfilDemo(page, /Carlos Maidana/i);
       await page.waitForLoadState("networkidle");
       const desbordeChofer = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1
@@ -247,7 +248,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     page,
   }) => {
     await page.goto("/#/login");
-    await page.click("button:has-text('Carlos Maidana')");
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page).toHaveURL(/#\/chofer/);
 
     // Header muestra badge CHOFER

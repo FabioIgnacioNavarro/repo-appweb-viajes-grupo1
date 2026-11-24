@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 
 test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance de viaje", () => {
   test.beforeEach(async ({ page }) => {
@@ -226,7 +227,7 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
 
     // 1. Ingresar como Chofer
     await page.goto("/#login");
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
     // 2. Activar disponibilidad en ms-flota
@@ -340,7 +341,7 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     // Verificar en los 3 viewports requeridos (360px, 768px, 1024px)
     await page.setViewportSize({ width: 360, height: 640 });
     await page.goto("/#login");
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
     await expect(page.getByTestId("tarjeta-oferta-oferta-409")).toBeVisible();

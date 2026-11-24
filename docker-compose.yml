@@ -36,6 +36,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PUERTO_EMULADOR_AUTH: 9099
+      AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-ViajesDemo2026!}
       JWT_ISSUER: ${JWT_ISSUER:-http://auth-emulator:9099/demo-viajes-grupo1}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-demo-viajes-grupo1}
     ports:

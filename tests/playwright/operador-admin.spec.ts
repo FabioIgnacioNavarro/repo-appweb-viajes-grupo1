@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 import express from "express";
 import { createServer, type Server } from "node:http";
 import {
@@ -222,7 +223,7 @@ test.describe("WEB-008 - Panel de Operador (auditoría API-002) y Administrador 
     });
 
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Lucía Operaciones/i }).click();
+    await iniciarConPerfilDemo(page, /Lucía Operaciones/i);
     await expect(page).toHaveURL(/#\/operador/);
 
     // Verifica listado inicial
@@ -312,7 +313,7 @@ test.describe("WEB-008 - Panel de Operador (auditoría API-002) y Administrador 
     });
 
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Martín Administrador/i }).click();
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
 
     // Verifica v1 inicial
