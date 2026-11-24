@@ -9,6 +9,8 @@ Esta guía documenta los pasos reproducibles para ejecutar la demostración prá
 >
 > **Respuesta demostrable:** Inyectando y propagando el estándar W3C Trace Context (`traceparent`) en cada salto de red HTTP entre servicios. Toda solicitud entrante genera o propaga un `trace_id` único que correlaciona los spans de ejecución y los logs estructurados, permitiendo visualizar la cascada completa de tiempos y errores en Jaeger.
 
+El modo local predeterminado sigue usando Jaeger para trazas. La sección **Modo Grafana Cloud (OBS-002)** muestra cómo habilitar trazas, métricas y logs OTLP con valores guardados únicamente en el `.env` local.
+
 ---
 
 ## Requisitos Previos
@@ -83,6 +85,90 @@ Invoke-RestMethod -Uri "http://localhost:8080/viajes/estimacion" -Method Post -H
 ```powershell
 docker compose start ms-flota
 ```
+
+---
+
+## Modo Grafana Cloud (OBS-002)
+
+Este modo envía las tres señales (trazas, métricas y logs) a Grafana Cloud desde los tres microservicios. Necesitan una cuenta/stack de Grafana Cloud y los datos de conexión que aparecen en **Configure > OpenTelemetry**. Grafana entrega un endpoint OTLP y un encabezado de autorización.
+
+### 1. Guardar la configuración en `.env` local
+
+No pongan esos valores en `docker-compose.yml`, documentación, capturas ni `.env.example`. Abran el archivo `.env` de su clon local —Docker Compose lo lee automáticamente y Git lo ignora— y agreguen estas variables con los valores copiados desde su stack. Si ya existe una línea `OTEL_EXPORTER_OTLP_ENDPOINT`, edítenla para que quede una sola definición:
+
+```dotenv
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-<region>.grafana.net/otlp
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<credencial-generada-por-grafana>
+OTEL_METRICS_EXPORTER=otlp
+OTEL_LOGS_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_TIMEOUT=1500
+OTEL_METRIC_EXPORT_INTERVAL=10000
+```
+
+Los textos entre `< >` son marcadores: reemplácenlos por los datos de su stack, sin copiar este ejemplo literalmente. Si Grafana proporciona endpoints distintos por señal, pueden definir `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` y `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`; cada uno debe incluir su ruta completa `/v1/traces`, `/v1/metrics` o `/v1/logs`.
+
+Si todavía no existe `.env`, creen un archivo local vacío y edítenlo; Compose ya tiene valores predeterminados para ejecutar Jaeger sin configuración adicional:
+
+```powershell
+New-Item -Path .env -ItemType File
+notepad .env
+```
+
+No agreguen ni suban `.env` o `.env.example` en esta tarea. Revisen `git status --short` antes del commit y no impriman el valor de `OTEL_EXPORTER_OTLP_HEADERS` en la terminal.
+
+### 2. Reiniciar los microservicios con la nueva configuración
+
+```powershell
+docker compose up --build -d --force-recreate ms-viajes ms-tarifas ms-flota
+docker compose ps
+```
+
+Los exportadores se ejecutan en segundo plano y tienen un timeout configurable; si Grafana Cloud no responde, la petición de viaje continúa usando las mismas reglas de negocio y su respuesta no espera al envío de telemetría.
+
+### 3. Generar una traza distribuida y métricas
+
+Ejecuten la solicitud de estimación de la **Sección 1** y envíen también solicitudes correctas y fallidas a los servicios. Esperen hasta el intervalo configurado de exportación de métricas (10 segundos por defecto), luego:
+
+1. En Grafana Cloud, abran **Explore > Traces** y busquen por `service.name` (`ms-viajes`, `ms-tarifas` o `ms-flota`). La traza debe mostrar los spans enlazados por `traceparent`.
+2. En **Explore > Metrics**, busquen `viajes_http_solicitudes` y `viajes_http_duracion`. Grafana puede normalizar puntos y agregar el sufijo de unidad; el autocompletado de métricas muestra el nombre exacto. La primera métrica permite agrupar por servicio, ruta, método y estado HTTP; la segunda permite consultar percentiles de latencia.
+
+Consultas PromQL de referencia, ajustando el nombre al que sugiera el autocompletado del stack:
+
+```promql
+sum by (service_name, http_route, http_response_status_code) (rate(viajes_http_solicitudes_total[5m]))
+```
+
+```promql
+histogram_quantile(0.95, sum by (le, service_name, http_route) (rate(viajes_http_duracion_seconds_bucket[5m])))
+```
+
+Las métricas usan la ruta declarada por Express (por ejemplo, `/viajes/:id`) y no incluyen IDs, query strings ni identificadores de usuario.
+
+### 4. Generar y encontrar un log correlacionado de dependencia
+
+Para provocar el error controlado del Escenario 2, detengan `ms-flota` y repitan la estimación. En Grafana Cloud, abran **Explore > Logs** y filtren por el servicio y el evento:
+
+```logql
+{service_name="ms-tarifas"} | json | evento="dependencia_http_fallida"
+```
+
+El registro JSON de `ms-tarifas` debe mostrar `servicio`, `operacion`, `resultado` y los IDs de traza/span. Desde el log, sigan el `trace_id` hacia Tempo para ver el span fallido y su latencia. No se envían JWT ni encabezados de autorización en esos registros.
+
+Reinicien la dependencia después de la demostración:
+
+```powershell
+docker compose start ms-flota
+```
+
+### 5. Volver al modo Jaeger local
+
+Para volver al modo local, quiten del `.env` las variables de endpoint/encabezados de Grafana (incluidas las variables de endpoint específicas por señal) y vuelvan a dejar `OTEL_METRICS_EXPORTER` y `OTEL_LOGS_EXPORTER` sin definir o con `none`. Compose vuelve a usar `http://jaeger:4318` para las trazas. Después recreen los servicios:
+
+```powershell
+docker compose up -d --force-recreate ms-viajes ms-tarifas ms-flota
+```
+
+La verificación contra un stack real de Grafana Cloud requiere credenciales del equipo; los tests automatizados no hacen llamadas externas y no validan la ingestión del proveedor.
 
 ---
 

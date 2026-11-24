@@ -45,6 +45,7 @@ Decisiones adicionales registradas:
 53. Geocodificación en cascada por cercanía y geocodificación inversa.
 54. Emulador de identidad externa OIDC / JWKS y control de acceso RBAC por recurso.
 55. Stack del front-end (React, TypeScript y Tailwind CSS con Vite) y arquitectura modular por roles.
+56. Exportación OTLP directa a Grafana Cloud.
 
 ## Rangos reservados para flujos paralelos
 

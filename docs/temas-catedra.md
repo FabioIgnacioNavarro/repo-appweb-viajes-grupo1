@@ -26,11 +26,13 @@ Este documento registra los temas especiales seleccionados por el grupo para su 
   * El backend está estructurado en tres microservicios (`ms-viajes`, `ms-tarifas`, `ms-flota`) orquestados a través de un gateway Nginx.
   * Un flujo común (por ejemplo, confirmar un viaje o calcular una tarifa dinámica) cruza fronteras de red: el gateway recibe el pedido, invoca a `ms-viajes`, este consulta a `ms-flota` para obtener candidatos y a `ms-tarifas` para la regla de precio.
   * Si un servicio falla o responde con lentitud (latencia alta o error `503 DEPENDENCIA_NO_DISPONIBLE`), revisar logs aislados en archivos de texto independientes vuelve casi imposible diagnosticar la causa raíz.
-  * La incorporación de OpenTelemetry SDK junto con Jaeger permite inyectar y propagar encabezados de contexto W3C (`traceparent` y `trace_id`), correlacionando cada llamada HTTP, query SQL y evento en una misma traza visual.
+  * OpenTelemetry propaga encabezados W3C (`traceparent`) entre los microservicios. En desarrollo local las trazas se visualizan en Jaeger; para la demo de OBS-002 los servicios exportan trazas, métricas HTTP y logs JSON correlacionados a Grafana Cloud por OTLP.
 * **Demostración práctica planificada:**
   * Ejecutar una solicitud que atraviese el gateway y al menos dos servicios.
-  * Visualizar en la UI de Jaeger la traza distribuida desglosada por spans con sus tiempos individuales de ejecución.
-  * Forzar un error (o timeout controlado) en una dependencia interna y demostrar cómo la traza en Jaeger identifica de inmediato el servicio y la operación que falló.
+  * En modo local, visualizar en Jaeger la traza distribuida desglosada por spans con sus tiempos individuales de ejecución.
+  * En modo Grafana Cloud, localizar la misma operación en Tempo, consultar las métricas de cantidad/duración HTTP en Metrics y seguir un log estructurado correlacionado en Loki.
+  * Forzar un error (o timeout controlado) en una dependencia interna y demostrar cómo la traza y el log correlacionado identifican el servicio y la operación que falló.
+  * Mantener el endpoint y el encabezado de autorización en `.env` local ignorado por Git; no se comparten ni versionan credenciales.
 
 ---
 

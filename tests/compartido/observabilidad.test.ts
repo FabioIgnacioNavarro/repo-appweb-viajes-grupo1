@@ -6,7 +6,9 @@ import {
   obtenerContextoTraza,
   inyectarContextoW3C,
   extraerContextoW3C,
-  middlewareObservabilidad
+  middlewareObservabilidad,
+  interpretarEncabezadosOtlp,
+  registrarLogEstructurado
 } from "../../src/compartido/observabilidad";
 import type { Request, Response } from "express";
 
@@ -53,14 +55,18 @@ test("observabilidad: inyecta y extrae encabezados W3C traceparent", async () =>
   });
 });
 
-test("observabilidad: middleware inyecta X-Trace-Id en la respuesta", () => {
-  const middleware = middlewareObservabilidad("ms-prueba");
+test("observabilidad: middleware inyecta X-Trace-Id y registra métricas con ruta de baja cardinalidad", () => {
+  const metricas: Array<{ servicio: string; metodo: string; ruta: string; estadoHttp: number; duracionSegundos: number }> = [];
+  const middleware = middlewareObservabilidad("ms-prueba", (metrica) => metricas.push(metrica));
+  let finalizarRespuesta: (() => void) | undefined;
 
   const req = {
     method: "GET",
     path: "/test",
     url: "/test",
-    headers: {}
+    headers: {},
+    route: { path: "/viajes/:id" },
+    baseUrl: ""
   } as unknown as Request;
 
   let headerEstablecido = "";
@@ -70,7 +76,8 @@ test("observabilidad: middleware inyecta X-Trace-Id en la respuesta", () => {
         headerEstablecido = valor;
       }
     },
-    on: () => {}
+    once: (_evento: string, callback: () => void) => { finalizarRespuesta = callback; },
+    statusCode: 200
   } as unknown as Response;
 
   let nextLlamado = false;
@@ -81,4 +88,40 @@ test("observabilidad: middleware inyecta X-Trace-Id en la respuesta", () => {
   assert.ok(nextLlamado, "Debe llamar a next()");
   assert.ok(headerEstablecido, "Debe haber inyectado X-Trace-Id");
   assert.match(headerEstablecido, /^[0-9a-f]{32}$/);
+
+  finalizarRespuesta?.();
+  assert.equal(metricas.length, 1);
+  assert.equal(metricas[0].servicio, "ms-prueba");
+  assert.equal(metricas[0].metodo, "GET");
+  assert.equal(metricas[0].ruta, "/viajes/:id");
+  assert.equal(metricas[0].estadoHttp, 200);
+  assert.ok(metricas[0].duracionSegundos >= 0);
+});
+
+test("observabilidad: interpreta encabezados OTLP codificados sin perder los signos del token", () => {
+  assert.deepEqual(
+    interpretarEncabezadosOtlp("Authorization=Basic%20YWJjZA==,X-Region=north%20america"),
+    { Authorization: "Basic YWJjZA==", "X-Region": "north america" }
+  );
+});
+
+test("observabilidad: emite logs JSON correlacionados sin exportar atributos de credenciales", async () => {
+  const errorOriginal = console.error;
+  let salida = "";
+  console.error = (mensaje?: unknown) => { salida = String(mensaje ?? ""); };
+  try {
+    await conSpan("operacion-con-log", {}, async () => {
+      registrarLogEstructurado({ evento: "prueba_segura", servicio: "ms-prueba", token: "no-debe-aparecer" }, "ERROR");
+    });
+  } finally {
+    console.error = errorOriginal;
+  }
+
+  const registro = JSON.parse(salida) as Record<string, unknown>;
+  assert.equal(registro.evento, "prueba_segura");
+  assert.equal(registro.servicio, "ms-prueba");
+  assert.match(String(registro.traceId), /^[0-9a-f]{32}$/);
+  assert.match(String(registro.spanId), /^[0-9a-f]{16}$/);
+  assert.equal("token" in registro, false);
+  assert.equal(salida.includes("no-debe-aparecer"), false);
 });
