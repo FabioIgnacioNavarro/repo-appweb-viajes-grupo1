@@ -99,6 +99,7 @@ async function prepararMocksBase(page: Page): Promise<{
     const body = route.request().postDataJSON() as {
       origen: { latitud?: number; longitud?: number; direccion?: string };
       destino: { latitud?: number; longitud?: number; direccion?: string };
+      simulacion?: { hora?: number; llueve?: boolean; choferes_disponibles?: number; solicitudes_activas?: number };
     };
     estimacionesRecibidas.push(body);
     contadorEstimacion += 1;
@@ -113,25 +114,36 @@ async function prepararMocksBase(page: Page): Promise<{
         ? { latitud: body.destino.latitud, longitud: body.destino.longitud }
         : { latitud: -27.43159, longitud: -58.96306 };
 
+    const llueveSim = body.simulacion?.llueve ?? false;
+    const precioSim = llueveSim ? "5420" : "4721";
+    const multSim = llueveSim ? 1.56 : 1.36;
+
     const ahora = Date.now();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
       body: JSON.stringify({
         id_estimacion: `est-web-009-${contadorEstimacion}`,
-        precio_estimado: "4721",
+        precio_estimado: precioSim,
         moneda: "ARS",
         distancia_metros: 3041,
         duracion_segundos: 317,
         proveedor_ruta: "OSRM",
-        multiplicador_demanda: 1.36,
+        multiplicador_demanda: multSim,
         zona: "Resistencia",
         factores_precio: {
-          llueve: false,
-          choferes_disponibles: 4,
-          solicitudes_activas: 7,
-          franja_horaria: "noche",
+          llueve: llueveSim,
+          choferes_disponibles: body.simulacion?.choferes_disponibles ?? 4,
+          solicitudes_activas: body.simulacion?.solicitudes_activas ?? 7,
+          franja_horaria: body.simulacion?.hora !== undefined && body.simulacion.hora >= 20 ? "noche" : "siesta",
+          factor_horario: 1.1,
+          factor_lluvia: llueveSim ? 1.1 : 1.0,
+          factor_disponibilidad: 1.0,
+          factor_demanda: 1.2,
         },
+        recomendaciones: llueveSim
+          ? ["Hay recargo por lluvia activa.", "Si podés esperar a que escampe, la tarifa bajará."]
+          : ["Tarifa estable en este momento."],
         version_regla: 1,
         creada_en: new Date(ahora).toISOString(),
         vigente_hasta: new Date(ahora + 180_000).toISOString(),
@@ -330,5 +342,24 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
       );
       expect(sinDesborde, `Desborde horizontal en ${viewport.width}px`).toBe(true);
     }
+  });
+
+  test("DEV-001: panel desarrollador permite simular hora y lluvia, ver modificadores y recomendaciones", async ({ page }) => {
+    const registro = await prepararMocksBase(page);
+    await page.goto("/#/login");
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
+    await expect(page).toHaveURL(/#\/pasajero/);
+
+    await page.locator("#destino-viaje").fill("Shopping Sarmiento, Resistencia");
+    await expect(page.getByRole("button", { name: /^Confirmar viaje$/i })).toBeVisible({ timeout: 5000 });
+
+    await page.getByTestId("toggle-panel-dev").click();
+    await expect(page.getByTestId("sim-lluvia-select")).toBeVisible();
+
+    await page.getByTestId("sim-lluvia-select").selectOption("lluvia");
+    await expect.poll(() => registro.estimacionesRecibidas.length, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
+
+    await expect(page.getByTestId("bloque-recomendaciones")).toContainText("recargo por lluvia activa");
+    await expect(page.getByTestId("panel-desarrollador")).toContainText("×1.56");
   });
 });

@@ -227,3 +227,34 @@ test("GestionarReglaDemanda versiona nuevas reglas sin alterar estimaciones prev
     (err: { codigo?: string }) => err.codigo === "REGLA_INVALIDA"
   );
 });
+
+test("DEV-001: CrearEstimacion aplica simulación de hora, lluvia y demanda y genera recomendaciones", async () => {
+  const repoReglas = new RepositorioReglasMemoria(regla);
+  const estimaciones = new RepositorioEstimacionesMemoria();
+  const caso = new CrearEstimacion(
+    { async calcular() { return { distanciaMetros: 3000, duracionSegundos: 420, proveedor: "OSRM" }; } },
+    { async consultar() { return { precipitacionMm: 0, observadaEn: new Date("2026-11-19T15:59:00Z"), fuente: "OPEN_METEO" }; } },
+    { async contarDisponibles() { return 5; } },
+    { async contarSolicitudesActivas() { return 1; } },
+    { async resolver() { return zona; } },
+    repoReglas,
+    estimaciones,
+    new GeneradorIdMemoria()
+  );
+
+  const ahora = new Date("2026-11-19T16:00:00Z"); // 13:00 AR (SIESTA)
+  const normal = await caso.ejecutar("pasajero-1", zona.centro, zona.centro, ahora);
+  const simulada = await caso.ejecutar("pasajero-1", zona.centro, zona.centro, ahora, {
+    hora: 21, // NOCHE
+    llueve: true,
+    choferesDisponibles: 0,
+    solicitudesActivas: 10
+  });
+
+  assert.equal(simulada.factoresPrecio.franjaHoraria, "NOCHE");
+  assert.equal(simulada.factoresPrecio.llueve, true);
+  assert.equal(simulada.factoresPrecio.choferesDisponibles, 0);
+  assert.equal(simulada.factoresPrecio.solicitudesActivas, 10);
+  assert.ok(simulada.precioEstimado > normal.precioEstimado);
+  assert.ok(Array.isArray(simulada.recomendaciones) && simulada.recomendaciones.length >= 2);
+});

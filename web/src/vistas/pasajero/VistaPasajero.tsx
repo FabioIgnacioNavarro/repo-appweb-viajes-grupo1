@@ -4,6 +4,7 @@ import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal } from "../../nucleo/ws";
 import { InsigniaEstadoViaje } from "../../componentes/comunes";
 import { MapaLeaflet, type PuntoMapa } from "../../componentes/mapa/MapaLeaflet";
+import { PanelDesarrollador, type FactoresVisualizacion, type ParametrosSimulacion } from "../../componentes/dev/PanelDesarrollador";
 
 interface Coordenada {
   latitud: number;
@@ -20,6 +21,7 @@ interface EstimacionDto {
   multiplicador_demanda: number;
   zona: string;
   factores_precio: Record<string, unknown>;
+  recomendaciones?: string[];
   version_regla: number;
   creada_en: string;
   vigente_hasta: string;
@@ -180,6 +182,9 @@ export const VistaPasajero: React.FC = () => {
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [error, setError] = useState<ErrorVisible | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [panelDevActivo, setPanelDevActivo] = useState(false);
+  const [parametrosSimulacion, setParametrosSimulacion] = useState<ParametrosSimulacion>({});
+  const parametrosSimulacionRef = useRef<ParametrosSimulacion>({});
   const claveConfirmacion = useRef<string | null>(null);
   const claveReintentoCobro = useRef<{ viajeId: string; valor: string } | null>(null);
   const bloqueoEnvio = useRef(false);
@@ -312,10 +317,25 @@ export const VistaPasajero: React.FC = () => {
     setError(null);
     setAviso(null);
     try {
-      const respuesta = await clienteApi.post<EstimacionDto>("/viajes/estimacion", {
+      const sim = parametrosSimulacionRef.current;
+      const haySimulacion =
+        sim.hora !== undefined ||
+        sim.llueve !== undefined ||
+        sim.choferesDisponibles !== undefined ||
+        sim.solicitudesActivas !== undefined;
+      const cuerpo: Record<string, unknown> = {
         origen: puntoOrigen,
         destino: puntoDestino
-      });
+      };
+      if (haySimulacion) {
+        cuerpo.simulacion = {
+          ...(sim.hora !== undefined ? { hora: sim.hora } : {}),
+          ...(sim.llueve !== undefined ? { llueve: sim.llueve } : {}),
+          ...(sim.choferesDisponibles !== undefined ? { choferes_disponibles: sim.choferesDisponibles } : {}),
+          ...(sim.solicitudesActivas !== undefined ? { solicitudes_activas: sim.solicitudesActivas } : {})
+        };
+      }
+      const respuesta = await clienteApi.post<EstimacionDto>("/viajes/estimacion", cuerpo);
       if (secuenciaEstimacionRef.current !== turno) return;
       setEstimacion(respuesta);
       claveConfirmacion.current = null;
@@ -353,6 +373,48 @@ export const VistaPasajero: React.FC = () => {
     },
     [invalidarEstimacion, puedeCancelar, ejecutarEstimacion]
   );
+
+  const reestimarConSimulacion = useCallback(
+    (nuevosParametros: ParametrosSimulacion) => {
+      parametrosSimulacionRef.current = nuevosParametros;
+      setParametrosSimulacion(nuevosParametros);
+      if (puedeCancelar) return;
+      const oTexto = origen.trim();
+      const dTexto = destino.trim();
+      const origenValido = Boolean(pinManualOrigen) || (oTexto.length >= 3 && oTexto !== "Buscando dirección...");
+      const destinoValido = Boolean(pinManualDestino) || (dTexto.length >= 3 && dTexto !== "Buscando dirección...");
+      if (!origenValido || !destinoValido) return;
+
+      cancelarDebounceEstimacion();
+      const puntoOrigen: PuntoSolicitud = pinManualOrigen ?? { direccion: oTexto };
+      const puntoDestino: PuntoSolicitud = pinManualDestino ?? { direccion: dTexto };
+      debounceEstimacionRef.current = window.setTimeout(() => {
+        debounceEstimacionRef.current = null;
+        void ejecutarEstimacion(puntoOrigen, puntoDestino);
+      }, 250);
+    },
+    [puedeCancelar, origen, destino, pinManualOrigen, pinManualDestino, cancelarDebounceEstimacion, ejecutarEstimacion]
+  );
+
+  const restablecerSimulacion = useCallback(() => {
+    reestimarConSimulacion({});
+  }, [reestimarConSimulacion]);
+
+  const factoresDev = useMemo<FactoresVisualizacion | undefined>(() => {
+    if (!estimacion) return undefined;
+    const f = estimacion.factores_precio ?? {};
+    return {
+      factorHorario: typeof f.factor_horario === "number" ? f.factor_horario : undefined,
+      franjaHoraria: typeof f.franja_horaria === "string" ? f.franja_horaria.toUpperCase() : undefined,
+      factorLluvia: typeof f.factor_lluvia === "number" ? f.factor_lluvia : undefined,
+      llueve: typeof f.llueve === "boolean" ? f.llueve : undefined,
+      factorDisponibilidad: typeof f.factor_disponibilidad === "number" ? f.factor_disponibilidad : undefined,
+      choferesDisponibles: typeof f.choferes_disponibles === "number" ? f.choferes_disponibles : undefined,
+      factorDemanda: typeof f.factor_demanda === "number" ? f.factor_demanda : undefined,
+      solicitudesActivas: typeof f.solicitudes_activas === "number" ? f.solicitudes_activas : undefined,
+      multiplicadorDemanda: estimacion.multiplicador_demanda
+    };
+  }, [estimacion]);
 
   const manejarPinArrastrado = useCallback(
     (tipo: "origen" | "destino", coords: [number, number]) => {
@@ -524,6 +586,16 @@ export const VistaPasajero: React.FC = () => {
         </div>
       )}
       {aviso && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{aviso}</p>}
+
+      <PanelDesarrollador
+        activo={panelDevActivo}
+        onAlternarActivo={() => setPanelDevActivo((prev) => !prev)}
+        parametros={parametrosSimulacion}
+        onCambiarParametros={reestimarConSimulacion}
+        onRestablecer={restablecerSimulacion}
+        factores={factoresDev}
+        recomendaciones={estimacion?.recomendaciones}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-5">

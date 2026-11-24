@@ -40,6 +40,7 @@ const regla: ReglaTarifa = {
 async function iniciarServidorTarifas(opciones: {
   fallarBase?: boolean;
   fallarDependencia?: boolean;
+  modoDesarrollador?: boolean;
 } = {}): Promise<{ base: string; servidor: Server; estimaciones: RepositorioEstimacionesMemoria }> {
   const estimaciones = new RepositorioEstimacionesMemoria();
   const repoReglas = new RepositorioReglasMemoria(regla);
@@ -72,9 +73,11 @@ async function iniciarServidorTarifas(opciones: {
   );
 
   const deps: DependenciasTarifas = {
-    estimar: (pasajeroId, origen, destino) => caso.ejecutar(pasajeroId, origen, destino),
+    estimar: (pasajeroId, origen, destino, _token, simulacion) =>
+      caso.ejecutar(pasajeroId, origen, destino, new Date(), simulacion),
     estimaciones,
     reglas: gestionarRegla,
+    modoDesarrollador: opciones.modoDesarrollador ?? false,
     geocodificarInversa: async (c) => `Juan B. Justo 4, Resistencia (${c.latitud.toFixed(3)})`,
     validador: {
       async validar(token: string) {
@@ -392,5 +395,50 @@ test("ms-tarifas HTTP: POST /tarifas/geocodificacion-inversa devuelve dirección
     assert.equal(badRes.status, 400);
   } finally {
     await cerrar(ctx.servidor);
+  }
+});
+
+test("DEV-001: POST /viajes/estimacion bloquea simulación fuera de modo desarrollador y la habilita cuando está activo", async () => {
+  const ctxBloqueado = await iniciarServidorTarifas({ modoDesarrollador: false });
+  try {
+    const res403 = await fetch(`${ctxBloqueado.base}/viajes/estimacion`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-pasajero-1", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origen: zona.centro,
+        destino: zona.centro,
+        simulacion: { hora: 22, llueve: true }
+      })
+    });
+    assert.equal(res403.status, 403);
+    const body403 = await res403.json() as { error: { codigo: string } };
+    assert.equal(body403.error.codigo, "MODO_DESARROLLADOR_DESHABILITADO");
+  } finally {
+    await cerrar(ctxBloqueado.servidor);
+  }
+
+  const ctxActivo = await iniciarServidorTarifas({ modoDesarrollador: true });
+  try {
+    const res201 = await fetch(`${ctxActivo.base}/viajes/estimacion`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-pasajero-1", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origen: zona.centro,
+        destino: zona.centro,
+        simulacion: { hora: 22, llueve: true, choferes_disponibles: 0, solicitudes_activas: 5 }
+      })
+    });
+    assert.equal(res201.status, 201);
+    const body201 = await res201.json() as {
+      factores_precio: { franja_horaria: string; llueve: boolean; choferes_disponibles: number; solicitudes_activas: number };
+      recomendaciones: string[];
+    };
+    assert.equal(body201.factores_precio.franja_horaria, "noche");
+    assert.equal(body201.factores_precio.llueve, true);
+    assert.equal(body201.factores_precio.choferes_disponibles, 0);
+    assert.equal(body201.factores_precio.solicitudes_activas, 5);
+    assert.ok(Array.isArray(body201.recomendaciones) && body201.recomendaciones.length > 0);
+  } finally {
+    await cerrar(ctxActivo.servidor);
   }
 });
