@@ -317,4 +317,34 @@ docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml run --rm -e 
 ### Hallazgos técnicos observados bajo stress
 
 1. **Estabilidad de backend y gateway:** bajo ráfagas de hasta `202,58 req/s` desde una única fuente, Nginx absorbió el excedente con `429` mientras los tres microservicios y PostgreSQL mantuvieron **`0,00 %` de errores `5xx`**, `/health` y `/ready/flota` al `100 %` en `<= 2,83 ms` p95 y todas las latencias `2xx` muy por debajo de los SLA (`<= 66,52 ms` p95 frente a límites de `300–1500 ms`).
-2. **Condición de carrera en idempotencia paralela pre-commit (`POST /viajes`):** en una prueba exploratoria previa enviando dos `POST /viajes` simultáneos vía `http.batch()` antes de que la primera transacción haga `COMMIT`, se detectó una ventana TOCTOU entre `idempotencia.obtener` e `idempotencia.guardar` en `ConfirmarViaje` (`161/761` pares paralelos bajo `24 VUs` crearon viajes distintos antes de persistirse la clave, mientras los reintentos secuenciales posteriores devolvieron el mismo `id_viaje` en el `100 %` de los casos). Se registra este hallazgo como mejora recomendada en `ms-viajes` (reserva transaccional o lock por `(actor_id, operacion, clave)` antes de crear el viaje).
+2. **Condición de carrera en idempotencia paralela pre-commit (`POST /viajes`) y corrección (MED-004):** en la prueba exploratoria inicial con `http.batch()`, dos `POST /viajes` simultáneos antes del `COMMIT` mostraron una ventana TOCTOU (`161/761` pares paralelos). En **MED-004** se corrigió con un puerto `EjecutorIdempotente` (`pg_advisory_xact_lock(hashtext($1), hashtext($2))` dentro de transacción en PostgreSQL + cola por clave en memoria), coalescing en vuelo para el matching (`matchingEnCurso`) y `GeneradorIdUuid` en producción, validado por unit tests, test concurrente de 10 confirmaciones en PostgreSQL (`tests/ms-viajes/postgres.test.ts`) y re-habilitación de `http.batch()` en `k6`.
+
+---
+
+## Prueba de 100 usuarios distintos, lock de idempotencia y tablero Grafana (MED-004)
+
+### Diseño implementado
+
+- **Exclusión mutua transaccional por clave de idempotencia:** `ConfirmarViaje` utiliza `EjecutorIdempotente` (`EjecutorIdempotentePostgres` con `BEGIN` + `pg_advisory_xact_lock` por `(actor_id, operacion, clave)` + `COMMIT`, y `EjecutorIdempotenteMemoria` para pruebas unitarias), más filtro indexado `participanteId` con `LIMIT 100` en `GET /viajes`.
+- **Simulación de 100 usuarios distintos (`carga/k6/carga-100-usuarios.js`):** genera `50` pasajeros (`aaaa0001-...`) y `50` choferes (`11111111-...` habilitado en flota + `bbbb0002-...`) con JWTs RS256 propios e IP sintética por usuario vía `X-Forwarded-For`. Para que los `100` usuarios no compartan una única cubeta IP en Nginx sin alterar la defensa de producción, `carga/docker-compose.k6.yml` monta un override aislado (`carga/nginx.k6.conf`) que mantiene intacto el límite de `30 r/s` (`burst=60`) por cliente.
+- **Visualización bajo estrés en Grafana + Prometheus:** el perfil `grafana` de `carga/docker-compose.k6.yml` levanta `prometheus` (`--web.enable-remote-write-receiver` en `:9090`) y `grafana` (`:3300`) con datasource y tablero auto-provisionado (`carga/grafana/dashboards/k6-rendimiento.json`). Compatible también con Grafana Cloud configurando `K6_PROMETHEUS_RW_SERVER_URL`, `K6_PROMETHEUS_RW_USERNAME` y `K6_PROMETHEUS_RW_PASSWORD`.
+
+### Comandos reproducibles
+
+```powershell
+# Levantar Prometheus + Grafana y correr carga de 100 usuarios distintos (~50s)
+npm.cmd run carga:k6:100
+
+# Abrir Grafana local: http://localhost:3300 (tablero "Rendimiento bajo estrés k6 — Plataforma Viajes")
+
+# Restaurar Nginx y ms-tarifas por defecto al finalizar las mediciones
+npm.cmd run carga:grafana:down
+```
+
+### Resultados tras corrección (Docker Compose, `2026-11-23`)
+
+| Corrida | Requests totales | Throughput medio | Checks OK | `errores_5xx` | Gateway `429` | Latencias p95 (`2xx`) | Estado umbrales |
+|---|---:|---:|---:|---:|---:|---|---|
+| **Stress viajes con `http.batch` paralelo** (`estimacion-y-viajes.js`, `24 VUs`) | 3.208 | 79,70 req/s | **100,00 %** (4.758/4.758) | **0,00 %** (0/3.206) | 62,53 % (IP única) | Estimación `20,88 ms` · Confirmación paralela `36,44 ms` | ✅ PASS |
+| **Stress combinado con `http.batch` paralelo** (`stress-combinado.js`, `34 VUs` máx) | 4.690 | 100,39 req/s | **100,00 %** (4.685/4.685) | **0,00 %** (0/4.503) | 70,75 % (IP única) | Estimación `35,35 ms` · Confirmación `661,94 ms` · Ubicación `29,79 ms` · Búsqueda `33,12 ms` · `/health` `1,26 ms` | ✅ PASS |
+| **100 usuarios distintos + Prometheus/Grafana** (`carga-100-usuarios.js`, `100 VUs`, `50s`) | 12.510 | **240,31 req/s** | **100,00 %** (12.408/12.408) | **0,00 %** (0/12.408) | **0,00 %** (0/12.408) | Estimación `65,93 ms` · Confirmación paralela `561,12 ms` · Lecturas `459,97 ms` (tras indexar SQL; `944,44 ms` antes) · Ubicación `36,62 ms` | ✅ PASS |

@@ -220,9 +220,10 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
         respuesta.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo soporte o administración puede filtrar el listado global.", detalles: {} } });
         return;
       }
-      const lista = await deps.viajes.listar();
+      const esListadoGlobalSinPaginar = !deps.listarViajesOperador && puedeListarGlobal;
+      const lista = await deps.viajes.listar(esListadoGlobalSinPaginar ? {} : { participanteId: actor.idUsuario, limite: 100 });
       const propios = lista.filter((viaje) => viaje.pasajeroId === actor.idUsuario || viaje.choferId === actor.idUsuario
-        || (!deps.listarViajesOperador && puedeListarGlobal));
+        || esListadoGlobalSinPaginar);
       respuesta.status(200).json({ viajes: propios.map(viajeDto) });
     } catch (error) { errorHttp(error, respuesta); }
   });

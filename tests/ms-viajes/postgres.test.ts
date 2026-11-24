@@ -18,6 +18,8 @@ import {
   AsignadorAtomicoPostgres,
   ConsultarChoferesOcupadosPostgres,
   ConsultarDemandaPorZonaPostgres,
+  EjecutorIdempotentePostgres,
+  GeneradorIdUuid,
   RepositorioCobrosPostgres,
   RepositorioIdempotenciaPostgres,
   RepositorioOfertasPostgres,
@@ -30,7 +32,7 @@ const PREFIJO = "test-postgres-";
 async function limpiar(pool: Pool): Promise<void> {
   await pool.query("DELETE FROM viajes.cobro WHERE viaje_id LIKE $1", [`${PREFIJO}%`]);
   await pool.query("DELETE FROM viajes.oferta WHERE viaje_id LIKE $1", [`${PREFIJO}%`]);
-  await pool.query("DELETE FROM viajes.viaje WHERE id LIKE $1", [`${PREFIJO}%`]);
+  await pool.query("DELETE FROM viajes.viaje WHERE id LIKE $1 OR pasajero_usuario_id LIKE $1", [`${PREFIJO}%`]);
   await pool.query("DELETE FROM viajes.idempotencia WHERE actor_id LIKE $1", [`${PREFIJO}%`]);
 }
 
@@ -426,7 +428,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
       vigenteHasta: new Date(ahora.getTime() + 180_000)
     };
 
-    const casoDeUso = new ConfirmarViaje(repoViajes, repoIdempotencia, ids);
+    const casoDeUso = new ConfirmarViaje(repoViajes, repoIdempotencia, new GeneradorIdUuid(), new EjecutorIdempotentePostgres(pool));
     const clave = "clave-idempotencia-unica-123";
 
     const v1 = await casoDeUso.ejecutar(actor, estimacion, clave, ahora);
@@ -438,6 +440,45 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
     const { rows } = await pool.query<{ total: string }>(
       "SELECT COUNT(*)::text AS total FROM viajes.viaje WHERE id = $1",
       [v1.id]
+    );
+    assert.equal(rows[0]?.total, "1");
+  });
+
+  await t.test("idempotencia concurrente en PostgreSQL: 10 confirmaciones simultáneas crean exactamente un viaje", async () => {
+    const pasajeroId = `${PREFIJO}pasajero-idemp-conc`;
+    const actor: ActorAutenticado = { idUsuario: pasajeroId, rol: "PASAJERO" };
+    const ahora = new Date();
+    const estimacion: EstimacionVigente = {
+      id: `${PREFIJO}est-idemp-conc`,
+      origen: { latitud: -27.45, longitud: -58.98 },
+      destino: { latitud: -27.46, longitud: -58.99 },
+      precioEstimado: "3200",
+      moneda: "ARS",
+      multiplicadorDemanda: 1.25,
+      factoresPrecio: { zona_id: "centro" },
+      versionRegla: 1,
+      creadaEn: ahora,
+      vigenteHasta: new Date(ahora.getTime() + 180_000)
+    };
+
+    const casoDeUso = new ConfirmarViaje(
+      repoViajes,
+      repoIdempotencia,
+      new GeneradorIdUuid(),
+      new EjecutorIdempotentePostgres(pool)
+    );
+    const clave = "clave-concurrente-simultanea-postgres";
+
+    const viajesCreados = await Promise.all(
+      Array.from({ length: 10 }, () => casoDeUso.ejecutar(actor, estimacion, clave, ahora))
+    );
+
+    const idsUnicos = new Set(viajesCreados.map((v) => v.id));
+    assert.equal(idsUnicos.size, 1, `Se esperaban 10 respuestas al mismo viaje, hubo ${idsUnicos.size}`);
+
+    const { rows } = await pool.query<{ total: string }>(
+      "SELECT COUNT(*)::text AS total FROM viajes.viaje WHERE estimacion_id = $1",
+      [estimacion.id]
     );
     assert.equal(rows[0]?.total, "1");
   });

@@ -85,15 +85,21 @@ export default function (data) {
     };
     const cuerpo = JSON.stringify({ id_estimacion: estimacion.id_estimacion });
 
-    // Confirmación inicial + reintento idempotente inmediato con idéntica Clave-Idempotencia
-    const conf1 = http.post(`${data.baseUrl}/viajes`, cuerpo, {
-      headers: headersConfirmacion,
-      tags: { endpoint: "confirmacion" },
-    });
-    const conf2 = http.post(`${data.baseUrl}/viajes`, cuerpo, {
-      headers: headersConfirmacion,
-      tags: { endpoint: "confirmacion_reintento" },
-    });
+    // Dos POST /viajes simultáneos con idéntica Clave-Idempotencia validan lock transaccional
+    const [conf1, conf2] = http.batch([
+      [
+        "POST",
+        `${data.baseUrl}/viajes`,
+        cuerpo,
+        { headers: headersConfirmacion, tags: { endpoint: "confirmacion" } },
+      ],
+      [
+        "POST",
+        `${data.baseUrl}/viajes`,
+        cuerpo,
+        { headers: headersConfirmacion, tags: { endpoint: "confirmacion_reintento" } },
+      ],
+    ]);
 
     registrarMetricasHttp(conf1);
     registrarMetricasHttp(conf2);
@@ -108,7 +114,7 @@ export default function (data) {
     check([conf1, conf2], {
       "confirmaciones sin 5xx": ([a, b]) =>
         a.status > 0 && a.status < 500 && b.status > 0 && b.status < 500,
-      "reintento idempotente conserva mismo id_viaje": ([a, b]) => {
+      "confirmación paralela idempotente conserva mismo id_viaje": ([a, b]) => {
         if ((a.status === 201 || a.status === 200) && (b.status === 201 || b.status === 200)) {
           const j1 = a.json();
           const j2 = b.json();

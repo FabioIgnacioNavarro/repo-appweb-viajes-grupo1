@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: k6-viajes
+    orgId: 1
+    folder: Carga y Estrés
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

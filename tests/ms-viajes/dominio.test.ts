@@ -209,3 +209,24 @@ test("el pasajero no puede cancelar un viaje en curso, pero soporte puede por tr
   );
   assert.equal(cancelado.estado, "CANCELADO_POR_OPERADOR");
 });
+
+test("confirmaciones concurrentes con la misma clave serializan y crean un solo viaje", async () => {
+  const baseViajes = new RepositorioViajesMemoria();
+  let guardados = 0;
+  const viajesLento: typeof baseViajes = Object.create(baseViajes);
+  viajesLento.guardar = async (viaje) => {
+    guardados += 1;
+    await new Promise((resolver) => setTimeout(resolver, 15));
+    return await baseViajes.guardar(viaje);
+  };
+  const idempBase = new RepositorioIdempotenciaMemoria();
+  const confirmar = new ConfirmarViaje(viajesLento, idempBase, new GeneradorIdMemoria());
+
+  const resultados = await Promise.all(
+    Array.from({ length: 10 }, () => confirmar.ejecutar(pasajero, estimacion(), "clave-concurrente"))
+  );
+
+  const idsUnicos = new Set(resultados.map((v) => v.id));
+  assert.equal(idsUnicos.size, 1);
+  assert.equal(guardados, 1);
+});
