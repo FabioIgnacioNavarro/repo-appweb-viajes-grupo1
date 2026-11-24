@@ -160,6 +160,17 @@ Reinicien la dependencia después de la demostración:
 docker compose start ms-flota
 ```
 
+### Verificación manual realizada en Grafana Cloud (24/11/2026)
+
+La ingestión se comprobó con credenciales locales del equipo, sin guardarlas en el repositorio:
+
+- **Trazas en Tempo:** una estimación exitosa respondió `201` y mostró una traza distribuida de `ms-tarifas`, `ms-flota` y `ms-viajes` (7 spans). Con `ms-flota` detenido, la estimación devolvió `503` y la traza de error también apareció en Tempo. Después de iniciar `ms-flota`, `/ready/flota` volvió a `200` y una estimación nueva respondió `201`.
+- **Métricas en Prometheus:** la consulta `sum by (service_name, http_route, http_response_status_code) (rate(viajes_http_solicitudes_total[5m]))` devolvió series para los tres microservicios y sus rutas/estados HTTP.
+- **Logs en Loki:** `{service_name="ms-tarifas"} | json | evento="dependencia_http_fallida"` encontró el evento de timeout de la llamada a `ms-flota`, con `operacion="buscar_candidatos"`, `resultado="timeout_o_red"` y los IDs de traza y span.
+- La prueba detectó que los instrumentos de métricas se creaban antes de iniciar el `MeterProvider` y quedaban como no-op. Se corrigió su inicialización para que ocurra después de `sdk.start()`; tras reconstruir los servicios, las métricas aparecieron en Grafana Cloud.
+
+La captura de credenciales, tokens y encabezados de autorización no forma parte de la evidencia y no debe versionarse.
+
 ### 5. Volver al modo Jaeger local
 
 Para volver al modo local, quiten del `.env` las variables de endpoint/encabezados de Grafana (incluidas las variables de endpoint específicas por señal) y vuelvan a dejar `OTEL_METRICS_EXPORTER` y `OTEL_LOGS_EXPORTER` sin definir o con `none`. Compose vuelve a usar `http://jaeger:4318` para las trazas. Después recreen los servicios:
@@ -168,7 +179,7 @@ Para volver al modo local, quiten del `.env` las variables de endpoint/encabezad
 docker compose up -d --force-recreate ms-viajes ms-tarifas ms-flota
 ```
 
-La verificación contra un stack real de Grafana Cloud requiere credenciales del equipo; los tests automatizados no hacen llamadas externas y no validan la ingestión del proveedor.
+Los tests automatizados no hacen llamadas externas y, por sí solos, no validan la ingestión del proveedor. La verificación manual anterior sí confirmó trazas, métricas y logs en el stack de Grafana Cloud del equipo.
 
 ---
 

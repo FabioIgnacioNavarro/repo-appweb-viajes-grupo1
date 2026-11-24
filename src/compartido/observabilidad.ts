@@ -27,15 +27,7 @@ export type NivelLog = "INFO" | "WARN" | "ERROR";
 export type AtributosLog = Record<string, string | number | boolean | undefined>;
 export type RegistrarMetricaSolicitud = (metrica: MetricaSolicitudHttp) => void;
 
-const medidorHttp = metrics.getMeter("viajes.http", "1.0.0");
-const solicitudesHttp = medidorHttp.createCounter("viajes.http.solicitudes", {
-  description: "Cantidad de solicitudes HTTP finalizadas por microservicio",
-  unit: "{solicitud}"
-});
-const duracionSolicitudesHttp = medidorHttp.createHistogram("viajes.http.duracion", {
-  description: "Duración de solicitudes HTTP finalizadas en segundos",
-  unit: "s"
-});
+let registrarMetricaOtelActiva: RegistrarMetricaSolicitud = () => {};
 const descartarSpansSinDestino: SpanProcessor = {
   onStart: () => {},
   onEnd: () => {},
@@ -86,6 +78,7 @@ export function iniciarObservabilidad(nombreServicio: string): void {
 
   try {
     sdkInstancia.start();
+    if (metricReaders.length > 0) inicializarInstrumentosHttp();
   } catch {
     // La instrumentación nunca debe impedir que arranque el servicio de negocio.
     console.error(JSON.stringify({ evento: "otel_inicio_fallido", servicio: nombreServicio }));
@@ -261,14 +254,32 @@ function filtrarAtributosSensibles(registro: AtributosLog): AtributosLog {
 }
 
 function registrarMetricaOtel(metrica: MetricaSolicitudHttp): void {
-  const atributos = {
-    "service.name": metrica.servicio,
-    "http.request.method": metrica.metodo,
-    "http.route": metrica.ruta,
-    "http.response.status_code": metrica.estadoHttp
+  registrarMetricaOtelActiva(metrica);
+}
+
+function inicializarInstrumentosHttp(): void {
+  // Crear los instrumentos después de sdk.start(): antes de registrar el MeterProvider,
+  // la API de OpenTelemetry devuelve instrumentos no-op que descartan las mediciones.
+  const medidorHttp = metrics.getMeter("viajes.http", "1.0.0");
+  const solicitudesHttp = medidorHttp.createCounter("viajes.http.solicitudes", {
+    description: "Cantidad de solicitudes HTTP finalizadas por microservicio",
+    unit: "{solicitud}"
+  });
+  const duracionSolicitudesHttp = medidorHttp.createHistogram("viajes.http.duracion", {
+    description: "Duración de solicitudes HTTP finalizadas en segundos",
+    unit: "s"
+  });
+
+  registrarMetricaOtelActiva = (metrica) => {
+    const atributos = {
+      "service.name": metrica.servicio,
+      "http.request.method": metrica.metodo,
+      "http.route": metrica.ruta,
+      "http.response.status_code": metrica.estadoHttp
+    };
+    solicitudesHttp.add(1, atributos);
+    duracionSolicitudesHttp.record(metrica.duracionSegundos, atributos);
   };
-  solicitudesHttp.add(1, atributos);
-  duracionSolicitudesHttp.record(metrica.duracionSegundos, atributos);
 }
 
 function rutaExpressDeBajaCardinalidad(req: Request): string {
