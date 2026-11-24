@@ -229,6 +229,29 @@ test.describe("SEG-003 / SEG-005 - Hardening del front y CSP", () => {
     await expect(page).toHaveURL(/#\/no_autorizado/);
     await expect(page.getByTestId("vista-no-autorizado")).toBeVisible();
 
+    // Repetir el recorrido con el tema oscuro ya integrado por WEB-010.
+    await page.getByRole("button", { name: "Salir" }).click();
+    await expect(page).toHaveURL(/#\/login/);
+    await page.getByTestId("boton-tema").click();
+    await expect.poll(() => page.locator("html").evaluate((raiz) => raiz.classList.contains("dark"))).toBe(true);
+
+    await iniciarConPerfilDemo(page, /Lucía Operaciones/i);
+    await expect(page).toHaveURL(/#\/operador/);
+    await page.getByRole("button", { name: "Salir" }).click();
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
+    await expect(page).toHaveURL(/#\/admin/);
+    await page.locator("nav").getByRole("button", { name: "Pasajero" }).click();
+    await expect(page).toHaveURL(/#\/pasajero/);
+    await expect(page.locator(".leaflet-container")).toBeVisible();
+    await expect.poll(() => page.locator(".leaflet-tile").evaluateAll((tiles) =>
+      tiles.filter((tile) => tile instanceof HTMLImageElement && tile.complete && tile.naturalWidth > 0).length
+    )).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Salir" }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
+    await expect(page).toHaveURL(/#\/chofer/);
+    await expect(page.getByRole("banner")).toContainText("CHOFER");
+    expect(await page.locator("html").evaluate((raiz) => raiz.classList.contains("dark"))).toBe(true);
+
     if (process.env.PLAYWRIGHT_REQUIRE_CSP === "1") {
       expect(politicasRecibidas.some((politica) => politica.includes("default-src 'self'"))).toBe(true);
       expect(politicasRecibidas.some((politica) => /'unsafe-inline'|'unsafe-eval'/.test(politica))).toBe(false);
