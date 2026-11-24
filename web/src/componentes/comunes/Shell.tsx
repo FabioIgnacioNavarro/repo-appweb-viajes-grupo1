@@ -3,12 +3,14 @@ import { useRouter } from "../../nucleo/router";
 import { cerrarSesion, obtenerSesion, suscribirSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
 import { UsuarioSesion } from "../../nucleo/tipos";
+import { useTema } from "../../nucleo/tema";
 import { IconoAuto } from "./Iconos";
 
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { rutaActual, navegarA } = useRouter();
   const [sesion, setSesion] = useState<UsuarioSesion | null>(obtenerSesion());
   const [estadoWs, setEstadoWs] = useState<EstadoConexionWs>(clienteTiempoReal.obtenerEstado());
+  const { tema, alternarTema } = useTema();
 
   useEffect(() => {
     const desuscribirSesion = suscribirSesion(setSesion);
@@ -81,16 +83,16 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <a
         href="#contenido-principal"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-slate-900 focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:text-white"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-slate-900 dark:focus:bg-slate-100 focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:text-white dark:focus:text-slate-900"
       >
         Saltar al contenido principal
       </a>
 
       {/* Barra de Navegación Superior */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 transition-colors">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap items-center justify-between gap-2">
           {/* Logo y Nombre */}
           <button
@@ -98,12 +100,12 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             className="flex items-center gap-2.5 cursor-pointer text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 min-w-0"
             onClick={() => navegarA(sesion ? "pasajero" : "login")}
           >
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shrink-0">
               <IconoAuto size={20} />
             </div>
             <div className="min-w-0 truncate">
-              <span className="font-bold text-slate-900 text-sm sm:text-lg tracking-tight">Viajes Compartidos</span>
-              <span className="hidden sm:inline-block ml-2 text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-lg tracking-tight">Viajes Compartidos</span>
+              <span className="hidden sm:inline-block ml-2 text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 Grupo 1
               </span>
             </div>
@@ -111,6 +113,18 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
           {/* Menú derecho */}
           <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
+            {/* Selector Claro / Oscuro */}
+            <button
+              type="button"
+              onClick={alternarTema}
+              className="min-h-[36px] min-w-[36px] flex items-center justify-center px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
+              title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              data-testid="boton-tema"
+            >
+              {tema === "oscuro" ? "☀️" : "🌙"}
+            </button>
+
             {sesion ? (
               <>
                 <div className="hidden sm:block">{pillWs()}</div>
@@ -124,7 +138,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                 {sesion.rol === "ADMINISTRADOR" && (
                   <nav
                     aria-label="Navegación entre roles"
-                    className="order-last sm:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto text-sm bg-slate-100 p-1 rounded-lg border border-slate-200"
+                    className="order-last sm:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto text-sm bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700"
                   >
                     {enlacesAdmin.map((item) => (
                       <button
@@ -133,8 +147,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                         onClick={() => navegarA(item.ruta)}
                         className={`flex-1 md:flex-none px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition cursor-pointer ${
                           rutaActual === item.ruta
-                            ? "bg-white shadow-xs text-indigo-700 font-semibold"
-                            : "text-slate-700 hover:text-slate-900"
+                            ? "bg-white dark:bg-slate-900 shadow-xs text-indigo-700 dark:text-indigo-400 font-semibold"
+                            : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
                         }`}
                       >
                         {item.etiqueta}
@@ -150,14 +164,14 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     cerrarSesion();
                     navegarA("login");
                   }}
-                  className="min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 hover:bg-slate-100 border border-slate-300 transition cursor-pointer"
+                  className="min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
                   title="Cerrar sesión"
                 >
                   Salir
                 </button>
               </>
             ) : (
-              <span className="text-xs text-slate-600 font-medium text-right">Modo Seguro · Autenticación Externa</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 font-medium text-right">Modo Seguro · Autenticación Externa</span>
             )}
           </div>
         </div>
@@ -169,10 +183,10 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       </main>
 
       {/* Pie de Página */}
-      <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-600">
+      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-600 dark:text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>Programación IV — Trabajo Práctico de Microservicios</span>
-          <span className="text-slate-500">Variante A (Precio Dinámico) · Arquitectura Hexagonal</span>
+          <span className="text-slate-500 dark:text-slate-400">Variante A (Precio Dinámico) · Arquitectura Hexagonal</span>
         </div>
       </footer>
     </div>

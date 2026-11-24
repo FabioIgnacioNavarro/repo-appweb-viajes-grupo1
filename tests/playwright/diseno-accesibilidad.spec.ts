@@ -78,4 +78,29 @@ test.describe("WEB-003 - Sistema de diseño responsive, accesibilidad y mapa Lea
       }
     }
   });
+
+  test("WEB-010: selector de modo oscuro alterna clase dark en html y persiste en localStorage", async ({ page }) => {
+    await page.goto("/#/login");
+
+    const botonTema = page.getByTestId("boton-tema");
+    await expect(botonTema).toBeVisible();
+
+    // Estado inicial en tema claro
+    const esOscuroInicial = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    expect(esOscuroInicial).toBe(false);
+
+    // Click alterna a oscuro
+    await botonTema.click();
+    const esOscuroDespues = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    expect(esOscuroDespues).toBe(true);
+
+    const valorStorage = await page.evaluate(() => window.localStorage.getItem("tema_color"));
+    expect(valorStorage).toBe("oscuro");
+
+    // Click de nuevo vuelve a claro
+    await botonTema.click();
+    const esOscuroFinal = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    expect(esOscuroFinal).toBe(false);
+    expect(await page.evaluate(() => window.localStorage.getItem("tema_color"))).toBe("claro");
+  });
 });

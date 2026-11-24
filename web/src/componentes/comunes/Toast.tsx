@@ -10,10 +10,10 @@ export interface ToastProps {
 }
 
 const ESTILOS_TOAST: Record<TipoToast, string> = {
-  exito: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  error: "border-red-300 bg-red-50 text-red-900",
-  advertencia: "border-amber-300 bg-amber-50 text-amber-900",
-  info: "border-blue-300 bg-blue-50 text-blue-900",
+  exito: "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200",
+  error: "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/80 text-red-900 dark:text-red-200",
+  advertencia: "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200",
+  info: "border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/80 text-blue-900 dark:text-blue-200",
 };
 
 export const Toast: React.FC<ToastProps> = ({
