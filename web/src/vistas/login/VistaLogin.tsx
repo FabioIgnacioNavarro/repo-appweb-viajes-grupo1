@@ -238,6 +238,24 @@ export const VistaLogin: React.FC = () => {
         </p>
       </Tarjeta>
 
+      {error && (
+        <div
+          role="alert"
+          data-testid="alerta-login"
+          className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-center justify-between gap-3"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Cerrar aviso"
+            className="font-bold text-rose-900 px-2 py-1 rounded-md hover:bg-rose-100 cursor-pointer shrink-0"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       <details className="rounded-xl border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer font-semibold text-sm text-slate-800">
           Opciones de acceso para demo y desarrollo
@@ -270,24 +288,6 @@ export const VistaLogin: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {error && (
-        <div
-          role="alert"
-          data-testid="alerta-login"
-          className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-center justify-between gap-3"
-        >
-          <span>{error}</span>
-          <button
-            type="button"
-            onClick={() => setError(null)}
-            aria-label="Cerrar aviso"
-            className="font-bold text-rose-900 px-2 py-1 rounded-md hover:bg-rose-100 cursor-pointer shrink-0"
-          >
-            &times;
-          </button>
-        </div>
-      )}
 
       {/* Cuadrícula de Perfiles por Rol */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

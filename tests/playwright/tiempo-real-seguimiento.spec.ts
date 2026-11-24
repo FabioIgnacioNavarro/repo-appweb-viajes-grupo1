@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 
 test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resiliencia (Tema 20)", () => {
   const tokenPrueba =
@@ -81,7 +82,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
 
     // 2. Ingresar como chofer
     await page.goto("/#login");
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
     // 3. Verificar que el componente IndicadorConexionTiempoReal se visualiza correctamente
@@ -123,7 +124,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     });
 
     await page.goto("/#login");
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
     // Asegurar disponibilidad activa
@@ -291,7 +292,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     );
 
     await page.goto("/#login");
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
     // Asegurar disponibilidad activa
@@ -358,7 +359,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     });
 
     await page.goto("/#login");
-    await page.getByRole("button", { name: /Carlos Maidana/i }).click();
+    await iniciarConPerfilDemo(page, /Carlos Maidana/i);
 
     const monitor = page.getByTestId("indicador-tiempo-real-completo");
 

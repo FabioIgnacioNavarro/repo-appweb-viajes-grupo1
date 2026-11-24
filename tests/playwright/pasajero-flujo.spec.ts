@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 
 const TOKEN_PASAJERO =
   "eyJhbGciOiJSUzI1NiJ9." +
@@ -200,7 +201,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     const registro = await prepararMocksBase(page);
 
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Ana Gómez/i }).click();
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
 
     const inputOrigen = page.locator("#origen-viaje");
@@ -244,7 +245,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     const registro = await prepararMocksBase(page);
 
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Ana Gómez/i }).click();
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.locator(".leaflet-marker-icon")).toHaveCount(1);
 
@@ -307,7 +308,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
   test("vista de pasajero sin desborde horizontal en 360px, 768px y 1024px", async ({ page }) => {
     await prepararMocksBase(page);
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Ana Gómez/i }).click();
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
 
     await page.locator("#destino-viaje").fill("Shopping Sarmiento, Resistencia");

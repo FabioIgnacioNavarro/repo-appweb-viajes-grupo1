@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 
 function emitirJwt(id: string, rol: string, nombre: string): string {
   const payload = {
@@ -119,7 +120,7 @@ test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () =
 
     // 1. Verificar Operador con datos con payloads XSS -> escapado como texto, sin ejecución
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Lucía Operaciones/i }).click();
+    await iniciarConPerfilDemo(page, /Lucía Operaciones/i);
     await expect(page).toHaveURL(/#\/operador/);
     await expect(page.getByText(payloadXssImg).first()).toBeVisible();
     await expect(page.getByText(payloadXssScript).first()).toBeVisible();
@@ -136,7 +137,7 @@ test.describe("SEG-003 - Hardening del front: anti-XSS y sin token en URL", () =
     await page.getByRole("button", { name: "Salir" }).click();
 
     // 2. Verificar Administrador con campo autor XSS -> escapado como texto, sin ejecución
-    await page.getByRole("button", { name: /Martín Administrador/i }).click();
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
     await expect(page.getByText(payloadXssImg).first()).toBeVisible();
 

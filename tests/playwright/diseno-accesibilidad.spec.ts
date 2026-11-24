@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { iniciarConPerfilDemo } from "./ayudantes-login";
 
 test.describe("WEB-003 - Sistema de diseño responsive, accesibilidad y mapa Leaflet", () => {
   test.beforeEach(async ({ page }) => {
@@ -46,7 +47,7 @@ test.describe("WEB-003 - Sistema de diseño responsive, accesibilidad y mapa Lea
     await expect(enfocado).toHaveText(/Saltar al contenido principal/i);
 
     // Ingresar como pasajero y verificar Mapa Leaflet + landmarks únicos
-    await page.getByRole("button", { name: /Ana Gómez/i }).click();
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.locator("header")).toHaveCount(1);
     await expect(page.locator("main")).toHaveCount(1);
@@ -61,7 +62,7 @@ test.describe("WEB-003 - Sistema de diseño responsive, accesibilidad y mapa Lea
     ];
 
     await page.goto("/#/login");
-    await page.getByRole("button", { name: /Martín Administrador/i }).click();
+    await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
 
     for (const vp of viewports) {
