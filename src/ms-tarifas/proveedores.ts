@@ -1,5 +1,5 @@
 import { distanceHaversineMetros } from "./utilidades";
-import { conSpan, inyectarContextoW3C, obtenerContextoTraza } from "../compartido/observabilidad";
+import { conSpan, inyectarContextoW3C, obtenerContextoTraza, registrarLogEstructurado } from "../compartido/observabilidad";
 import {
   ErrorTarifas,
   construirNivelesCascada,
@@ -23,7 +23,7 @@ export type { Geocodificador, OpcionesGeocodificacion, CuadroDelimitador };
 type Obtener = (url: string, opciones?: RequestInit) => Promise<Response>;
 function registrarFalla(servicio: string, operacion: string, resultado: string): void {
   const traza = obtenerContextoTraza();
-  console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado, ...traza }));
+  registrarLogEstructurado({ evento: "dependencia_http_fallida", servicio, operacion, resultado, ...traza }, "ERROR");
 }
 
 async function obtenerJsonConReintento<T>(

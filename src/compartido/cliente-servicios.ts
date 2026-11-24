@@ -1,4 +1,4 @@
-import { inyectarContextoW3C, obtenerContextoTraza, conSpan } from "./observabilidad";
+import { inyectarContextoW3C, obtenerContextoTraza, conSpan, registrarLogEstructurado } from "./observabilidad";
 
 export class ErrorDependenciaHttp extends Error {
   constructor(readonly servicio: string, readonly operacion: string, readonly estadoHttp?: number) {
@@ -17,7 +17,7 @@ export interface OpcionesClienteHttp {
 
 export function registrarFallaDependencia(servicio: string, operacion: string, resultado: string): void {
   const traza = obtenerContextoTraza();
-  console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio, operacion, resultado, ...traza }));
+  registrarLogEstructurado({ evento: "dependencia_http_fallida", servicio, operacion, resultado, ...traza }, "ERROR");
 }
 
 /** Transporte común para GET internos: reintento acotado y errores sin URL, token ni cuerpo. */

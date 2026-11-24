@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import { registrarLogEstructurado } from "../compartido/observabilidad";
 import type { ValidadorToken } from "../compartido/jwt";
 import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 import { BuscarChoferesCercanos, CambiarDisponibilidadChofer, ConsultarUbicacionChofer, ErrorFlota, RegistrarUbicacionActual, type ActorAutenticado, type AutorizadorUbicacion, type RepositorioChoferes, type RepositorioUbicaciones, type RepositorioViajesActivos } from "./dominio";
@@ -38,7 +39,7 @@ export function crearRouterFlota(dependencias: DependenciasFlota): express.Route
       const ubicacion = await new RegistrarUbicacionActual(dependencias.choferes, dependencias.ubicaciones, randomUUID).ejecutar(actor, { latitud: cuerpo.latitud, longitud: cuerpo.longitud }, actualizado, precision);
       if (dependencias.publicadorUbicacionViaje && ubicacion.actualizadoAt.getTime() === actualizado.getTime()) {
         try { await dependencias.publicadorUbicacionViaje.publicar(actor, ubicacion, pedido.jwtExterno!); }
-        catch { console.error(JSON.stringify({ evento: "dependencia_http_fallida", servicio: "ms-viajes", operacion: "publicar_ubicacion_tiempo_real", resultado: "timeout_o_red" })); }
+        catch { registrarLogEstructurado({ evento: "dependencia_http_fallida", servicio: "ms-viajes", operacion: "publicar_ubicacion_tiempo_real", resultado: "timeout_o_red" }, "ERROR"); }
       }
       respuesta.status(200).json(serializarUbicacion(ubicacion));
     } catch (error) { errorHttp(error, respuesta); }
