@@ -92,6 +92,7 @@ export interface Viaje {
 
 export interface FiltrosListadoViajes {
   estado?: EstadoViaje;
+  participanteId?: string;
   desde?: Date;
   hasta?: Date;
   limite?: number;
@@ -150,6 +151,22 @@ export interface RepositorioCobros {
 export interface RepositorioIdempotencia {
   obtener(actorId: string, clave: string, operacion?: string): Promise<unknown | undefined>;
   guardar(actorId: string, clave: string, resultado: unknown, operacion?: string): Promise<void>;
+}
+
+/** Repositorios disponibles dentro de una confirmación transaccional serializada por clave. */
+export interface RepositoriosConfirmacionTransaccionales {
+  viajes: RepositorioViajes;
+  idempotencia: RepositorioIdempotencia;
+}
+
+/** Puerto de exclusión mutua por clave de idempotencia; en PostgreSQL usa lock transaccional. */
+export interface EjecutorIdempotente {
+  ejecutar<T>(
+    actorId: string,
+    clave: string,
+    operacion: string,
+    trabajo: (repositorios: RepositoriosConfirmacionTransaccionales) => Promise<T>
+  ): Promise<T>;
 }
 
 /** Repositorios con bloqueos explícitos disponibles solo dentro de una transacción local. */
@@ -245,7 +262,8 @@ export class RepositorioViajesMemoria implements RepositorioViajes {
 
   private filtrar(filtros: Omit<FiltrosListadoViajes, "limite" | "desplazamiento"> = {}): Viaje[] {
     return [...this.datos.values()].filter((viaje) =>
-      (!filtros.estado || viaje.estado === filtros.estado)
+      (!filtros.participanteId || viaje.pasajeroId === filtros.participanteId || viaje.choferId === filtros.participanteId)
+      && (!filtros.estado || viaje.estado === filtros.estado)
       && (!filtros.desde || viaje.creadoEn.getTime() >= filtros.desde.getTime())
       && (!filtros.hasta || viaje.creadoEn.getTime() < filtros.hasta.getTime())
     ).sort((a, b) => b.creadoEn.getTime() - a.creadoEn.getTime());
@@ -362,6 +380,39 @@ export class RepositorioIdempotenciaMemoria implements RepositorioIdempotencia {
   }
 }
 
+/** Serializa en memoria peticiones concurrentes que comparten actor, operación y clave de idempotencia. */
+export class EjecutorIdempotenteMemoria implements EjecutorIdempotente {
+  private readonly bloqueos = new Map<string, Promise<void>>();
+
+  constructor(
+    private readonly viajes: RepositorioViajes,
+    private readonly idempotencia: RepositorioIdempotencia
+  ) {}
+
+  async ejecutar<T>(
+    actorId: string,
+    clave: string,
+    operacion: string,
+    trabajo: (repositorios: RepositoriosConfirmacionTransaccionales) => Promise<T>
+  ): Promise<T> {
+    const llave = `${actorId}:${operacion}:${clave}`;
+    const previo = this.bloqueos.get(llave) ?? Promise.resolve();
+    let liberar!: () => void;
+    const actual = new Promise<void>((resolver) => { liberar = resolver; });
+    const cola = previo.then(() => actual);
+    this.bloqueos.set(llave, cola);
+    await previo;
+    try {
+      return await trabajo({ viajes: this.viajes, idempotencia: this.idempotencia });
+    } finally {
+      liberar();
+      if (this.bloqueos.get(llave) === cola) {
+        this.bloqueos.delete(llave);
+      }
+    }
+  }
+}
+
 export class AsignadorAtomicoMemoria implements AsignadorAtomico {
   private readonly porViaje = new Map<string, string>();
   private readonly porChofer = new Map<string, string>();
@@ -399,35 +450,54 @@ function exigirImporte(importe: string): void {
 }
 
 export class ConfirmarViaje {
+  private readonly ejecutor: EjecutorIdempotente;
+
   constructor(
     private readonly viajes: RepositorioViajes,
     private readonly idempotencia: RepositorioIdempotencia,
-    private readonly ids: GeneradorId
-  ) {}
+    private readonly ids: GeneradorId,
+    ejecutor?: EjecutorIdempotente
+  ) {
+    this.ejecutor = ejecutor ?? new EjecutorIdempotenteMemoria(viajes, idempotencia);
+  }
 
   async ejecutar(actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, ahora = new Date()): Promise<Viaje> {
+    const { viaje } = await this.ejecutarConRegistro(actor, estimacion, clave, ahora);
+    return viaje;
+  }
+
+  async ejecutarConRegistro(
+    actor: ActorAutenticado,
+    estimacion: EstimacionVigente,
+    clave: string,
+    ahora = new Date()
+  ): Promise<{ viaje: Viaje; creado: boolean }> {
     exigirRol(actor, "PASAJERO");
     if (!clave) throw new ErrorDominio("CLAVE_IDEMPOTENCIA_REQUERIDA", "La confirmacion requiere una clave de idempotencia.");
-    const anterior = (await this.idempotencia.obtener(actor.idUsuario, clave)) as Viaje | undefined;
-    if (anterior) return await this.viajes.obtener(anterior.id) ?? anterior;
-    exigirEstimacionVigente(estimacion, ahora);
-    exigirImporte(estimacion.precioEstimado);
-    const viaje: Viaje = {
-      id: this.ids.generar("viaje"),
-      pasajeroId: actor.idUsuario,
-      origen: structuredClone(estimacion.origen),
-      destino: structuredClone(estimacion.destino),
-      estimacionId: estimacion.id,
-      precioEstimado: estimacion.precioEstimado,
-      moneda: "ARS",
-      multiplicadorDemanda: estimacion.multiplicadorDemanda,
-      factoresPrecio: { ...structuredClone(estimacion.factoresPrecio), version_regla: estimacion.versionRegla },
-      estado: "SOLICITADO",
-      creadoEn: new Date(ahora)
-    };
-    const guardado = await this.viajes.guardar(viaje);
-    await this.idempotencia.guardar(actor.idUsuario, clave, guardado);
-    return guardado;
+    return await this.ejecutor.ejecutar(actor.idUsuario, clave, "confirmar_viaje", async ({ viajes, idempotencia }) => {
+      const anterior = (await idempotencia.obtener(actor.idUsuario, clave, "confirmar_viaje")) as Viaje | undefined;
+      if (anterior) {
+        return { viaje: (await viajes.obtener(anterior.id)) ?? anterior, creado: false };
+      }
+      exigirEstimacionVigente(estimacion, ahora);
+      exigirImporte(estimacion.precioEstimado);
+      const viaje: Viaje = {
+        id: this.ids.generar("viaje"),
+        pasajeroId: actor.idUsuario,
+        origen: structuredClone(estimacion.origen),
+        destino: structuredClone(estimacion.destino),
+        estimacionId: estimacion.id,
+        precioEstimado: estimacion.precioEstimado,
+        moneda: "ARS",
+        multiplicadorDemanda: estimacion.multiplicadorDemanda,
+        factoresPrecio: { ...structuredClone(estimacion.factoresPrecio), version_regla: estimacion.versionRegla },
+        estado: "SOLICITADO",
+        creadoEn: new Date(ahora)
+      };
+      const guardado = await viajes.guardar(viaje);
+      await idempotencia.guardar(actor.idUsuario, clave, guardado, "confirmar_viaje");
+      return { viaje: guardado, creado: true };
+    });
   }
 }
 

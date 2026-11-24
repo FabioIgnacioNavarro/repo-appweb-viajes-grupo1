@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import {
   ErrorDominio,
@@ -5,16 +6,19 @@ import {
   type ActorAutenticado,
   type AsignadorAtomico,
   type Cobro,
+  type EjecutorIdempotente,
   type EstadoCobro,
   type Coordenada,
   type EstadoOferta,
   type EstadoViaje,
+  type GeneradorId,
   type Oferta,
   type FiltrosListadoViajes,
   type RepositorioCobros,
   type RepositorioIdempotencia,
   type RepositorioOfertas,
   type RepositorioViajes,
+  type RepositoriosConfirmacionTransaccionales,
   type RepositoriosViajeTransaccionales,
   type TransaccionViajes,
   type Viaje
@@ -82,6 +86,10 @@ type FilaIdempotencia = {
 function filtrosSqlViajes(filtros: Omit<FiltrosListadoViajes, "limite" | "desplazamiento"> = {}): { where: string; valores: unknown[] } {
   const condiciones: string[] = [];
   const valores: unknown[] = [];
+  if (filtros.participanteId) {
+    valores.push(filtros.participanteId);
+    condiciones.push(`(pasajero_usuario_id = $${valores.length} OR chofer_usuario_id = $${valores.length})`);
+  }
   if (filtros.estado) { valores.push(filtros.estado); condiciones.push(`estado = $${valores.length}`); }
   if (filtros.desde) { valores.push(filtros.desde); condiciones.push(`creado_en >= $${valores.length}`); }
   if (filtros.hasta) { valores.push(filtros.hasta); condiciones.push(`creado_en < $${valores.length}`); }
@@ -404,6 +412,44 @@ export class RepositorioIdempotenciaPostgres implements RepositorioIdempotencia 
        ON CONFLICT (actor_id, operacion, clave) DO UPDATE SET resultado = EXCLUDED.resultado`,
       [actorId, operacion, clave, JSON.stringify(resultado)]
     );
+  }
+}
+
+export class GeneradorIdUuid implements GeneradorId {
+  generar(prefijo: string): string {
+    return `${prefijo}-${randomUUID()}`;
+  }
+}
+
+/** Ejecuta confirmaciones serializando por actor, operación y clave con lock transaccional en PostgreSQL. */
+export class EjecutorIdempotentePostgres implements EjecutorIdempotente {
+  constructor(private readonly pool: Pool) {}
+
+  async ejecutar<T>(
+    actorId: string,
+    clave: string,
+    operacion: string,
+    trabajo: (repositorios: RepositoriosConfirmacionTransaccionales) => Promise<T>
+  ): Promise<T> {
+    const cliente = await this.pool.connect();
+    try {
+      await cliente.query("BEGIN");
+      await cliente.query(
+        "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+        [`${actorId}:${operacion}`, clave]
+      );
+      const resultado = await trabajo({
+        viajes: new RepositorioViajesPostgres(cliente),
+        idempotencia: new RepositorioIdempotenciaPostgres(cliente)
+      });
+      await cliente.query("COMMIT");
+      return resultado;
+    } catch (error) {
+      try { await cliente.query("ROLLBACK"); } catch { /* Conserva el error original que provocó el rollback. */ }
+      throw error;
+    } finally {
+      cliente.release();
+    }
   }
 }
 

@@ -97,9 +97,9 @@ el destino HTTP y el contexto de Docker deben ser locales. Los informes se guard
 `carga/resultados/`, excluida de Git. La prueba corta valida que el simulador funcione, pero no
 reemplaza las tres ejecuciones de aceptación.
 
-### Pruebas de stress con k6 (MED-003)
+### Pruebas de stress con k6 y tablero Grafana (MED-003 / MED-004)
 
-Con el stack de Docker Compose levantado, podés ejecutar las pruebas de humo y stress con `grafana/k6` sin instalar binarios globales ni golpear APIs externas (`carga/docker-compose.k6.yml` fuerza proveedores internos):
+Con el stack de Docker Compose levantado, podés ejecutar las pruebas de humo, stress, simulación de **100 usuarios distintos** y visualizar las métricas en vivo en **Grafana** (`http://localhost:3300`) sin instalar binarios globales ni golpear APIs externas (`carga/docker-compose.k6.yml` fuerza proveedores internos):
 
 ```powershell
 # Prueba rápida (~10 s)
@@ -107,9 +107,15 @@ npm.cmd run carga:k6:smoke
 
 # Suite combinada de stress (~45 s): viajes + flota + sondas de salud
 npm.cmd run carga:k6
+
+# Carga de 100 usuarios distintos (~50 s) enviando métricas a Prometheus + Grafana (:3300)
+npm.cmd run carga:k6:100
+
+# Al finalizar las pruebas de carga, restaurar Nginx y ms-tarifas normales (mapa OSRM/Nominatim)
+npm.cmd run carga:grafana:down
 ```
 
-Los scripts están en `carga/k6/` (`estimacion-y-viajes.js`, `flota-stress.js`, `stress-combinado.js`) y sus métricas medidas figuran en [`docs/mediciones.md`](docs/mediciones.md).
+También es compatible con **Grafana Cloud** definiendo `K6_PROMETHEUS_RW_SERVER_URL`, `K6_PROMETHEUS_RW_USERNAME` y `K6_PROMETHEUS_RW_PASSWORD`. Los scripts están en `carga/k6/` (`estimacion-y-viajes.js`, `flota-stress.js`, `stress-combinado.js`, `carga-100-usuarios.js`), los tableros en `carga/grafana/` y sus métricas medidas en [`docs/mediciones.md`](docs/mediciones.md).
 
 ---
 

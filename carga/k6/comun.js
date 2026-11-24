@@ -16,21 +16,35 @@ export function obtenerBaseUrl() {
   return (__ENV.BASE_URL || "http://localhost:8080").replace(/\/$/, "");
 }
 
-export function emitirTokenPrueba(baseUrl, idUsuario, rol, nombre) {
+export function ipSinteticaUsuario(indice) {
+  const octeto3 = Math.floor(indice / 250) + 1;
+  const octeto4 = (indice % 250) + 1;
+  return `10.100.${octeto3}.${octeto4}`;
+}
+
+export function uuidSintetico(prefijoHex, indice) {
+  const sufijo = String(indice + 1).padStart(12, "0");
+  return `${prefijoHex}-0000-4000-8000-${sufijo}`;
+}
+
+export function emitirTokenPrueba(baseUrl, idUsuario, rol, nombre, headersExtra = {}) {
   const rolLower = rol.toLowerCase();
   const res = http.post(
     `${baseUrl}/auth/token`,
     JSON.stringify({ id_usuario: idUsuario, rol: rolLower, nombre }),
-    { headers: { "Content-Type": "application/json" } }
+    { headers: { "Content-Type": "application/json", ...headersExtra } }
   );
 
   if (res.status === 200) {
     try {
       const data = res.json();
       if (data && typeof data.token === "string" && data.token.length > 10) {
+        if (headersExtra.__omitirSonda === "true") {
+          return data.token;
+        }
         const rutaSonda = rolLower === "chofer" ? "/choferes/yo/ofertas" : "/viajes";
         const sonda = http.get(`${baseUrl}${rutaSonda}`, {
-          headers: { Authorization: `Bearer ${data.token}` },
+          headers: { Authorization: `Bearer ${data.token}`, ...headersExtra },
         });
         if (sonda.status !== 401) {
           return data.token;

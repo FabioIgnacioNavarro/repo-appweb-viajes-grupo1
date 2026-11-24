@@ -3,10 +3,27 @@ import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";
 
 /** Orquesta casos de uso y puertos; las reglas de autorización y estado siguen en el dominio. */
 export class ConfirmarViajeYBuscarChoferes {
+  private readonly matchingEnCurso = new Map<string, Promise<Viaje>>();
+
   constructor(private readonly confirmar: ConfirmarViaje, private readonly candidatos: FuenteCandidatos, private readonly crearOfertas: CrearOfertasParaCandidatos, private readonly sinChoferesDisponibles: MarcarViajeSinChoferesDisponibles, private readonly eventos?: PublicadorEventosTiempoReal) {}
+
   async ejecutar(actor: ActorAutenticado, estimacion: EstimacionVigente, clave: string, jwt: string): Promise<Viaje> {
     const viaje = await this.confirmar.ejecutar(actor, estimacion, clave);
     if (viaje.estado !== "SOLICITADO") return viaje;
+
+    const enCurso = this.matchingEnCurso.get(viaje.id);
+    if (enCurso) return await enCurso;
+
+    const proceso = this.buscarYOfertar(viaje, jwt).finally(() => {
+      if (this.matchingEnCurso.get(viaje.id) === proceso) {
+        this.matchingEnCurso.delete(viaje.id);
+      }
+    });
+    this.matchingEnCurso.set(viaje.id, proceso);
+    return await proceso;
+  }
+
+  private async buscarYOfertar(viaje: Viaje, jwt: string): Promise<Viaje> {
     try {
       const choferes = await this.candidatos.buscar(viaje.origen, jwt);
       if (choferes.length === 0) return await this.sinChoferesDisponibles.ejecutar(viaje.id);

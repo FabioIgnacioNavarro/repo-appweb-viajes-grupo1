@@ -18,6 +18,8 @@ import {
   ConsultarChoferesOcupadosPostgres,
   ConsultarDemandaPorZonaPostgres,
   crearPoolPostgres,
+  EjecutorIdempotentePostgres,
+  GeneradorIdUuid,
   RepositorioCobrosPostgres,
   RepositorioIdempotenciaPostgres,
   RepositorioOfertasPostgres,
@@ -46,7 +48,8 @@ const cobros = pool ? new RepositorioCobrosPostgres(pool) : new RepositorioCobro
 const idempotencia = pool ? new RepositorioIdempotenciaPostgres(pool) : new RepositorioIdempotenciaMemoria();
 const asignador = pool ? new AsignadorAtomicoPostgres(pool) : new AsignadorAtomicoMemoria();
 const transaccionViajes = pool ? new TransaccionesViajesPostgres(pool) : undefined;
-const ids = new GeneradorIdMemoria();
+const ejecutorIdempotente = pool ? new EjecutorIdempotentePostgres(pool) : undefined;
+const ids = pool ? new GeneradorIdUuid() : new GeneradorIdMemoria();
 const pasarelaPagos = new PasarelaPagosFalsa();
 
 const timeoutServicio = Number(process.env.TIMEOUT_SERVICIO_MS ?? "1500");
@@ -55,7 +58,7 @@ const clienteHttp = new ClienteServiciosHttp({ timeoutMs: timeoutServicio, reint
 const clienteTarifas = new ClienteTarifasHttp(exigirBaseInterna(process.env.MS_TARIFAS_URL, "MS_TARIFAS_URL"), clienteHttp);
 const clienteFlota = new ClienteFlotaHttp(exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL"), clienteHttp, Number(process.env.RADIO_BUSQUEDA_CHOFERES_METROS ?? "5000"));
 
-const confirmar = new ConfirmarViaje(viajes, idempotencia, ids);
+const confirmar = new ConfirmarViaje(viajes, idempotencia, ids, ejecutorIdempotente);
 const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(confirmar, clienteFlota, new CrearOfertasParaCandidatos(ofertas, ids), new MarcarViajeSinChoferesDisponibles(viajes), eventosTiempoReal);
 
 const consultarDemanda = pool ? new ConsultarDemandaPorZonaPostgres(pool) : new ConsultarDemandaPorZona(viajes);

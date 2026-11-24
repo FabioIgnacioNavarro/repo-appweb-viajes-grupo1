@@ -150,14 +150,20 @@ export function flujoViajes(data) {
       "Clave-Idempotencia": clave,
     };
     const body = JSON.stringify({ id_estimacion: idEstimacion });
-    const c1 = http.post(`${data.baseUrl}/viajes`, body, {
-      headers,
-      tags: { escenario: "viajes", endpoint: "confirmacion" },
-    });
-    const c2 = http.post(`${data.baseUrl}/viajes`, body, {
-      headers,
-      tags: { escenario: "viajes", endpoint: "confirmacion_reintento" },
-    });
+    const [c1, c2] = http.batch([
+      [
+        "POST",
+        `${data.baseUrl}/viajes`,
+        body,
+        { headers, tags: { escenario: "viajes", endpoint: "confirmacion" } },
+      ],
+      [
+        "POST",
+        `${data.baseUrl}/viajes`,
+        body,
+        { headers, tags: { escenario: "viajes", endpoint: "confirmacion_reintento" } },
+      ],
+    ]);
     registrarMetricasHttp(c1);
     registrarMetricasHttp(c2);
     if (c1.status === 201 || c1.status === 200) latenciaConfirmacionOk.add(c1.timings.duration);
@@ -166,7 +172,7 @@ export function flujoViajes(data) {
     check([c1, c2], {
       "confirmación combinada sin 5xx": ([a, b]) =>
         a.status > 0 && a.status < 500 && b.status > 0 && b.status < 500,
-      "reintento idempotente combinado consistente": ([a, b]) =>
+      "confirmación paralela combinada consistente": ([a, b]) =>
         (a.status === 201 || a.status === 200) && (b.status === 201 || b.status === 200)
           ? a.json().id_viaje === b.json().id_viaje
           : true,
