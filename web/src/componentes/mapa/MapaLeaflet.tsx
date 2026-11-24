@@ -264,14 +264,14 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
 
   return (
     <div
-      className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-xs"
+      className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs"
       style={{ minHeight: "360px", height: altura }}
     >
       <div ref={contenedorRef} className="w-full h-full" style={{ minHeight: "360px" }} />
       <button
         type="button"
         onClick={encuadrarRecorridoCompleto}
-        className="absolute top-3 right-3 z-[400] rounded-lg border border-slate-300 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-xs hover:bg-slate-50 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-slate-900"
+        className="absolute top-3 right-3 z-[400] rounded-lg border border-slate-300 dark:border-slate-700 bg-white/95 dark:bg-slate-800/95 px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-100"
         title="Centrar y encuadrar el origen o el recorrido completo"
         aria-label="Centrar mapa"
       >

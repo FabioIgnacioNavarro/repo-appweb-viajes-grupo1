@@ -11,12 +11,12 @@ export interface BotonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
 }
 
 const ESTILOS_VARIANTE: Record<VarianteBoton, string> = {
-  primario: "bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-900",
-  secundario: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-900",
+  primario: "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white focus-visible:ring-slate-900 dark:focus-visible:ring-slate-100",
+  secundario: "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-400",
   pasajero: "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-600",
   chofer: "bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600",
   peligro: "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600",
-  fantasma: "bg-transparent text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-900",
+  fantasma: "bg-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-400",
 };
 
 const ESTILOS_TAMANO: Record<TamanoBoton, string> = {

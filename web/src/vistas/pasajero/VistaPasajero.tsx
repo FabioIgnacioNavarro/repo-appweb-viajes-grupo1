@@ -527,12 +527,12 @@ export const VistaPasajero: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-5">
-          <form onSubmit={solicitarEstimacion} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Calcular estimación del viaje">
+          <form onSubmit={solicitarEstimacion} className="space-y-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm" aria-label="Calcular estimación del viaje">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900">Tu recorrido</h2>
-              <p className="mt-1 text-xs text-slate-500">Ingresá un destino o tocá el mapa para cotizar al instante.</p>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900 dark:text-slate-100">Tu recorrido</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ingresá un destino o tocá el mapa para cotizar al instante.</p>
             </div>
-            <label className="block text-xs font-semibold text-slate-700" htmlFor="origen-viaje">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="origen-viaje">
               Origen
               <input
                 id="origen-viaje"
@@ -546,12 +546,12 @@ export const VistaPasajero: React.FC = () => {
                   programarEstimacionAutomatica(nuevoOrigen, destino, null, pinManualDestino);
                 }}
                 disabled={puedeCancelar}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-950 disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 placeholder="Juan B. Justo 4, Resistencia"
                 required
               />
             </label>
-            <label className="block text-xs font-semibold text-slate-700" htmlFor="destino-viaje">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="destino-viaje">
               Destino
               <input
                 id="destino-viaje"
@@ -578,7 +578,7 @@ export const VistaPasajero: React.FC = () => {
                   );
                 }}
                 disabled={puedeCancelar}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-950 disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 placeholder="Ej.: Shopping Sarmiento, Resistencia"
                 required
               />
@@ -592,34 +592,34 @@ export const VistaPasajero: React.FC = () => {
           </form>
 
           {estimacion && !viaje && (
-            <section className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5" aria-labelledby="titulo-precio">
+            <section className="space-y-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 p-5" aria-labelledby="titulo-precio">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 id="titulo-precio" className="text-xs font-bold uppercase tracking-wide text-amber-900">Precio estimado</h2>
-                  <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900">{importePesos(estimacion.precio_estimado)}</p>
-                  <p className="mt-1 text-xs text-slate-600">{estimacion.zona} · regla v{estimacion.version_regla}</p>
+                  <h2 id="titulo-precio" className="text-xs font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Precio estimado</h2>
+                  <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{importePesos(estimacion.precio_estimado)}</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{estimacion.zona} · regla v{estimacion.version_regla}</p>
                 </div>
-                <span className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm font-extrabold text-amber-900">×{estimacion.multiplicador_demanda.toFixed(2)}</span>
+                <span className="rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm font-extrabold text-amber-900 dark:text-amber-300">×{estimacion.multiplicador_demanda.toFixed(2)}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-amber-200 bg-white p-3"><span className="block text-slate-500">Distancia</span><strong className="mt-1 block text-slate-900">{(estimacion.distancia_metros / 1000).toFixed(1)} km</strong></div>
-                <div className="rounded-lg border border-amber-200 bg-white p-3"><span className="block text-slate-500">Duración aprox.</span><strong className="mt-1 block text-slate-900">{Math.max(1, Math.ceil(estimacion.duracion_segundos / 60))} min</strong></div>
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-800 p-3"><span className="block text-slate-500 dark:text-slate-400">Distancia</span><strong className="mt-1 block text-slate-900 dark:text-slate-100">{(estimacion.distancia_metros / 1000).toFixed(1)} km</strong></div>
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-800 p-3"><span className="block text-slate-500 dark:text-slate-400">Duración aprox.</span><strong className="mt-1 block text-slate-900 dark:text-slate-100">{Math.max(1, Math.ceil(estimacion.duracion_segundos / 60))} min</strong></div>
               </div>
 
               <div>
-                <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-amber-900">Factores del precio</h3>
+                <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Factores del precio</h3>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                   {camposFactor.map((campo) => (
-                    <div key={campo.clave} className="rounded-lg border border-amber-100 bg-white/80 p-2.5">
-                      <dt className="text-slate-500">{campo.etiqueta}</dt>
-                      <dd className="mt-0.5 font-semibold capitalize text-slate-900">{campo.mostrar(estimacion.factores_precio[campo.clave])}</dd>
+                    <div key={campo.clave} className="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-white/80 dark:bg-slate-800/80 p-2.5">
+                      <dt className="text-slate-500 dark:text-slate-400">{campo.etiqueta}</dt>
+                      <dd className="mt-0.5 font-semibold capitalize text-slate-900 dark:text-slate-100">{campo.mostrar(estimacion.factores_precio[campo.clave])}</dd>
                     </div>
                   ))}
                 </dl>
               </div>
 
-              <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${segundosVigencia > 0 ? "bg-white text-indigo-700" : "bg-red-100 text-red-800"}`} aria-live="polite">
+              <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${segundosVigencia > 0 ? "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300" : "bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300"}`} aria-live="polite">
                 {segundosVigencia > 0 ? `Este precio vence en ${formatearTiempo(segundosVigencia)}` : "La estimación venció. Volvé a elegir destino para recalcular."}
               </div>
               <button type="button" onClick={() => void confirmarViaje()} disabled={procesando || calculandoEstimacion || segundosVigencia <= 0} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
@@ -629,61 +629,61 @@ export const VistaPasajero: React.FC = () => {
           )}
 
           {viaje && (
-            <section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm" aria-labelledby="titulo-viaje-activo">
+            <section className="space-y-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-slate-900 p-5 shadow-sm" aria-labelledby="titulo-viaje-activo">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 id="titulo-viaje-activo" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <h2 id="titulo-viaje-activo" className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     {estadoViaje === "sin_choferes_disponibles" ? "Sin chofer disponible" : estadoViaje === "finalizado" ? "Viaje finalizado" : "Viaje confirmado"}
                   </h2>
-                  <p className="mt-1 text-2xl font-extrabold text-slate-900">{importePesos(viaje.precio_final ?? viaje.precio_estimado)}</p>
+                  <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">{importePesos(viaje.precio_final ?? viaje.precio_estimado)}</p>
                 </div>
                 <InsigniaEstadoViaje estado={viaje.estado} />
               </div>
-              <p className="text-xs text-slate-600">El precio y sus factores se mantienen congelados desde la confirmación.</p>
-              <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <p className="text-xs text-slate-600 dark:text-slate-400">El precio y sus factores se mantienen congelados desde la confirmación.</p>
+              <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-200 dark:border-red-800/60 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-red-700 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-50">
                 {procesando ? "Procesando…" : puedeCancelar ? "Cancelar viaje" : etiquetaEstado(viaje.estado)}
               </button>
             </section>
           )}
 
           {cobro && viaje && cobro.id_viaje === viaje.id_viaje && (
-            <section className={`space-y-3 rounded-2xl border p-5 shadow-sm ${cobro.estado === "confirmado" ? "border-emerald-200 bg-emerald-50" : cobro.estado === "fallido" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`} aria-labelledby="titulo-recibo-cobro">
+            <section className={`space-y-3 rounded-2xl border p-5 shadow-sm ${cobro.estado === "confirmado" ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20" : cobro.estado === "fallido" ? "border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20" : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20"}`} aria-labelledby="titulo-recibo-cobro">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 id="titulo-recibo-cobro" className="text-xs font-bold uppercase tracking-wide text-slate-600">Recibo del viaje</h2>
-                  <p className="mt-1 text-xs font-semibold text-slate-700">Cobro #{cobro.id_cobro}</p>
+                  <h2 id="titulo-recibo-cobro" className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Recibo del viaje</h2>
+                  <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">Cobro #{cobro.id_cobro}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${cobro.estado === "confirmado" ? "bg-emerald-100 text-emerald-800" : cobro.estado === "fallido" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${cobro.estado === "confirmado" ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200" : cobro.estado === "fallido" ? "bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200" : "bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200"}`}>
                   {cobro.estado === "confirmado" ? "Pago confirmado" : cobro.estado === "fallido" ? "Pago fallido" : "Pago pendiente"}
                 </span>
               </div>
-              <p className="text-2xl font-extrabold text-slate-900">{importePesos(cobro.importe)}</p>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">{importePesos(cobro.importe)}</p>
               <dl className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-white/80 bg-white/80 p-3"><dt className="text-slate-500">Intentos</dt><dd className="mt-1 font-semibold text-slate-800">{cobro.intentos}</dd></div>
-                <div className="rounded-lg border border-white/80 bg-white/80 p-3"><dt className="text-slate-500">Fecha</dt><dd className="mt-1 font-semibold text-slate-800">{new Date(cobro.creado_en).toLocaleString("es-AR")}</dd></div>
+                <div className="rounded-lg border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-800/80 p-3"><dt className="text-slate-500 dark:text-slate-400">Intentos</dt><dd className="mt-1 font-semibold text-slate-800 dark:text-slate-200">{cobro.intentos}</dd></div>
+                <div className="rounded-lg border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-800/80 p-3"><dt className="text-slate-500 dark:text-slate-400">Fecha</dt><dd className="mt-1 font-semibold text-slate-800 dark:text-slate-200">{new Date(cobro.creado_en).toLocaleString("es-AR")}</dd></div>
               </dl>
               {cobro.estado === "fallido" && (
                 <>
-                  <p className="text-xs text-rose-800">El viaje se completó, pero el pago no se confirmó. Podés reintentar; el importe y el cobro se mantienen únicos.</p>
+                  <p className="text-xs text-rose-800 dark:text-rose-300">El viaje se completó, pero el pago no se confirmó. Podés reintentar; el importe y el cobro se mantienen únicos.</p>
                   <button type="button" onClick={() => void reintentarCobro()} disabled={procesando} className="w-full rounded-xl bg-rose-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50">
                     {procesando ? "Reintentando pago…" : "Reintentar pago"}
                   </button>
                 </>
               )}
-              {cobro.estado === "confirmado" && <p className="text-xs font-semibold text-emerald-800">El cobro quedó confirmado por el importe final congelado al cerrar el viaje.</p>}
+              {cobro.estado === "confirmado" && <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">El cobro quedó confirmado por el importe final congelado al cerrar el viaje.</p>}
             </section>
           )}
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Recorrido estimado">
-          <div className="flex flex-col justify-between gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" aria-label="Recorrido estimado">
+          <div className="flex flex-col justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-5 py-4 sm:flex-row sm:items-center">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Recorrido</h2>
-              <p className="mt-0.5 text-xs text-slate-500">La línea sigue la geometría devuelta por el proveedor de rutas.</p>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Recorrido</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">La línea sigue la geometría devuelta por el proveedor de rutas.</p>
             </div>
-            {estimacion && <span className="text-xs font-semibold text-slate-600">{(estimacion.distancia_metros / 1000).toFixed(1)} km · {Math.ceil(estimacion.duracion_segundos / 60)} min</span>}
+            {estimacion && <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{(estimacion.distancia_metros / 1000).toFixed(1)} km · {Math.ceil(estimacion.duracion_segundos / 60)} min</span>}
           </div>
-          <div className="relative min-h-[360px] bg-slate-100 sm:min-h-[440px]">
+          <div className="relative min-h-[360px] bg-slate-100 dark:bg-slate-950 sm:min-h-[440px]">
             <MapaLeaflet
               altura="440px"
               origen={origenPinMapa}
@@ -692,14 +692,14 @@ export const VistaPasajero: React.FC = () => {
               onSeleccionarPunto={puedeCancelar ? undefined : manejarPinArrastrado}
             />
             {!estimacion && !viaje && (
-              <div className="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-[400] rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-xs">
+              <div className="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-[400] rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 shadow-xs">
                 Elegí un destino escribiendo la dirección o tocando el mapa para calcular el precio automáticamente.
               </div>
             )}
             {estimacion && (
-              <div className="pointer-events-none absolute bottom-3 left-3 z-[400] flex gap-3 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold shadow-xs">
-                <span className="text-blue-700">● Origen</span>
-                <span className="text-red-700">● Destino</span>
+              <div className="pointer-events-none absolute bottom-3 left-3 z-[400] flex gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-1.5 text-[11px] font-semibold shadow-xs">
+                <span className="text-blue-700 dark:text-blue-400">● Origen</span>
+                <span className="text-red-700 dark:text-red-400">● Destino</span>
               </div>
             )}
           </div>
