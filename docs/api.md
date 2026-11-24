@@ -51,8 +51,19 @@ Este documento consolida el contrato de la API HTTP de la plataforma para todos 
 | `GET` | `/ready/tarifas` | `ms-tarifas:3001/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/ready/flota` | `ms-flota:3002/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/` (y rutas SPA) | Estáticos Nginx (`dist/web`) | Sirve `index.html`, `/assets/*` con MIME types correctos y fallback a `index.html` para rutas del front. |
+| `POST` | `/auth/login` | `auth-emulator:9099` | Valida `{ usuario, contrasena }` contra cuentas semilla locales y devuelve JWT RS256 + perfil. Solo disponible fuera de producción. |
 | `POST` | `/auth/token` | `auth-emulator:9099` | Emite un JWT RS256 de desarrollo/demo para `{ id_usuario, rol }` (también acepta `idUsuario`). Solo entorno con emulador. |
 | `GET` | `/auth/tokens-demo` | `auth-emulator:9099` | Devuelve catálogo de tokens RS256 sintéticos de demostración por rol. |
+
+#### `POST /auth/login`
+Autentica una cuenta semilla del emulador de identidad. La contraseña se compara en el emulador y nunca se envía a los microservicios de negocio.
+- **Disponibilidad:** solo entorno local/de desarrollo; responde `404 RUTA_NO_ENCONTRADA` si `NODE_ENV=production`.
+- **Cuerpo:** `{"usuario":"ana","contrasena":"ViajesDemo2026!"}`. Acepta también `{"email":"ana@viajes.local","contrasena":"ViajesDemo2026!"}`.
+- **Cuentas locales de demostración:** `ana`, `carlos`, `lucia` y `martin`; contraseña predeterminada `ViajesDemo2026!`. Puede cambiarse con `AUTH_DEMO_PASSWORD`.
+- **Respuesta (`200 OK`):** `{"token":"<JWT RS256>","perfil":{"id_usuario":"...","usuario":"ana","email":"ana@viajes.local","nombre":"Ana Gómez","rol":"pasajero"},"expira_en_segundos":3600}`. El token contiene `sub`, `rol`, `iss`, `aud`, `exp`, `name` y `email` y se valida mediante el JWKS del emulador. La respuesta lleva `Cache-Control: no-store`.
+- **Credenciales incorrectas (`401`):** `CREDENCIALES_INVALIDAS`, con el mismo mensaje para usuario inexistente o contraseña incorrecta.
+- **Cuerpo inválido (`400`):** `ENTRADA_INVALIDA`; cuerpo mayor a `10kb` devuelve `413 PAYLOAD_DEMASIADO_GRANDE`.
+- Las cuentas y clave predeterminadas son datos ficticios para la demostración local, no una identidad ni una contraseña para producción.
 
 ### Canal de tiempo real
 

@@ -78,6 +78,8 @@ type ModoEmisionToken = "emulador" | "falso";
 export const VistaLogin: React.FC = () => {
   const { navegarA, rutaPorDefectoParaRol } = useRouter();
   const [tokenManual, setTokenManual] = useState("");
+  const [usuario, setUsuario] = useState("");
+  const [contrasena, setContrasena] = useState("");
   const [modoToken, setModoToken] = useState<ModoEmisionToken>("emulador");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +90,37 @@ export const VistaLogin: React.FC = () => {
       setError(aviso);
     }
   }, []);
+
+  const iniciarConCredenciales = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCargando(true);
+    setError(null);
+
+    try {
+      const respuesta = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario, contrasena }),
+      });
+      const datos = (await respuesta.json().catch(() => null)) as {
+        token?: string;
+        error?: { mensaje?: string };
+      } | null;
+
+      if (!respuesta.ok || !datos?.token) {
+        setError(datos?.error?.mensaje ?? "No se pudo iniciar sesión. Revisá tus credenciales.");
+        return;
+      }
+
+      const sesion = iniciarSesion(datos.token);
+      setContrasena("");
+      navegarA(rutaPorDefectoParaRol(sesion.rol));
+    } catch {
+      setError("No se pudo conectar con el servicio de identidad. Intentá nuevamente.");
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const iniciarConPerfil = async (perfil: PerfilDemo) => {
     setCargando(true);
@@ -170,10 +203,46 @@ export const VistaLogin: React.FC = () => {
           Bienvenido a la Plataforma de Viajes
         </h1>
         <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
-          Seleccioná un perfil de prueba para ingresar con credenciales de identidad externa o pegá un token JWT.
+          Iniciá sesión con tu usuario y contraseña. La identidad se valida en el emulador externo y la plataforma recibe un JWT firmado.
         </p>
       </div>
 
+      <Tarjeta titulo="Iniciar sesión" subtitulo="Usá las credenciales de una cuenta registrada.">
+        <form onSubmit={iniciarConCredenciales} className="max-w-md space-y-4">
+          <CampoTexto
+            id="login-usuario"
+            data-testid="login-usuario"
+            etiqueta="Usuario o email"
+            autoComplete="username"
+            value={usuario}
+            onChange={(e) => setUsuario(e.target.value)}
+            placeholder="ana o ana@viajes.local"
+            required
+          />
+          <CampoTexto
+            id="login-contrasena"
+            data-testid="login-contrasena"
+            etiqueta="Contraseña"
+            type="password"
+            autoComplete="current-password"
+            value={contrasena}
+            onChange={(e) => setContrasena(e.target.value)}
+            required
+          />
+          <Boton type="submit" data-testid="boton-iniciar-sesion" variante="primario" disabled={!usuario.trim() || !contrasena || cargando}>
+            {cargando ? "Verificando…" : "Iniciar sesión"}
+          </Boton>
+        </form>
+        <p className="mt-3 text-xs text-slate-500">
+          En el emulador local: usuarios ana, carlos, lucia o martin; contraseña de prueba <code>ViajesDemo2026!</code>.
+        </p>
+      </Tarjeta>
+
+      <details className="rounded-xl border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer font-semibold text-sm text-slate-800">
+          Opciones de acceso para demo y desarrollo
+        </summary>
+        <div className="mt-4 space-y-6">
       {/* Selector de modo de emisión de credenciales */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs">
         <span className="font-semibold text-slate-800">Modo de emisión de credenciales:</span>
@@ -291,6 +360,8 @@ export const VistaLogin: React.FC = () => {
           </Boton>
         </form>
       </Tarjeta>
+        </div>
+      </details>
     </div>
   );
 };

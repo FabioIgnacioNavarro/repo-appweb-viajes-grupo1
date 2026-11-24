@@ -47,6 +47,7 @@ Ventajas reales:
   - Genera automáticamente un par de claves RSA de 2048 bits al inicio.
   - Expone el endpoint público de claves `GET /.well-known/jwks.json` en formato JWK estándar (`kty: "RSA"`, `alg: "RS256"`, `use: "sig"`).
   - Expone endpoints para emitir credenciales de prueba (`POST /auth/token`, `GET /auth/tokens-demo`): token válido para cada rol, token con firma adulterada y token expirado.
+  - Para la demo de la aplicación, expone `POST /auth/login` con cuentas semilla ficticias y emite un JWT RS256 solo fuera de producción. La contraseña se valida exclusivamente en el emulador; los servicios de negocio siguen recibiendo únicamente el token.
 - **Compatibilidad total con los microservicios:** `ms-viajes`, `ms-tarifas` y `ms-flota` ya cuentan con `ValidadorJwtJwks` en `src/compartido/jwt.ts`; solo requieren configurar `JWT_MODO=real` y apuntar `JWT_JWKS_URL` a este servicio.
 - **Sin colisiones:** No modifica la lógica interna de los servicios de los otros integrantes ni rompe `JWT_MODO=falso`, preservando los tests existentes.
 
@@ -61,7 +62,7 @@ Se adopta la **Opción C**.
    - Gestiona un par de claves RSA con identificador de clave (`kid`) dinámico.
    - Publica `GET /.well-known/jwks.json`.
    - Provee endpoints auxiliares para emitir tokens firmados con claims válidos (`rol`, `sub`, `iss`, `aud`, `exp`), tokens expirados y tokens adulterados.
-2. Se incorpora el servicio `auth-emulator` en `docker-compose.yml` en el puerto `9099`, integrado a la red interna de microservicios, y se proxea `/auth/` desde Nginx (`8080`) para que la SPA obtenga tokens RS256 en el mismo origen sin credenciales reales.
+2. Se incorpora el servicio `auth-emulator` en `docker-compose.yml` en el puerto `9099`, integrado a la red interna de microservicios, y se proxea `/auth/` desde Nginx (`8080`) para que la SPA obtenga tokens RS256 en el mismo origen. `POST /auth/login` usa cuentas ficticias de desarrollo y se deshabilita con `NODE_ENV=production`; no reemplaza al proveedor real de identidad.
    *(Nota: `ValidadorJwtFalso` queda deshabilitado en todos los microservicios si `NODE_ENV=production`.)*
 3. Se añaden pruebas unitarias completas para `ValidadorJwtJwks` en `src/compartido/jwt.test.ts` con verificación de firma RS256, expiración, claims anidados, claves desconocidas y rechazo de algoritmo `none`.
 4. Se documenta la demostración de los tres escenarios (200, 401, 403) en `requests/seguridad-rbac.http` y en `docs/ataque.md`.
