@@ -126,6 +126,7 @@ Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, d
   }
   ```
   *Nota: Admite también resolución por texto:* `{"direccion": "Av. Alberdi 250, Resistencia"}`.
+  *Modo desarrollador (`DEV-001`):* Cuando `MODO_DESARROLLADOR=true` y `NODE_ENV !== "production"`, admite un objeto opcional `"simulacion": { "hora": 21, "llueve": true, "choferes_disponibles": 2, "solicitudes_activas": 8 }` para simular escenarios sin alterar la regla activa. Si se envía fuera de modo desarrollador o en producción, responde `403 MODO_DESARROLLADOR_DESHABILITADO`.
 - **Respuesta exitosa (`201 Created`):**
   ```json
   {
@@ -151,6 +152,7 @@ Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, d
       "factor_demanda": 1.0,
       "factor_horario": 0.95
     },
+    "recomendaciones": ["Tarifa estable en este momento."],
     "version_regla": 1,
     "creada_en": "2026-11-02T13:00:00.000Z",
     "vigente_hasta": "2026-11-02T13:03:00.000Z",

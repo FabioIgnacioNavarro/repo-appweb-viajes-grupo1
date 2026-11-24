@@ -76,6 +76,7 @@ export interface EstimacionTarifa {
   polilinea?: string;
   multiplicadorDemandaEscalado: number;
   factoresPrecio: FactoresPrecio;
+  recomendaciones?: string[];
   versionRegla: number;
   creadaEn: Date;
   vigenteHasta: Date;
@@ -195,15 +196,19 @@ function seleccionarFactor(valor: number, umbrales: FactorPorUmbral[]): number {
     ?? 10_000;
 }
 
-export function obtenerFranjaHoraria(fecha: Date, zonaHoraria: string): FranjaHoraria {
-  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: zonaHoraria, hour: "2-digit", hourCycle: "h23" }).formatToParts(fecha);
-  const hora = Number(partes.find((parte) => parte.type === "hour")?.value);
+export function franjaParaHora(hora: number): FranjaHoraria {
   if (!Number.isInteger(hora) || hora < 0 || hora > 23) throw new ErrorTarifas("ZONA_HORARIA_INVALIDA", "No se pudo resolver la hora local de la zona.");
   if (hora < 6) return "MADRUGADA";
   if (hora < 12) return "MANANA";
   if (hora < 16) return "SIESTA";
   if (hora < 20) return "TARDE";
   return "NOCHE";
+}
+
+export function obtenerFranjaHoraria(fecha: Date, zonaHoraria: string): FranjaHoraria {
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: zonaHoraria, hour: "2-digit", hourCycle: "h23" }).formatToParts(fecha);
+  const hora = Number(partes.find((parte) => parte.type === "hour")?.value);
+  return franjaParaHora(hora);
 }
 
 function combinarMultiplicadores(factores: number[], regla: ReglaTarifa): number {
@@ -235,6 +240,64 @@ export function calcularPrecioPesos(
     + BigInt(ruta.duracionSegundos) * regla.precioPorMinutoPesos * 50n;
   const denominador = 3000n * ESCALA_MULTIPLICADOR;
   return (baseEscaladaPorTresMil * BigInt(multiplicadorEscalado) + denominador / 2n) / denominador;
+}
+
+export interface SimulacionTarifaInput {
+  hora?: number; // 0 a 23
+  franjaHoraria?: FranjaHoraria;
+  llueve?: boolean;
+  precipitacionMm?: number;
+  choferesDisponibles?: number;
+  solicitudesActivas?: number;
+}
+
+export function generarRecomendacionesTarifa(
+  factores: FactoresPrecio,
+  regla: ReglaTarifa
+): string[] {
+  const recomendaciones: string[] = [];
+
+  // Recomendación horaria
+  const factorHorarioActual = factores.factorHorarioEscalado;
+  let franjaMasBarata: FranjaHoraria = factores.franjaHoraria;
+  let menorFactor = factorHorarioActual;
+
+  for (const [franja, factor] of Object.entries(regla.horario) as [FranjaHoraria, number][]) {
+    if (factor < menorFactor) {
+      menorFactor = factor;
+      franjaMasBarata = franja;
+    }
+  }
+
+  if (menorFactor < factorHorarioActual) {
+    const ahorroPorc = Math.round(((factorHorarioActual - menorFactor) / factorHorarioActual) * 100);
+    recomendaciones.push(
+      `Viajar en franja ${franjaMasBarata} reduce el factor horario hasta un ${ahorroPorc}% respecto a ${factores.franjaHoraria}.`
+    );
+  }
+
+  // Recomendación por lluvia
+  if (factores.llueve) {
+    const recargoLluviaPorc = Math.round(
+      ((regla.lluviaConPrecipitacionEscalado - regla.lluviaSinPrecipitacionEscalado) / regla.lluviaSinPrecipitacionEscalado) * 100
+    );
+    recomendaciones.push(
+      `Hay lluvia activa (${factores.precipitacionMm.toFixed(1)} mm) aplicando un recargo del ${recargoLluviaPorc}%. Si no tenés urgencia, esperar a que cese reducirá la tarifa.`
+    );
+  }
+
+  // Recomendación por demanda
+  if (factores.solicitudesActivas > factores.choferesDisponibles * 1.5) {
+    recomendaciones.push(
+      "Alta concentración de solicitudes en la zona. La demanda se normaliza habitualmente en 10-15 minutos."
+    );
+  }
+
+  if (recomendaciones.length === 0) {
+    recomendaciones.push("Tarifa en condiciones óptimas: franja horaria estándar y demanda equilibrada.");
+  }
+
+  return recomendaciones;
 }
 
 export class CrearEstimacion {
@@ -269,28 +332,63 @@ export class CrearEstimacion {
     throw new ErrorTarifas("COORDENADAS_INVALIDAS", "El punto de ubicación no es válido.");
   }
 
-  async ejecutar(pasajeroId: string, origenPunto: PuntoUbicacion, destinoPunto: PuntoUbicacion, ahora = new Date()): Promise<EstimacionTarifa> {
+  async ejecutar(
+    pasajeroId: string,
+    origenPunto: PuntoUbicacion,
+    destinoPunto: PuntoUbicacion,
+    ahora = new Date(),
+    simulacion?: SimulacionTarifaInput
+  ): Promise<EstimacionTarifa> {
     if (!pasajeroId) throw new ErrorTarifas("ACTOR_INVALIDO", "Falta el identificador del pasajero autenticado.");
     const origen = await this.resolverPunto(origenPunto);
     const destino = await this.resolverPunto(destinoPunto, origen);
     const [zona, regla, ruta] = await Promise.all([
       this.zonas.resolver(origen), this.reglas.obtenerActiva(), this.rutas.calcular(origen, destino)
     ]);
-    const [observacion, choferesDisponibles, solicitudesActivas] = await Promise.all([
-      this.clima.consultar(zona),
-      this.disponibilidad.contarDisponibles(zona, origen),
-      this.demanda.contarSolicitudesActivas(zona)
-    ]);
+
+    if (simulacion?.hora !== undefined) {
+      if (!Number.isInteger(simulacion.hora) || simulacion.hora < 0 || simulacion.hora > 23) {
+        throw new ErrorTarifas("ENTRADA_INVALIDA", "La hora simulada debe ser un entero entre 0 y 23.");
+      }
+    }
+
+    const promesas: [Promise<ObservacionClima>, Promise<number>, Promise<number>] = [
+      simulacion?.precipitacionMm !== undefined || simulacion?.llueve !== undefined
+        ? Promise.resolve({
+            precipitacionMm: simulacion.precipitacionMm ?? (simulacion.llueve ? 5 : 0),
+            observadaEn: ahora,
+            fuente: "simulada_modo_dev",
+          })
+        : this.clima.consultar(zona),
+      simulacion?.choferesDisponibles !== undefined
+        ? Promise.resolve(Math.max(0, simulacion.choferesDisponibles))
+        : this.disponibilidad.contarDisponibles(zona, origen),
+      simulacion?.solicitudesActivas !== undefined
+        ? Promise.resolve(Math.max(0, simulacion.solicitudesActivas))
+        : this.demanda.contarSolicitudesActivas(zona),
+    ];
+
+    const [observacion, choferesDisponibles, solicitudesActivas] = await Promise.all(promesas);
+
     exigirConteo(choferesDisponibles, "choferes disponibles");
     exigirConteo(solicitudesActivas, "solicitudes activas");
-    if (!Number.isFinite(observacion.precipitacionMm) || observacion.precipitacionMm < 0
-      || !(observacion.observadaEn instanceof Date) || !Number.isFinite(observacion.observadaEn.getTime())
-      || observacion.observadaEn.getTime() > ahora.getTime()
-      || ahora.getTime() - observacion.observadaEn.getTime() > EDAD_MAXIMA_CLIMA_MS) {
+
+    if (
+      !Number.isFinite(observacion.precipitacionMm) ||
+      observacion.precipitacionMm < 0 ||
+      !(observacion.observadaEn instanceof Date) ||
+      !Number.isFinite(observacion.observadaEn.getTime()) ||
+      (!simulacion && (observacion.observadaEn.getTime() > ahora.getTime() || ahora.getTime() - observacion.observadaEn.getTime() > EDAD_MAXIMA_CLIMA_MS))
+    ) {
       throw new ErrorTarifas("CLIMA_DESACTUALIZADO", "No hay un dato de lluvia válido y reciente para la zona.");
     }
 
-    const franjaHoraria = obtenerFranjaHoraria(ahora, zona.zonaHoraria);
+    const franjaHoraria = simulacion?.franjaHoraria && FRANJAS_VALIDAS.includes(simulacion.franjaHoraria)
+      ? simulacion.franjaHoraria
+      : simulacion?.hora !== undefined
+        ? franjaParaHora(simulacion.hora)
+        : obtenerFranjaHoraria(ahora, zona.zonaHoraria);
+
     const factorLluviaEscalado = observacion.precipitacionMm > 0
       ? regla.lluviaConPrecipitacionEscalado : regla.lluviaSinPrecipitacionEscalado;
     const factorDisponibilidadEscalado = seleccionarFactor(choferesDisponibles, regla.disponibilidad);
@@ -300,19 +398,46 @@ export class CrearEstimacion {
     const multiplicadorDemandaEscalado = combinarMultiplicadores([
       factorLluviaEscalado, factorDisponibilidadEscalado, factorDemandaEscalado, factorHorarioEscalado
     ], regla);
+
+    const factoresPrecio: FactoresPrecio = {
+      choferesDisponibles,
+      solicitudesActivas,
+      precipitacionMm: observacion.precipitacionMm,
+      llueve: observacion.precipitacionMm > 0,
+      fuenteClima: observacion.fuente,
+      climaObservadoEn: new Date(observacion.observadaEn),
+      franjaHoraria,
+      factorLluviaEscalado,
+      factorDisponibilidadEscalado,
+      factorDemandaEscalado,
+      factorHorarioEscalado,
+      multiplicadorAplicadoEscalado: multiplicadorDemandaEscalado,
+    };
+
+    const recomendaciones = generarRecomendacionesTarifa(factoresPrecio, regla);
+
     const estimacion: EstimacionTarifa = {
-      id: this.ids.generar(), pasajeroId, origen: structuredClone(origen), destino: structuredClone(destino), zona,
-      precioEstimado: calcularPrecioPesos({ ...ruta, duracionSegundos: Math.max(60, ruta.duracionSegundos) }, regla, multiplicadorDemandaEscalado), moneda: "ARS",
-      distanciaMetros: ruta.distanciaMetros, duracionSegundos: Math.max(60, ruta.duracionSegundos),
-      proveedorRuta: ruta.proveedor, polilinea: ruta.polilinea, multiplicadorDemandaEscalado,
-      factoresPrecio: {
-        choferesDisponibles, solicitudesActivas, precipitacionMm: observacion.precipitacionMm,
-        llueve: observacion.precipitacionMm > 0, fuenteClima: observacion.fuente,
-        climaObservadoEn: new Date(observacion.observadaEn), franjaHoraria,
-        factorLluviaEscalado, factorDisponibilidadEscalado, factorDemandaEscalado,
-        factorHorarioEscalado, multiplicadorAplicadoEscalado: multiplicadorDemandaEscalado
-      }, versionRegla: regla.version, creadaEn: new Date(ahora),
-      vigenteHasta: new Date(ahora.getTime() + VIGENCIA_MS)
+      id: this.ids.generar(),
+      pasajeroId,
+      origen: structuredClone(origen),
+      destino: structuredClone(destino),
+      zona,
+      precioEstimado: calcularPrecioPesos(
+        { ...ruta, duracionSegundos: Math.max(60, ruta.duracionSegundos) },
+        regla,
+        multiplicadorDemandaEscalado
+      ),
+      moneda: "ARS",
+      distanciaMetros: ruta.distanciaMetros,
+      duracionSegundos: Math.max(60, ruta.duracionSegundos),
+      proveedorRuta: ruta.proveedor,
+      polilinea: ruta.polilinea,
+      multiplicadorDemandaEscalado,
+      factoresPrecio,
+      recomendaciones,
+      versionRegla: regla.version,
+      creadaEn: new Date(ahora),
+      vigenteHasta: new Date(ahora.getTime() + VIGENCIA_MS),
     };
     await this.estimaciones.guardar(estimacion);
     return structuredClone(estimacion);

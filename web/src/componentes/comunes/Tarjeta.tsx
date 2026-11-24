@@ -13,10 +13,10 @@ export interface TarjetaProps {
 }
 
 const ESTILOS_TARJETA: Record<VarianteTarjeta, string> = {
-  neutra: "border-slate-200 bg-white",
-  alerta: "border-amber-200 bg-amber-50/50",
-  exito: "border-emerald-200 bg-emerald-50/40",
-  error: "border-red-200 bg-red-50/50",
+  neutra: "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100",
+  alerta: "border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 text-slate-900 dark:text-slate-100",
+  exito: "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100",
+  error: "border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 text-slate-900 dark:text-slate-100",
 };
 
 export const Tarjeta: React.FC<TarjetaProps> = ({
@@ -36,8 +36,8 @@ export const Tarjeta: React.FC<TarjetaProps> = ({
       {(titulo || subtitulo || accion) && (
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            {titulo && <h2 className="text-sm sm:text-base font-semibold text-slate-900 tracking-tight">{titulo}</h2>}
-            {subtitulo && <p className="mt-0.5 text-xs text-slate-600 leading-relaxed">{subtitulo}</p>}
+            {titulo && <h2 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{titulo}</h2>}
+            {subtitulo && <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{subtitulo}</p>}
           </div>
           {accion && <div className="shrink-0">{accion}</div>}
         </div>

@@ -26,7 +26,13 @@ if (!Number.isInteger(timeoutServicio) || timeoutServicio < 1 || !Number.isInteg
 const urlFlota = exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL");
 const urlViajes = exigirBaseInterna(process.env.MS_VIAJES_URL, "MS_VIAJES_URL");
 const geocodificador = crearGeocodificador(process.env, timeoutProveedor);
-const crear = (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => {
+const crear = (
+  pasajeroId: string,
+  origen: PuntoUbicacion,
+  destino: PuntoUbicacion,
+  token: string,
+  simulacion?: import("./dominio").SimulacionTarifaInput
+) => {
   const clima = process.env.PROVEEDORES_MODO === "falso" ? new FuenteClimaFalsa() : new FuenteClimaOpenMeteo(timeoutProveedor);
   return new CrearEstimacion(
     crearCalculadorRuta(process.env, timeoutProveedor),
@@ -38,7 +44,7 @@ const crear = (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicaci
     estimaciones,
     { generar: randomUUID },
     geocodificador
-  ).ejecutar(pasajeroId, origen, destino);
+  ).ejecutar(pasajeroId, origen, destino, new Date(), simulacion);
 };
 const app = express();
 app.use(middlewareObservabilidad("ms-tarifas"));
@@ -51,7 +57,8 @@ app.use(crearRouterTarifas({
       ? geocodificador.geocodificarInversa(coord)
       : Promise.resolve(`Ubicación (${coord.latitud.toFixed(5)}, ${coord.longitud.toFixed(5)})`),
   validador,
-  comprobarBase: async () => { await pool.query("SELECT 1"); }
+  comprobarBase: async () => { await pool.query("SELECT 1"); },
+  modoDesarrollador: process.env.MODO_DESARROLLADOR === "true" && process.env.NODE_ENV !== "production"
 }));
 const servidor = app.listen(puerto, () => console.log(`ms-tarifas disponible en puerto ${puerto}`));
 async function cerrar(): Promise<void> { servidor.close(); await pool.end(); }

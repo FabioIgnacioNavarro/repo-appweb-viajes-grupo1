@@ -10,18 +10,26 @@ import {
   type NuevaReglaDemandaInput,
   type PuntoUbicacion,
   type ReglaTarifa,
-  type RepositorioEstimaciones
+  type RepositorioEstimaciones,
+  type SimulacionTarifaInput,
 } from "./dominio";
 import type { ActorJWT, ValidadorJwtJwks } from "../compartido/jwt";
 import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 
 export interface DependenciasTarifas {
-  estimar: (pasajeroId: string, origen: PuntoUbicacion, destino: PuntoUbicacion, token: string) => ReturnType<CrearEstimacion["ejecutar"]>;
+  estimar: (
+    pasajeroId: string,
+    origen: PuntoUbicacion,
+    destino: PuntoUbicacion,
+    token: string,
+    simulacion?: SimulacionTarifaInput
+  ) => ReturnType<CrearEstimacion["ejecutar"]>;
   estimaciones: RepositorioEstimaciones;
   reglas?: GestionarReglaDemanda;
   geocodificarInversa?: (coordenada: Coordenada) => Promise<string>;
   validador: Pick<ValidadorJwtJwks, "validar">;
   comprobarBase: () => Promise<void>;
+  modoDesarrollador?: boolean;
 }
 declare global { namespace Express { interface Request { actor?: ActorJWT } } }
 const objeto = (valor: unknown): valor is Record<string, unknown> => typeof valor === "object" && valor !== null && !Array.isArray(valor);
@@ -186,12 +194,61 @@ function reglaDto(r: ReglaTarifa) {
     }
   };
 }
+function parsearSimulacion(valor: unknown): SimulacionTarifaInput {
+  if (!objeto(valor)) {
+    throw new ErrorTarifas("ENTRADA_INVALIDA", "El bloque de simulación debe ser un objeto JSON.");
+  }
+  const res: SimulacionTarifaInput = {};
+  if (valor.hora !== undefined) {
+    if (typeof valor.hora !== "number" || !Number.isInteger(valor.hora) || valor.hora < 0 || valor.hora > 23) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "La hora simulada debe ser un número entero entre 0 y 23.");
+    }
+    res.hora = valor.hora;
+  }
+  if (valor.franja_horaria !== undefined || valor.franjaHoraria !== undefined) {
+    const rawFranja = String(valor.franja_horaria ?? valor.franjaHoraria).toUpperCase();
+    if (!FRANJAS_HORARIAS.includes(rawFranja as FranjaHoraria)) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", `Franja horaria simulada inválida: ${rawFranja}`);
+    }
+    res.franjaHoraria = rawFranja as FranjaHoraria;
+  }
+  if (valor.llueve !== undefined) {
+    if (typeof valor.llueve !== "boolean") {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "El campo llueve debe ser booleano.");
+    }
+    res.llueve = valor.llueve;
+  }
+  if (valor.precipitacion_mm !== undefined || valor.precipitacionMm !== undefined) {
+    const mm = Number(valor.precipitacion_mm ?? valor.precipitacionMm);
+    if (!Number.isFinite(mm) || mm < 0) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "La precipitación simulada debe ser un número mayor o igual a 0.");
+    }
+    res.precipitacionMm = mm;
+  }
+  if (valor.choferes_disponibles !== undefined || valor.choferesDisponibles !== undefined) {
+    const ch = Number(valor.choferes_disponibles ?? valor.choferesDisponibles);
+    if (!Number.isInteger(ch) || ch < 0) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "Los choferes disponibles simulados deben ser un entero >= 0.");
+    }
+    res.choferesDisponibles = ch;
+  }
+  if (valor.solicitudes_activas !== undefined || valor.solicitudesActivas !== undefined) {
+    const sol = Number(valor.solicitudes_activas ?? valor.solicitudesActivas);
+    if (!Number.isInteger(sol) || sol < 0) {
+      throw new ErrorTarifas("ENTRADA_INVALIDA", "Las solicitudes activas simuladas deben ser un entero >= 0.");
+    }
+    res.solicitudesActivas = sol;
+  }
+  return res;
+}
+
 function dto(e: NonNullable<Awaited<ReturnType<RepositorioEstimaciones["obtener"]>>>) {
   const f = e.factoresPrecio;
   return { id_estimacion: e.id, precio_estimado: e.precioEstimado.toString(), moneda: e.moneda, distancia_metros: e.distanciaMetros, duracion_segundos: e.duracionSegundos,
     proveedor_ruta: e.proveedorRuta,
     multiplicador_demanda: e.multiplicadorDemandaEscalado / 10_000, zona: e.zona.nombre,
     factores_precio: { zona_id: e.zona.id, choferes_disponibles: f.choferesDisponibles, solicitudes_activas: f.solicitudesActivas, precipitacion_mm: f.precipitacionMm, llueve: f.llueve, fuente_clima: f.fuenteClima, clima_observado_en: f.climaObservadoEn.toISOString(), franja_horaria: f.franjaHoraria.toLowerCase(), factor_lluvia: f.factorLluviaEscalado / 10_000, factor_disponibilidad: f.factorDisponibilidadEscalado / 10_000, factor_demanda: f.factorDemandaEscalado / 10_000, factor_horario: f.factorHorarioEscalado / 10_000 },
+    recomendaciones: e.recomendaciones ?? [],
     version_regla: e.versionRegla, creada_en: e.creadaEn.toISOString(), vigente_hasta: e.vigenteHasta.toISOString(), origen: e.origen, destino: e.destino, polilinea: e.polilinea ?? null };
 }
 export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
@@ -206,10 +263,32 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
   });
   router.post("/viajes/estimacion", async (req, res) => {
     if (req.actor?.rol !== "PASAJERO") { res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un pasajero puede solicitar una estimación.", detalles: {} } }); return; }
-    if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio.", detalles: {} } }); return; }
+    if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino", "simulacion"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio.", detalles: {} } }); return; }
     const origen = puntoUbicacion(req.body.origen); const destino = puntoUbicacion(req.body.destino);
     if (!origen || !destino || !req.actor) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Origen y destino deben incluir coordenadas numéricas o una dirección válida.", detalles: {} } }); return; }
-    try { res.status(201).json(dto(await deps.estimar(req.actor.idUsuario, origen, destino, req.header("Authorization")!.slice(7)))); } catch (causa) { error(res, causa); }
+
+    let simulacion: SimulacionTarifaInput | undefined;
+    if (req.body.simulacion !== undefined) {
+      const modoDevActivo = deps.modoDesarrollador ?? (process.env.MODO_DESARROLLADOR === "true" && process.env.NODE_ENV !== "production");
+      if (!modoDevActivo) {
+        res.status(403).json({
+          error: {
+            codigo: "MODO_DESARROLLADOR_DESHABILITADO",
+            mensaje: "La simulación de tarifas solo está permitida cuando MODO_DESARROLLADOR=true y fuera de producción.",
+            detalles: {}
+          }
+        });
+        return;
+      }
+      try {
+        simulacion = parsearSimulacion(req.body.simulacion);
+      } catch (causa) {
+        error(res, causa);
+        return;
+      }
+    }
+
+    try { res.status(201).json(dto(await deps.estimar(req.actor.idUsuario, origen, destino, req.header("Authorization")!.slice(7), simulacion))); } catch (causa) { error(res, causa); }
   });
   router.get("/estimaciones/:idEstimacion", async (req, res) => {
     try {
