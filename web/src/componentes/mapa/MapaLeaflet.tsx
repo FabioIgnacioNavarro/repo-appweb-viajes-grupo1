@@ -35,14 +35,16 @@ function construirContenidoPopup(etiqueta: string, texto: string): HTMLElement {
 function firmaEncuadre(
   origen: PuntoMapa | undefined,
   destino: PuntoMapa | undefined,
+  chofer: PuntoMapa | undefined,
   rutaGeoJson: [number, number][] | undefined
 ): string {
   const o = origen ? `${origen.latitud.toFixed(5)},${origen.longitud.toFixed(5)}` : "none";
   const d = destino ? `${destino.latitud.toFixed(5)},${destino.longitud.toFixed(5)}` : "none";
+  const c = chofer ? `${chofer.latitud.toFixed(5)},${chofer.longitud.toFixed(5)}` : "none";
   const rLen = rutaGeoJson?.length ?? 0;
   const rIni = rLen > 0 ? `${rutaGeoJson![0]![0].toFixed(5)},${rutaGeoJson![0]![1].toFixed(5)}` : "";
   const rFin = rLen > 1 ? `${rutaGeoJson![rLen - 1]![0].toFixed(5)},${rutaGeoJson![rLen - 1]![1].toFixed(5)}` : "";
-  return `${o}|${d}|${rLen}:${rIni}->${rFin}`;
+  return `${o}|${d}|${c}|${rLen}:${rIni}->${rFin}`;
 }
 
 export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
@@ -61,6 +63,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   const onSeleccionarPuntoRef = useRef(onSeleccionarPunto);
   const origenActualRef = useRef<PuntoMapa | undefined>(origen);
   const destinoActualRef = useRef<PuntoMapa | undefined>(destino);
+  const posicionChoferActualRef = useRef<PuntoMapa | undefined>(posicionChofer);
   const rutaActualRef = useRef<[number, number][] | undefined>(rutaGeoJson);
 
   useEffect(() => {
@@ -80,6 +83,9 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     }
     if (destinoActualRef.current) {
       puntos.push([destinoActualRef.current.latitud, destinoActualRef.current.longitud]);
+    }
+    if (posicionChoferActualRef.current) {
+      puntos.push([posicionChoferActualRef.current.latitud, posicionChoferActualRef.current.longitud]);
     }
 
     if (puntos.length >= 2) {
@@ -174,6 +180,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
 
     origenActualRef.current = origen;
     destinoActualRef.current = destino;
+    posicionChoferActualRef.current = posicionChofer;
     rutaActualRef.current = rutaGeoJson;
 
     const sincronizarMarcador = (
@@ -248,7 +255,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     }
 
     // 5. Encuadrar vista SOLO cuando cambian coordenadas/recorrido reales (evita robar zoom/pan al usuario)
-    const firmaActual = firmaEncuadre(origen, destino, puntosLinea);
+    const firmaActual = firmaEncuadre(origen, destino, posicionChofer, puntosLinea);
     if (firmaActual !== ultimaFirmaEncuadreRef.current) {
       ultimaFirmaEncuadreRef.current = firmaActual;
       encuadrarRecorridoCompleto();
@@ -264,10 +271,11 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
       <button
         type="button"
         onClick={encuadrarRecorridoCompleto}
-        className="absolute top-3 right-3 z-[400] rounded-lg border border-slate-300 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-xs hover:bg-slate-50 cursor-pointer"
-        title="Alejar o acercar el mapa para ver el viaje completo"
+        className="absolute top-3 right-3 z-[400] rounded-lg border border-slate-300 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-xs hover:bg-slate-50 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-slate-900"
+        title="Centrar y encuadrar el origen o el recorrido completo"
+        aria-label="Centrar mapa"
       >
-        Ver recorrido
+        Centrar mapa
       </button>
     </div>
   );

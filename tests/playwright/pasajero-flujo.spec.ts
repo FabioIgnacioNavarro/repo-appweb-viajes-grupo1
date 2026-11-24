@@ -211,6 +211,9 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     await expect(inputDestino).toHaveValue("");
     await expect(page.locator(".leaflet-marker-icon")).toHaveCount(1);
     await expect(page.getByRole("button", { name: /Calcular precio/i })).toHaveCount(0);
+    const botonCentrar = page.getByRole("button", { name: /Centrar mapa/i });
+    await expect(botonCentrar).toBeVisible();
+    await botonCentrar.click();
 
     await inputDestino.fill("Shopping Sarmiento, Resistencia");
 
