@@ -1,7 +1,7 @@
 # Informe técnico — Plataforma de viajes, Programación IV
 
 **Grupo:** 1 — Echeverria, Borchichi y Navarro  
-**Estado de este informe:** corte documental del 18 de noviembre de 2026. Las cifras y pruebas se vinculan a sus registros; no se presentan como una certificación de producción.
+**Estado de este informe:** corte documental del 25 de noviembre de 2026 (Cierre Sprint 2). Las cifras y pruebas se vinculan a sus registros; no se presentan como una certificación de producción.
 
 ## 1. Resumen del proyecto
 
@@ -29,14 +29,14 @@ flowchart LR
   Auth -. valida JWT .-> Tarifas
   Auth -. valida JWT .-> Flota
   Viajes -->|eventos autenticados| WS[WebSocket]
-  Viajes -. trazas OTLP .-> Jaeger[Jaeger]
-  Tarifas -. trazas OTLP .-> Jaeger
-  Flota -. trazas OTLP .-> Jaeger
+  Viajes -. trazas OTLP .-> Jaeger[Jaeger / Grafana Cloud]
+  Tarifas -. trazas/métricas/logs OTLP .-> Jaeger
+  Flota -. trazas/métricas/logs OTLP .-> Jaeger
 ```
 
 Los servicios están organizados con arquitectura hexagonal: el dominio define reglas y puertos; Express, PostgreSQL, HTTP entre servicios, proveedores de rutas y el adaptador de pagos se conectan desde la capa de infraestructura. PostgreSQL es la fuente persistente de viajes, ofertas, cobros, idempotencia, tarifas y datos de flota. No se incorporó Redis.
 
-En el Compose de desarrollo, Nginx publica en el puerto `8080` tanto la API como el bundle estático compilado de la interfaz web (`dist/web`), eliminando la necesidad de CORS (opcionalmente puede usarse Vite en `5173` para hot-reload). Jaeger publica su interfaz en `16686`, el emulador de identidad en `9099`, y PostgreSQL usa `5432` dentro de Compose y `5434` desde el host.
+En el Compose de desarrollo, Nginx publica en el puerto `8080` tanto la API como el bundle estático compilado de la interfaz web (`dist/web`), eliminando la necesidad de CORS (opcionalmente puede usarse Vite en `5173` para hot-reload). Jaeger publica su interfaz en `16686`, el emulador de identidad en `9099` (con login RS256 usuario/contraseña en `/auth/login`), y PostgreSQL usa `5432` dentro de Compose y `5434` desde el host. En la interfaz web se incorporaron Modo Oscuro persistente (`WEB-010`), control explícito `"Centrar mapa"` en Leaflet (`WEB-011`) y el panel de Modo Desarrollador (`DEV-001`) para simular hora, lluvia y demanda cuando `MODO_DESARROLLADOR=true` (estrictamente bloqueado en `NODE_ENV=production`).
 
 ## 3. Flujos y reglas principales
 
@@ -69,42 +69,29 @@ Al finalizar se conserva un cobro por viaje con el precio final congelado. El ad
 | Integración y errores | [ADR 0022](adr/0022-fallas-dependencias-entre-servicios.md), [ADR 0023](adr/0023-timeouts-reintentos-servicios.md), [ADR 0030](adr/0030-integracion-http-entre-servicios.md), [ADR 0031](adr/0031-api-http-ms-viajes.md) | HTTP con JWT propagado, timeouts, reintentos limitados y fallos seguros. |
 | Gateway y ejecución local | [ADR 0024](adr/0024-nginx-gateway.md), [ADR 0027](adr/0027-docker-compose-servicios.md), [ADR 0054](adr/0054-emulador-identidad-jwks-y-rbac.md), [ADR 0055](adr/0055-stack-del-front.md) | Nginx como entrada API, Compose reproducible, identidad de desarrollo y web React/TypeScript. |
 | Cobro y tiempo real | [ADR 0035](adr/0035-cobro-simulado-recuperable.md), [ADR 0042](adr/0042-websocket-tiempo-real.md) | Adaptador de pago simulado, recibo único e idempotencia; WebSocket autenticado con recuperación HTTP. |
-| Observabilidad y mapas | [ADR 0050](adr/0050-observabilidad-opentelemetry-jaeger.md), [ADR 0051](adr/0051-geocodificacion-y-rutas-google-maps.md), [ADR 0052](adr/0052-geocodificacion-abierta-nominatim-openstreetmap.md), [ADR 0053](adr/0053-geocodificacion-en-cascada-por-cercania-e-inversa.md) | Trazas distribuidas y geocodificación por adaptadores con alternativa abierta. |
+| Observabilidad y mapas | [ADR 0050](adr/0050-observabilidad-opentelemetry-jaeger.md), [ADR 0051](adr/0051-geocodificacion-y-rutas-google-maps.md), [ADR 0052](adr/0052-geocodificacion-abierta-nominatim-openstreetmap.md), [ADR 0053](adr/0053-geocodificacion-en-cascada-por-cercania-e-inversa.md), [ADR 0056](adr/0056-exportacion-otlp-grafana-cloud.md) | Trazas, métricas y logs distribuidos (Jaeger y Grafana Cloud) y geocodificación por adaptadores con alternativa abierta. |
 
 ## 5. Verificación y evidencia
 
 ### Pruebas
 
-En el corte de WEB-005, `npm.cmd test` compiló backend y web y terminó con **129 aprobadas, 0 fallidas y 6 omitidas**. Las omitidas requieren PostgreSQL o un entorno E2E con gateway. La suite incluye escenarios de dominio, HTTP, autorización, integración, pagos e idempotencia, más pruebas de WebSocket. La prueba E2E del flujo completo se omite si no está definida `E2E_BASE_URL`.
+En el cierre de Sprint 2 sobre `main`, `npm.cmd test` compiló servidor, front Vite y suite de pruebas y terminó con **147 aprobadas, 0 fallidas y 6 omitidas** (las omitidas requieren PostgreSQL o `E2E_BASE_URL`), mientras que la suite E2E de navegador (`npx playwright test`) pasó **27/27 escenarios** cubriendo login RS256, roles, viewports responsive, modo oscuro, `"Centrar mapa"`, modo desarrollador, tiempo real WebSocket y CSP sin violaciones. Además, `.github/workflows/ci.yml` ejecuta de forma automática en CI la suite unitaria/integración contra PostgreSQL, Playwright E2E y el gateway con Docker Compose.
 
-Este resultado es de la corrida documentada en el PR #69; no equivale a una ejecución desde un clon limpio por otra persona.
+### Rendimiento y pruebas de stress (`k6`)
 
-### Rendimiento de Flota
+La comparación de `MED-002` y las corridas de stress con `k6` (`MED-003` y `MED-004`) están documentadas en [mediciones.md](mediciones.md). En las pruebas de stress con `k6` contra Nginx en modo controlado (`PROVEEDORES_MODO=falso`) se alcanzaron hasta **202,58 req/s** (`MED-003`) y **240,31 req/s** en carga de 100 usuarios concurrentes (`12.510` requests, `100 %` de checks aprobados y `0,00 %` de errores `5xx` en `MED-004`), incorporando lock transaccional `pg_advisory_xact_lock` en `POST /viajes` para eliminar condiciones de carrera TOCTOU en idempotencia.
 
-La comparación de MED-002 está documentada en [mediciones.md](mediciones.md). Para tres corridas de carga nominal con 500 choferes, 250 actualizaciones por segundo y cinco minutos medidos, el documento informa:
+### Seguridad y Observabilidad
 
-| Medida mediana informada | Resultado | Umbral del plan |
-|---|---:|---:|
-| Actualización de ubicación p95 / p99 | 16,10 / 121,45 ms | 300 / 600 ms |
-| Búsqueda cercana p95 / p99 | 34,20 / 162,10 ms | 300 / 600 ms |
-| Solicitudes de negocio fallidas | 0 % | máximo 0,5 % |
-| Lag de event loop p99 / máximo | 32,45 / 42,15 ms | 50 / 200 ms |
-| RSS máximo de Flota | 156,80 MiB | 512 MiB |
-| Crecimiento RSS minutos 2 a 5 | 3,40 % | 10 % |
-
-Estos son resultados registrados por el grupo, no mediciones ejecutadas durante la preparación de este informe. La interpretación, condiciones y limitaciones están en `docs/mediciones.md`.
-
-### Seguridad
-
-[ataque.md](ataque.md) registra tres escenarios controlados: firma JWT adulterada (401), token vencido (401) e intento de operar como pasajero en una función de chofer o consultar un viaje ajeno (403). Las pruebas automatizadas validan JWT RS256, roles y autorización por recurso. No se realizaron ataques de saturación ni pruebas fuera del entorno permitido.
+- **Autenticación y autorización (`SEG-002`, `SEG-004`, `SEG-005`):** Login real con usuario y contraseña sobre el emulador OIDC/JWKS (`POST /auth/login`) emitiendo JWT `RS256` estándar y respuestas uniformes `400/401/413`. Nginx mantiene `Content-Security-Policy` estricta (sin `'unsafe-inline'` ni `'unsafe-eval'`), rate limiting y bloqueo de `/interno/*` y `/estimaciones/*`, validado con cero violaciones CSP en modo claro y oscuro. No se realizaron ataques cruzados entre grupos (reemplazados en Sprint 2 por pruebas de stress con `k6` y observabilidad en Grafana Cloud).
+- **Observabilidad (`OBS-001`, `OBS-002`):** Propagación `traceparent` (W3C), métricas HTTP y logs JSON correlacionados exportados por OTLP tanto a Jaeger local como a **Grafana Cloud** (configuración por variables de entorno locales en `.env`, sin secretos versionados).
 
 ## 6. Limitaciones y verificaciones pendientes
 
 - Los pagos son simulados; no hay pasarela real ni transacción de dinero.
-- El modo `JWT_MODO=falso` es solo para desarrollo y pruebas. El emulador JWKS permite demostrar validación RS256 por separado.
+- El modo `JWT_MODO=falso` y las cuentas semilla del emulador son exclusivos de desarrollo/demo y quedan bloqueados cuando `NODE_ENV=production` (al igual que `MODO_DESARROLLADOR`).
 - Los resultados de carga corresponden al hardware y configuración descritos en `docs/mediciones.md`; no garantizan el mismo rendimiento en otras escalas.
-- La sesión que preparó este informe no tenía el motor Docker disponible. `docker compose config --quiet` valida la sintaxis, pero no se pudo ejecutar `docker compose up`, la demo E2E real ni la prueba de base PostgreSQL en esta sesión.
-- Falta que una persona distinta de quien preparó los cambios repita la secuencia de clon limpio y registre sistema operativo, versiones, resultado de Compose, tests y flujo REST.
+- En la sesión de cierre de `DOC-002`, el demonio de Docker Desktop no estuvo activo en la máquina local; `docker compose config --quiet` validó la sintaxis correctamente, pero queda pendiente correr `docker compose down -v && docker compose up -d --build` en un clon limpio con Docker Desktop encendido.
 
 ## 7. Referencias del proyecto
 
