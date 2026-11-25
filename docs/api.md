@@ -95,7 +95,7 @@ Autentica una cuenta semilla del emulador de identidad. La contraseña se compar
 Los mensajes son JSON con la envoltura `{"evento":"...","datos":{...}}`:
 
 - `CANAL_LISTO`: confirma que el usuario autenticado quedó conectado.
-- `OFERTA_NUEVA`: se entrega únicamente al chofer destinatario. `datos` incluye `id_oferta`, `id_viaje`, `estado`, `enviada_en` y `expira_en`.
+- `OFERTA_NUEVA`: se entrega únicamente al chofer destinatario. `datos` incluye `id_oferta`, `id_viaje`, `estado`, `enviada_en`, `expira_en`, `origen`, `destino`, `precio_estimado` y `moneda`. El origen, destino y precio corresponden al viaje confirmado y se envían como snapshot; no se recalculan al entregar la oferta.
 - `OFERTA_VENCIDA`: se entrega al chofer cuando el servidor observa el vencimiento (al consultar o aceptar); incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`. El cliente usa `expira_en` para marcar el vencimiento local en el instante indicado y consulta el GET al reconectar.
 - `OFERTA_CANCELADA`: se entrega a los choferes con ofertas pendientes cuando el viaje se asigna a otro chofer o se cancela. Incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`.
 - `ESTADO_VIAJE_ACTUALIZADO`: se entrega al pasajero y al chofer asignado. `datos` incluye `id_viaje`, `estado`, `id_chofer` y `actualizado_en`.
@@ -286,7 +286,8 @@ Reintenta un cobro fallido del viaje finalizado.
 #### `GET /choferes/yo/ofertas`
 Lista las ofertas vigentes enviadas al chofer autenticado.
 - **Autorización:** Exclusivo del rol `CHOFER`.
-- **Respuesta (`200 OK`):** `{"ofertas": [ ... ]}`.
+- **Respuesta (`200 OK`):** `{"ofertas": [{"id_oferta": "...", "id_viaje": "...", "id_chofer": "...", "estado": "pendiente", "enviada_en": "...", "expira_en": "...", "origen": {"latitud": -27.451, "longitud": -58.986}, "destino": {"latitud": -27.462, "longitud": -58.993}, "precio_estimado": "3700", "moneda": "ARS"}]}`. `origen`, `destino` y `precio_estimado` se leen del viaje confirmado asociado a esa oferta; el importe es el snapshot exacto que aceptó el pasajero, representado como cadena decimal.
+- **Alcance:** Solo incluye ofertas dirigidas al chofer autenticado. El chofer candidato no consulta directamente `GET /viajes/:idViaje` antes de aceptar.
 
 #### `POST /choferes/yo/ofertas/:idOferta/aceptacion`
 El chofer acepta una oferta de viaje antes de su vencimiento (60 segundos).

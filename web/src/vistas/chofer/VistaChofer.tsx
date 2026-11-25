@@ -72,7 +72,7 @@ export function formatearImporteArs(importe?: string): string {
   if (!importe) return "$ — ARS";
   const limpio = String(importe).replace(/[^\d]/g, "");
   if (!limpio) return `$ ${importe} ARS`;
-  return `$ ${Number(limpio).toLocaleString("es-AR")} ARS`;
+  return `$ ${BigInt(limpio).toLocaleString("es-AR")} ARS`;
 }
 
 export function describirMotivoOferta(oferta: OfertaDto): string {
@@ -267,18 +267,10 @@ export const VistaChofer: React.FC = () => {
           estado: "pendiente",
           enviada_en: enviadaEn,
           expira_en: expiraEn,
-          origen: (datos.origen as CoordenadaChofer | undefined) ?? {
-            latitud: -27.451,
-            longitud: -58.986,
-            direccion: "Plaza 25 de Mayo",
-          },
-          destino: (datos.destino as CoordenadaChofer | undefined) ?? {
-            latitud: -27.46,
-            longitud: -58.979,
-            direccion: "UNNE Campus Resistencia",
-          },
-          precio_estimado: datos.precio_estimado ? String(datos.precio_estimado) : datos.precio ? String(datos.precio) : undefined,
-          moneda: "ARS",
+          origen: datos.origen as CoordenadaChofer | undefined,
+          destino: datos.destino as CoordenadaChofer | undefined,
+          precio_estimado: datos.precio_estimado === undefined ? undefined : String(datos.precio_estimado),
+          moneda: typeof datos.moneda === "string" ? datos.moneda : undefined,
         };
 
         setOfertas((prev) => {
@@ -286,24 +278,9 @@ export const VistaChofer: React.FC = () => {
           return [nuevaOferta, ...sinDuplicado];
         });
 
-        // Consultar detalles del viaje si no vinieron en el payload efímero
-        void clienteApi
-          .get<ViajeChoferDto>(`/viajes/${encodeURIComponent(idViaje)}`)
-          .then((detalleViaje) => {
-            setOfertas((prev) =>
-              prev.map((item) =>
-                item.id_oferta === idOferta
-                  ? {
-                      ...item,
-                      origen: detalleViaje.origen ?? item.origen,
-                      destino: detalleViaje.destino ?? item.destino,
-                      precio_estimado: detalleViaje.precio_estimado ?? item.precio_estimado,
-                    }
-                  : item
-              )
-            );
-          })
-          .catch(() => null);
+        // Restaura la versión canónica de la oferta por el endpoint destinado al chofer.
+        // El chofer candidato aún no es participante y no debe consultar el viaje directamente.
+        void sincronizarEstadoServidor();
       }
 
       if (nombreEvento === "OFERTA_VENCIDA" || nombreEvento === "OFERTA_CANCELADA") {
@@ -848,6 +825,7 @@ export const VistaChofer: React.FC = () => {
                   const segundosRestantes = calcularSegundosRestantes(oferta.expira_en, ahoraMs);
                   const estaPendiente = oferta.estado === "pendiente" && segundosRestantes > 0;
                   const bloqueadaPorViajeActivo = tieneViajeEnCurso && viajeActivo?.id_viaje !== oferta.id_viaje;
+                  const tieneDetallesConfirmados = Boolean(oferta.origen && oferta.destino && oferta.precio_estimado);
 
                   return (
                     <div
@@ -894,18 +872,16 @@ export const VistaChofer: React.FC = () => {
                         <div>
                           <span className="font-semibold text-slate-500">Origen:</span>{" "}
                           {oferta.origen?.direccion ??
-                            (oferta.origen ? `${oferta.origen.latitud}, ${oferta.origen.longitud}` : "Resistencia Centro")}
+                            (oferta.origen ? `${oferta.origen.latitud}, ${oferta.origen.longitud}` : "Actualizando datos confirmados…")}
                         </div>
                         <div>
                           <span className="font-semibold text-slate-500">Destino:</span>{" "}
                           {oferta.destino?.direccion ??
-                            (oferta.destino ? `${oferta.destino.latitud}, ${oferta.destino.longitud}` : "Destino confirmado")}
+                            (oferta.destino ? `${oferta.destino.latitud}, ${oferta.destino.longitud}` : "Actualizando datos confirmados…")}
                         </div>
-                        {oferta.precio_estimado && (
-                          <div className="pt-1 text-sm font-extrabold text-slate-900">
-                            Importe: {formatearImporteArs(oferta.precio_estimado)}
-                          </div>
-                        )}
+                        <div className="pt-1 text-sm font-extrabold text-slate-900">
+                          Precio confirmado: {oferta.precio_estimado ? formatearImporteArs(oferta.precio_estimado) : "Actualizando…"}
+                        </div>
                       </div>
 
                       {estaPendiente ? (
@@ -914,15 +890,15 @@ export const VistaChofer: React.FC = () => {
                             <button
                               type="button"
                               data-testid={`boton-aceptar-${oferta.id_oferta}`}
-                              disabled={procesandoOfertaId === oferta.id_oferta || bloqueadaPorViajeActivo}
+                              disabled={procesandoOfertaId === oferta.id_oferta || bloqueadaPorViajeActivo || !tieneDetallesConfirmados}
                               onClick={() => void aceptarOferta(oferta)}
                               className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
-                                bloqueadaPorViajeActivo
+                                bloqueadaPorViajeActivo || !tieneDetallesConfirmados
                                   ? "bg-slate-200 text-slate-500 cursor-not-allowed"
                                   : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                               }`}
                             >
-                              {procesandoOfertaId === oferta.id_oferta ? "Aceptando..." : "Aceptar"}
+                              {procesandoOfertaId === oferta.id_oferta ? "Aceptando..." : !tieneDetallesConfirmados ? "Cargando detalles…" : "Aceptar"}
                             </button>
                             <button
                               type="button"

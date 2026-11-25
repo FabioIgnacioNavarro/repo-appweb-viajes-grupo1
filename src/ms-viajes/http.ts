@@ -87,8 +87,21 @@ function viajeDto(viaje: Viaje | undefined): Record<string, unknown> {
   };
 }
 
-function ofertaDto(oferta: { id: string; viajeId: string; choferId: string; estado: string; enviadaEm: Date; expiraEm: Date; respondidaEm?: Date }): Record<string, unknown> {
-  return { id_oferta: oferta.id, id_viaje: oferta.viajeId, id_chofer: oferta.choferId, estado: oferta.estado.toLowerCase(), enviada_en: oferta.enviadaEm.toISOString(), expira_en: oferta.expiraEm.toISOString(), respondida_en: fecha(oferta.respondidaEm) };
+function ofertaDto(
+  oferta: { id: string; viajeId: string; choferId: string; estado: string; enviadaEm: Date; expiraEm: Date; respondidaEm?: Date },
+  viaje?: Viaje
+): Record<string, unknown> {
+  return {
+    id_oferta: oferta.id, id_viaje: oferta.viajeId, id_chofer: oferta.choferId,
+    estado: oferta.estado.toLowerCase(), enviada_en: oferta.enviadaEm.toISOString(),
+    expira_en: oferta.expiraEm.toISOString(), respondida_en: fecha(oferta.respondidaEm),
+    ...(viaje ? {
+      origen: viaje.origen,
+      destino: viaje.destino,
+      precio_estimado: viaje.precioEstimado,
+      moneda: viaje.moneda
+    } : {})
+  };
 }
 
 function cobroDto(cobro: Cobro): Record<string, unknown> {
@@ -320,7 +333,12 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
       const actor = actorDe(pedido);
       if (actor.rol !== "CHOFER") throw new ErrorDominio("ROL_NO_AUTORIZADO", "Solo un chofer puede consultar sus ofertas.");
       const lista = deps.consultarOfertas ? await deps.consultarOfertas.ejecutar(actor) : await deps.ofertas.listarPorChofer(actor.idUsuario);
-      respuesta.status(200).json({ ofertas: lista.map(ofertaDto) });
+      const ofertas = await Promise.all(lista.map(async (oferta) => {
+        const viaje = await deps.viajes.obtener(oferta.viajeId);
+        if (!viaje) throw new ErrorDominio("VIAJE_NO_ENCONTRADO", "No se encontró el viaje asociado a la oferta.");
+        return ofertaDto(oferta, viaje);
+      }));
+      respuesta.status(200).json({ ofertas });
     } catch (error) { errorHttp(error, respuesta); }
   });
 
