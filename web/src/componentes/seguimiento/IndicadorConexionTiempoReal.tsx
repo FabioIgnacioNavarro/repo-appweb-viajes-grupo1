@@ -41,7 +41,7 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
   };
 
   const reconectar = () => {
-    clienteTiempoReal.conectar();
+    clienteTiempoReal.reconectar();
   };
 
   return (

@@ -255,7 +255,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
 
     await page.route("**/viajes/viaje-ws-999", (route) => {
       llamadasGetViaje++;
-      route.fulfill({
+      return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
@@ -264,15 +264,19 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
           chofer_id: "11111111-1111-4111-8111-111111111111",
           origen: { latitud: -27.4512, longitud: -58.9866, direccion: "Plaza 25 de Mayo" },
           destino: { latitud: -27.4598, longitud: -58.9789, direccion: "Campus UNNE" },
+          id_estimacion: "estimacion-ws-999",
           precio_estimado: "4900",
           precio_final: null,
           moneda: "ARS",
           estado: estadoBackend,
+          multiplicador_demanda: 1,
+          factores_precio: {},
+          creado_en: new Date().toISOString(),
         }),
       });
     });
 
-    await page.route("**/choferes/yo/ofertas/oferta-999/aceptacion", (route) =>
+    await page.route("**/choferes/yo/ofertas/oferta-999/aceptacion", (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -288,8 +292,8 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
           estado: "asignado",
           creado_en: new Date().toISOString(),
         }),
-      })
-    );
+      });
+    });
 
     await page.goto("/#login");
     await iniciarConPerfilDemo(page, /Carlos Maidana/i);
@@ -316,7 +320,10 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
           id_oferta: "oferta-999",
           id_viaje: "viaje-ws-999",
           expira_en: new Date(Date.now() + 60_000).toISOString(),
+          origen: { latitud: -27.4512, longitud: -58.9866, direccion: "Plaza 25 de Mayo" },
+          destino: { latitud: -27.4598, longitud: -58.9789, direccion: "Campus UNNE" },
           precio_estimado: "4900",
+          moneda: "ARS",
         },
       })
     );
@@ -335,7 +342,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     // 2. Mientras la red estaba caída, el backend avanzó a 'en_curso'
     estadoBackend = "en_curso";
 
-    // 3. Reconectar socket: el cambio de estado dispara la sincronización canónica GET /viajes/:id
+    // 3. Reconectar socket: el cliente recupera el estado canónico con GET /viajes/:id.
     const llamadasAntes = llamadasGetViaje;
     await page.getByTestId("boton-reconectar-ws").click();
 

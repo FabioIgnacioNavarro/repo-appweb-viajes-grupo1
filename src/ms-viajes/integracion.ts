@@ -32,7 +32,9 @@ export class ConfirmarViajeYBuscarChoferes {
         try {
           this.eventos?.publicarAUsuario(oferta.choferId, "OFERTA_NUEVA", {
             id_oferta: oferta.id, id_viaje: oferta.viajeId, estado: oferta.estado.toLowerCase(),
-            enviada_en: oferta.enviadaEm.toISOString(), expira_en: oferta.expiraEm.toISOString()
+            enviada_en: oferta.enviadaEm.toISOString(), expira_en: oferta.expiraEm.toISOString(),
+            origen: viaje.origen, destino: viaje.destino,
+            precio_estimado: viaje.precioEstimado, moneda: viaje.moneda
           });
         } catch { /* La oferta queda persistida y puede recuperarse por HTTP. */ }
       }

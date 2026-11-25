@@ -317,13 +317,18 @@ test("al recuperar las ofertas, materializa y notifica los vencimientos observad
   const publicaciones: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
   const eventos = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { publicaciones.push({ usuario, evento, datos }); } };
   contexto.deps.consultarOfertas = new ConsultarOfertasChofer(contexto.deps.ofertas, eventos);
+  const viaje = await contexto.deps.confirmar.ejecutar({ idUsuario: "pasajero-1", rol: "PASAJERO" }, estimacion, "viaje-vencido");
   const enviada = new Date(Date.now() - 120_000);
-  const expirada = await contexto.deps.ofertas.guardar({ id: "oferta-vencida", viajeId: "viaje-vencido", choferId: "chofer-1", estado: "PENDIENTE", enviadaEm: enviada, expiraEm: new Date(enviada.getTime() + 60_000) });
+  const expirada = await contexto.deps.ofertas.guardar({ id: "oferta-vencida", viajeId: viaje.id, choferId: "chofer-1", estado: "PENDIENTE", enviadaEm: enviada, expiraEm: new Date(enviada.getTime() + 60_000) });
   try {
     const respuesta = await pedido(contexto.base, "/choferes/yo/ofertas", "chofer");
-    const cuerpo = await respuesta.json() as { ofertas: Array<{ id_oferta: string; estado: string }> };
+    const cuerpo = await respuesta.json() as { ofertas: Array<{ id_oferta: string; estado: string; origen: { latitud: number; longitud: number }; destino: { latitud: number; longitud: number }; precio_estimado: string; moneda: string }> };
     assert.equal(respuesta.status, 200);
     assert.equal(cuerpo.ofertas.find((oferta) => oferta.id_oferta === expirada.id)?.estado, "vencida");
+    assert.deepEqual(cuerpo.ofertas[0].origen, estimacion.origen);
+    assert.deepEqual(cuerpo.ofertas[0].destino, estimacion.destino);
+    assert.equal(cuerpo.ofertas[0].precio_estimado, estimacion.precioEstimado);
+    assert.equal(cuerpo.ofertas[0].moneda, estimacion.moneda);
     assert.ok(publicaciones.some((p) => p.usuario === "chofer-1" && p.evento === "OFERTA_VENCIDA"));
   } finally { await cerrar(contexto.servidor); }
 });
