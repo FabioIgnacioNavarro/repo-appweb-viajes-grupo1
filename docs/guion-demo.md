@@ -1,7 +1,7 @@
 # Guion de demostración — Plataforma de viajes
 
 **Duración estimada:** 12–15 minutos  
-**Objetivo:** mostrar los tres roles, la Variante A, el ciclo del viaje, tiempo real, cobro, una caída de dependencia y un intento de acceso bloqueado.
+**Objetivo:** mostrar el login RS256, los roles, la Variante A con Modo Desarrollador, Modo Oscuro y `"Centrar mapa"`, el ciclo del viaje en tiempo real, cobro, pruebas de stress con `k6` y observabilidad distribuida en **Grafana Cloud** (y Jaeger local).
 
 ## Preparación antes de la defensa
 
@@ -27,29 +27,21 @@ Invoke-RestMethod http://localhost:8080/ready/flota
 
 Para mostrar la interfaz, podés abrir directamente `http://localhost:8080/` servida por Nginx desde el mismo gateway (o, si preferís hot-reload de desarrollo, abrir otra terminal con `npm.cmd run dev:web` y entrar a `http://localhost:5173`). El cliente web se comunica con el gateway local en `8080` tanto por HTTP como por WebSocket (`/ws` / `/tiempo-real`).
 
-El Compose de desarrollo usa `JWT_MODO=falso`. Para que la interfaz represente a los actores con las identidades que están sembradas en la base, en la pantalla de ingreso usá **token manual** y copiá los tokens `@pasajero` y `@chofer` de [`../requests/flujo-e2e.http`](../requests/flujo-e2e.http). Para soporte, generá un token falso local de prueba:
-
-```powershell
-$tokenSoporte = node -e "const p={tipo:'jwt-falso',idUsuario:'soporte-demo-1',rol:'SOPORTE'};process.stdout.write('falso.'+Buffer.from(JSON.stringify(p)).toString('base64url'))"
-$tokenSoporte
-```
-
-Los tokens falsos solo sirven en el entorno local de desarrollo. No son credenciales reales y no deben usarse en producción. Para mantener pasajero y chofer conectados a la vez, usá dos perfiles de navegador separados. Nginx sirve la SPA en `/` y reenvía el upgrade WebSocket tanto en `/tiempo-real` como en `/ws` hacia `ms-viajes`; además, las pruebas unitarias e integración de WebSocket siguen disponibles en `tests/ms-viajes/tiempo-real.test.ts`.
+En la pantalla de ingreso (`/#/login`) usá el formulario principal de **usuario y contraseña** con las cuentas semilla emitidas por `auth-emulator` en RS256 (`ana`, `carlos`, `lucia`, `martin` con clave `ViajesDemo2026!`), o bien el bloque colapsable secundario de perfiles rápidos de demostración. Los tokens falsos (`JWT_MODO=falso`) quedan estrictamente bloqueados en producción. Para mantener pasajero y chofer conectados a la vez, usá dos perfiles de navegador separados. Nginx sirve la SPA en `/` y reenvía el upgrade WebSocket tanto en `/tiempo-real` como en `/ws` hacia `ms-viajes`; además, la suite completa (`npm.cmd test` + `npx playwright test`) corre automáticamente en `.github/workflows/ci.yml`.
 
 ## Cronograma
 
 | Tiempo | Presentación | Acción y evidencia |
 |---|---|---|
-| 0:00–1:00 | Problema y arquitectura | Explicar pasajero → gateway → `ms-viajes`; cotización con `ms-tarifas`; candidatos con `ms-flota`; PostgreSQL como fuente de verdad. |
-| 1:00–2:00 | Sistema levantado | Mostrar los servicios saludables, `/health`, `/ready/*` y la interfaz web servida desde Nginx en `http://localhost:8080/`. |
-| 2:00–4:00 | Pasajero y Variante A | Ingresar con el token de pasajero. Solicitar origen/destino y señalar precio en ARS, multiplicador, factores y vigencia de tres minutos. Aclarar que el precio lo calcula el servidor. |
-| 4:00–5:00 | Confirmación idempotente | Confirmar el viaje y mostrar el precio congelado. En `requests/flujo-e2e.http`, repetir la confirmación con la misma `Clave-Idempotencia` y comparar el `id_viaje`. |
-| 5:00–7:00 | Chofer y oferta | Abrir el perfil separado del chofer, actualizar ubicación y disponibilidad, obtener la oferta en vivo por WebSocket (`/ws` / `/tiempo-real`), aceptarla y avanzar llegada/inicio. |
-| 7:00–8:00 | Soporte | Mostrar `GET /viajes` con el token local de soporte y explicar que su rol habilita supervisión. Intentar acceder a un viaje con otro pasajero debe responder `403 VIAJE_NO_AUTORIZADO`. |
-| 8:00–10:00 | Finalización y cobro | El chofer finaliza. El primer cobro simulado queda `fallido`; pasajero y chofer consultan `GET /viajes/{id}/cobro`. Pasajero titular o soporte reintenta con `Clave-Idempotencia`; el mismo cobro pasa a `confirmado`, mantiene su ID y conserva el importe final. |
-| 10:00–12:00 | Falla controlada | En terminal ejecutá `docker compose stop ms-flota`. Mostrá `/ready/flota` y la respuesta segura `503 DEPENDENCIA_NO_DISPONIBLE` de una operación que requiere candidatos. Restaurá con `docker compose start ms-flota`; repetir la operación con la misma clave idempotente no duplica el viaje. |
-| 12:00–13:00 | Intento bloqueado y observabilidad | Como pasajero, intentá cambiar la disponibilidad de un chofer: debe responder `403 ROL_NO_AUTORIZADO`. Mostrar los tests RBAC y, si la traza se generó, buscar el error en Jaeger (`http://localhost:16686`). |
-| 13:00–15:00 | Cierre | Resumir invariantes: precio calculado por servidor, un chofer por viaje activo, cobro único, acceso por rol/recurso y dependencias con fallos controlados. Mencionar las limitaciones documentadas. |
+| 0:00–1:00 | Problema y arquitectura | Explicar pasajero → gateway Nginx → `ms-viajes`, `ms-tarifas`, `ms-flota`; PostgreSQL como fuente de verdad y arquitectura hexagonal. |
+| 1:00–2:00 | Sistema levantado y login RS256 | Mostrar `/health`, `/ready/*`, la UI en `http://localhost:8080/`, CSP estricta sin violaciones en consola y el login con usuario/contraseña (`ana` / `ViajesDemo2026!`). |
+| 2:00–4:30 | Pasajero, Leaflet, Modo Oscuro y Modo Desarrollador | Mostrar destino en blanco, clic/arrastre en mapa (geocodificación inversa), `"Centrar mapa"`, selector de **Modo Oscuro** en el header y **Modo Desarrollador** (simular hora nocturna + lluvia + demanda viendo modificadores `[0.75, 2.00]` y recomendaciones). |
+| 4:30–5:30 | Confirmación idempotente | Confirmar el viaje (`Clave-Idempotencia`) y mostrar el precio congelado. |
+| 5:30–7:30 | Chofer y tiempo real (Tema 20) | Abrir perfil del chofer (`carlos`), activar disponibilidad, recibir oferta en vivo por WebSocket (`/ws` / `/tiempo-real`), aceptar y avanzar estados hasta finalizar. |
+| 7:30–9:00 | Cobro y panel Operador/Admin | Consultar recibo, reintentar cobro fallido con idempotencia; mostrar vistas de Soporte (`lucia`) y Admin (`martin`, reglas versionadas). |
+| 9:00–11:00 | Stress con `k6` y falla controlada | Mostrar resultados de `npm.cmd run carga:k6:smoke` / `carga:k6` (hasta `240,31 req/s`, `0,00 %` errores `5xx`) y simular caída con `docker compose stop ms-flota` (`503 DEPENDENCIA_NO_DISPONIBLE`). |
+| 11:00–13:00 | Observabilidad en Grafana Cloud (Tema 18) y Seguridad (Tema 19) | Mostrar trazas, métricas HTTP y logs correlacionados en **Grafana Cloud** (y fallback local en Jaeger `:16686`), más validación RS256/RBAC (`403 ROL_NO_AUTORIZADO`). |
+| 13:00–15:00 | Cierre | Resumir invariantes: precio calculado por servidor, un chofer por viaje activo, cobro único, idempotencia transaccional (`pg_advisory_xact_lock`) y CI en verde. |
 
 ## Secuencia REST del viaje
 
@@ -82,19 +74,16 @@ Invoke-RestMethod http://localhost:8080/ready/flota
 
 Repetí la confirmación fallida con la misma `Clave-Idempotencia` según `requests/fallas.http`. El sistema debe completar o devolver el resultado guardado, sin un viaje duplicado.
 
-## Ataque bloqueado
+## Pruebas de stress (`k6`), observabilidad y control RBAC
 
-Con el token falso de pasajero en modo local de desarrollo:
+En Sprint 2 las pruebas de stress con `k6` reemplazan los ataques cruzados:
 
-```http
-PATCH http://localhost:8080/choferes/yo/disponibilidad
-Authorization: Bearer <token-pasajero-de-requests/flujo-e2e.http>
-Content-Type: application/json
-
-{"disponibilidad":true}
+```powershell
+npm.cmd run carga:k6:smoke
+npm.cmd run carga:k6
 ```
 
-El resultado esperado es `403 ROL_NO_AUTORIZADO`. Para probar acceso por recurso, intentá consultar el viaje de otro pasajero y comprobá `403 VIAJE_NO_AUTORIZADO`. Las pruebas criptográficas RS256 de firma alterada y token vencido están registradas en [`ataque.md`](ataque.md) y en la suite; el modo falso no representa validación criptográfica.
+Los resultados y umbrales SLA están registrados en [`mediciones.md`](mediciones.md). Para observar trazas, métricas y logs en **Grafana Cloud** (o Jaeger local en `:16686`), seguir los pasos de [`demo-observabilidad.md`](demo-observabilidad.md). Para demostrar control de acceso RBAC, intentar `PATCH http://localhost:8080/choferes/yo/disponibilidad` con el token de pasajero debe responder `403 ROL_NO_AUTORIZADO`.
 
 ## Si algo no está disponible durante el ensayo
 
