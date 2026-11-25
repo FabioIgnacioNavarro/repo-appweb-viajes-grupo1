@@ -11,6 +11,7 @@ export class ClienteWebSocket {
   private reintentos = 0;
   private temporizadorReconexion: ReturnType<typeof setTimeout> | null = null;
   private cerradoVoluntario = false;
+  private reconexionManualPendiente = false;
 
   private oyentesEventos: Map<string, Set<OyenteEventoWs>> = new Map();
   private oyentesEstado: Set<OyenteEstadoConexion> = new Set();
@@ -41,6 +42,7 @@ export class ClienteWebSocket {
 
     const token = obtenerToken();
     if (!token) {
+      this.reconexionManualPendiente = false;
       this.actualizarEstado("DESCONECTADO");
       return;
     }
@@ -53,7 +55,8 @@ export class ClienteWebSocket {
       this.socket = new WebSocket(url, ["viajes-jwt", token]);
 
       this.socket.onopen = () => {
-        const eraReconexion = this.reintentos > 0;
+        const eraReconexion = this.reintentos > 0 || this.reconexionManualPendiente;
+        this.reconexionManualPendiente = false;
         this.reintentos = 0;
         this.actualizarEstado("CONECTADO");
 
@@ -89,6 +92,7 @@ export class ClienteWebSocket {
         }
       };
     } catch (err) {
+      this.reconexionManualPendiente = false;
       this.actualizarEstado("DESCONECTADO");
       this.programarReconexion();
     }
@@ -112,6 +116,12 @@ export class ClienteWebSocket {
       this.socket = null;
     }
     this.actualizarEstado("DESCONECTADO");
+  }
+
+  /** Reabre el canal manualmente y avisa a las vistas para que sincronicen su estado canónico. */
+  public reconectar(): void {
+    this.reconexionManualPendiente = true;
+    this.conectar();
   }
 
   /**
