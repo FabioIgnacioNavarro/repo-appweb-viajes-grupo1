@@ -75,7 +75,7 @@ Al finalizar se conserva un cobro por viaje con el precio final congelado. El ad
 
 ### Pruebas
 
-En el cierre de Sprint 2 sobre `main`, `npm.cmd test` compiló servidor, front Vite y suite de pruebas y terminó con **147 aprobadas, 0 fallidas y 6 omitidas** (las omitidas requieren PostgreSQL o `E2E_BASE_URL`), mientras que la suite E2E de navegador (`npx playwright test`) pasó **27/27 escenarios** cubriendo login RS256, roles, viewports responsive, modo oscuro, `"Centrar mapa"`, modo desarrollador, tiempo real WebSocket y CSP sin violaciones. Además, `.github/workflows/ci.yml` ejecuta de forma automática en CI la suite unitaria/integración contra PostgreSQL, Playwright E2E y el gateway con Docker Compose.
+En el cierre de Sprint 2 sobre `main`, `npm.cmd test` compiló servidor, front Vite y suite de pruebas y terminó con **147 aprobadas, 0 fallidas y 6 omitidas** (las omitidas requieren PostgreSQL o `E2E_BASE_URL`), mientras que la suite E2E de navegador (`npm.cmd run test:pw`) pasó **29/29 escenarios** cubriendo login RS256 con usuario/contraseña (`POST /auth/login`), roles, viewports responsive, modo oscuro, `"Centrar mapa"`, modo desarrollador, tiempo real WebSocket y CSP sin violaciones. Las pruebas de PostgreSQL (`postgres.test.ts`: **12/12**) y el flujo E2E real sobre el gateway en clon limpio (`docker compose down -v && docker compose up -d --build`) también pasaron completos. Además, `.github/workflows/ci.yml` ejecuta de forma automática en CI la suite unitaria/integración contra PostgreSQL, Playwright E2E y el gateway con Docker Compose.
 
 ### Rendimiento y pruebas de stress (`k6`)
 
@@ -91,7 +91,7 @@ La comparación de `MED-002` y las corridas de stress con `k6` (`MED-003` y `MED
 - Los pagos son simulados; no hay pasarela real ni transacción de dinero.
 - El modo `JWT_MODO=falso` y las cuentas semilla del emulador son exclusivos de desarrollo/demo y quedan bloqueados cuando `NODE_ENV=production` (al igual que `MODO_DESARROLLADOR`).
 - Los resultados de carga corresponden al hardware y configuración descritos en `docs/mediciones.md`; no garantizan el mismo rendimiento en otras escalas.
-- En la sesión de cierre de `DOC-002`, el demonio de Docker Desktop no estuvo activo en la máquina local; `docker compose config --quiet` validó la sintaxis correctamente, pero queda pendiente correr `docker compose down -v && docker compose up -d --build` en un clon limpio con Docker Desktop encendido.
+- En el cierre integrado final de Sprint 2 se verificó el levantamiento desde volumen limpio (`docker compose down -v --remove-orphans && docker compose up -d --build --wait`) con los 7 servicios saludables, pruebas PostgreSQL (`12/12`), `POST /auth/login` real, E2E contra el gateway (`201`/`404`) y Playwright con CSP estricta (`PLAYWRIGHT_REQUIRE_CSP=1`).
 
 ## 7. Referencias del proyecto
 
