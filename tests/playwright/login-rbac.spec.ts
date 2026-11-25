@@ -130,4 +130,108 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     await expect(page).toHaveURL(/#\/login/);
     await expect(page.getByTestId("alerta-login")).toContainText(/expiró/i);
   });
+
+  test("SEG-004: login con usuario y contraseña mediante POST /auth/login redirige según el rol", async ({ page }) => {
+    const intentosLogin: Array<{ usuario?: string; contrasena?: string }> = [];
+    const usuarios: Record<string, { id: string; rol: string; nombre: string; ruta: RegExp }> = {
+      ana: {
+        id: "22222222-2222-4222-8222-222222222222",
+        rol: "PASAJERO",
+        nombre: "Ana Gómez",
+        ruta: /#\/pasajero/,
+      },
+      martin: {
+        id: "99999999-9999-4999-8999-999999999999",
+        rol: "ADMINISTRADOR",
+        nombre: "Martín Administrador",
+        ruta: /#\/admin/,
+      },
+    };
+
+    await page.route("**/auth/login", async (route) => {
+      const body = route.request().postDataJSON() as { usuario?: string; contrasena?: string };
+      intentosLogin.push(body);
+      const cuenta = body.usuario ? usuarios[body.usuario] : undefined;
+      if (!cuenta || body.contrasena !== "ViajesDemo2026!") {
+        return route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: { codigo: "CREDENCIALES_INVALIDAS", mensaje: "Usuario o contraseña incorrectos.", detalles: {} },
+          }),
+        });
+      }
+
+      const payload = {
+        sub: cuenta.id,
+        idUsuario: cuenta.id,
+        rol: cuenta.rol,
+        name: cuenta.nombre,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      };
+      const token = `eyJhbGciOiJSUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.firma-demo`;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          token,
+          perfil: { id_usuario: cuenta.id, rol: cuenta.rol.toLowerCase(), nombre: cuenta.nombre },
+          expira_en_segundos: 3600,
+        }),
+      });
+    });
+
+    await page.route("**/viajes**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ viajes: [], total: 0 }) })
+    );
+    await page.route("**/reglas/demanda", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ activa: null, historial: [] }) })
+    );
+
+    await page.goto("/#/login");
+
+    for (const usuarioLogin of ["ana", "martin"]) {
+      const esperado = usuarios[usuarioLogin]!;
+      await page.getByTestId("login-usuario").fill(usuarioLogin);
+      await page.getByTestId("login-contrasena").fill("ViajesDemo2026!");
+      await expect(page.getByTestId("boton-iniciar-sesion")).toBeEnabled();
+      await page.getByTestId("boton-iniciar-sesion").click();
+
+      await expect(page).toHaveURL(esperado.ruta);
+      await expect(page.getByRole("banner")).toContainText(esperado.rol);
+      await page.getByRole("button", { name: "Salir" }).click();
+      await expect(page).toHaveURL(/#\/login/);
+    }
+
+    expect(intentosLogin).toEqual([
+      { usuario: "ana", contrasena: "ViajesDemo2026!" },
+      { usuario: "martin", contrasena: "ViajesDemo2026!" },
+    ]);
+  });
+
+  test("SEG-004: credenciales inválidas muestran error claro y formulario vacío deshabilita envío", async ({ page }) => {
+    await page.route("**/auth/login", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: { codigo: "CREDENCIALES_INVALIDAS", mensaje: "Usuario o contraseña incorrectos.", detalles: {} },
+        }),
+      })
+    );
+
+    await page.goto("/#/login");
+    const botonEnviar = page.getByTestId("boton-iniciar-sesion");
+    await expect(botonEnviar).toBeDisabled();
+
+    await page.getByTestId("login-usuario").fill("ana");
+    await expect(botonEnviar).toBeDisabled();
+
+    await page.getByTestId("login-contrasena").fill("clave-incorrecta");
+    await expect(botonEnviar).toBeEnabled();
+    await botonEnviar.click();
+
+    await expect(page).toHaveURL(/#\/login/);
+    await expect(page.getByTestId("alerta-login")).toContainText("Usuario o contraseña incorrectos.");
+  });
 });
