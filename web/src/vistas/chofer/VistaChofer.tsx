@@ -84,25 +84,6 @@ export function formatearImporteArs(importe?: string): string {
   return `$ ${BigInt(limpio).toLocaleString("es-AR")} ARS`;
 }
 
-export function describirMotivoOferta(oferta: OfertaDto): string {
-  if (oferta.estado === "vencida" || oferta.motivo === "vigencia_vencida") {
-    return "Vencida (superó los 60s de vigencia)";
-  }
-  if (oferta.estado === "no_seleccionada" || oferta.motivo === "viaje_asignado") {
-    return "Ya tomada por otro chofer";
-  }
-  if (oferta.estado === "cancelada" || oferta.motivo === "viaje_cancelado") {
-    return "Cancelada por el pasajero u operador";
-  }
-  if (oferta.estado === "rechazada") {
-    return "Rechazada por vos";
-  }
-  if (oferta.estado === "aceptada") {
-    return "Aceptada — Viaje asignado";
-  }
-  return "No disponible";
-}
-
 export function etiquetaEstadoViaje(estado?: string): string {
   switch ((estado ?? "").toLowerCase()) {
     case "asignado":
@@ -748,7 +729,6 @@ export const VistaChofer: React.FC = () => {
   const ofertasPendientes = ofertas.filter(
     (oferta) => oferta.estado === "pendiente" && calcularSegundosRestantes(oferta.expira_en, ahoraMs) > 0
   );
-  const ofertasAnteriores = ofertas.filter((oferta) => !ofertasPendientes.some((pendiente) => pendiente.id_oferta === oferta.id_oferta));
   const ofertaEmergente = ofertas.find((oferta) => oferta.id_oferta === idOfertaEmergente && oferta.estado === "pendiente");
   const historialViajes = viajesChofer
     .filter((viaje) => viaje.chofer_id === idChoferActual && ESTADOS_HISTORIAL_CHOFER.has(viaje.estado.toLowerCase()))
@@ -911,14 +891,14 @@ export const VistaChofer: React.FC = () => {
               </button>}
             </div>
 
-            {!disponible && ofertasPendientes.length === 0 && ofertasAnteriores.length === 0 ? (
+            {!disponible && ofertasPendientes.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-inactiva"
                 className="p-6 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/50 border border-dashed border-[#D4CFC2] dark:border-slate-700 text-center text-xs text-[#5E5B54] dark:text-slate-400"
               >
                 Activá tu disponibilidad para comenzar a recibir ofertas de pasajeros cercanos.
               </div>
-            ) : ofertasPendientes.length === 0 && ofertasAnteriores.length === 0 ? (
+            ) : ofertasPendientes.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-vacia"
                 className="p-6 rounded-xl bg-[#E6EFE8] dark:bg-emerald-950/30 border border-dashed border-[#4A7C59]/30 dark:border-emerald-800 text-center text-xs text-[#3B694A] dark:text-emerald-300"
@@ -942,118 +922,6 @@ export const VistaChofer: React.FC = () => {
                     >
                       Ver oferta
                     </button>
-                  </div>
-                )}
-
-                {ofertasAnteriores.length > 0 && (
-                  <div className="space-y-2" data-testid="historial-ofertas-respondidas">
-                    <h3 className="text-xs font-bold uppercase tracking-wide text-[#5E5B54] dark:text-slate-400">Ofertas anteriores</h3>
-                    {ofertasAnteriores.map((oferta) => {
-                      const segundosRestantes = calcularSegundosRestantes(oferta.expira_en, ahoraMs);
-                      const estaPendiente = oferta.estado === "pendiente" && segundosRestantes > 0;
-                      const bloqueadaPorViajeActivo = tieneViajeEnCurso && viajeActivo?.id_viaje !== oferta.id_viaje;
-                      const tieneDetallesConfirmados = Boolean(oferta.origen && oferta.destino && oferta.precio_estimado);
-
-                      return (
-                        <div
-                          key={oferta.id_oferta}
-                          data-testid={`tarjeta-oferta-${oferta.id_oferta}`}
-                          className={`p-4 rounded-xl border space-y-3 transition ${
-                            estaPendiente
-                              ? "border-[#4A7C59]/40 dark:border-emerald-800 bg-[#E6EFE8]/70 dark:bg-emerald-950/30"
-                              : oferta.estado === "aceptada"
-                                ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30"
-                                : "border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 opacity-90"
-                          }`}
-                        >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-[#2C2B28] dark:text-slate-100 truncate" title={oferta.id_oferta}>
-                          Oferta #{oferta.id_oferta}
-                        </span>
-                        {estaPendiente ? (
-                          <span
-                            data-testid={`cuenta-regresiva-${oferta.id_oferta}`}
-                            className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border ${
-                              segundosRestantes <= 10
-                                ? "text-rose-700 dark:text-rose-200 bg-rose-100 dark:bg-rose-950/60 border-rose-300 dark:border-rose-700 animate-pulse"
-                                : "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800"
-                            }`}
-                          >
-                            {segundosRestantes}s
-                          </span>
-                        ) : (
-                          <span
-                            data-testid={`estado-oferta-${oferta.id_oferta}`}
-                            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#E5E0D4] dark:bg-slate-700 text-[#2C2B28] dark:text-slate-200"
-                          >
-                            {oferta.estado.toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-xs space-y-1 text-[#2C2B28] dark:text-slate-300">
-                        <div>
-                          <span className="font-semibold text-slate-500 dark:text-slate-400">Viaje:</span>{" "}
-                          <span className="font-mono text-[11px]">{oferta.id_viaje}</span>
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-500 dark:text-slate-400">Origen:</span>{" "}
-                          {oferta.origen?.direccion ??
-                            (oferta.origen ? `${oferta.origen.latitud}, ${oferta.origen.longitud}` : "Actualizando datos confirmados…")}
-                        </div>
-                        <div>
-                          <span className="font-semibold text-slate-500 dark:text-slate-400">Destino:</span>{" "}
-                          {oferta.destino?.direccion ??
-                            (oferta.destino ? `${oferta.destino.latitud}, ${oferta.destino.longitud}` : "Actualizando datos confirmados…")}
-                        </div>
-                        <div className="pt-1 text-sm font-extrabold text-slate-900 dark:text-slate-100">
-                          Precio confirmado: {oferta.precio_estimado ? formatearImporteArs(oferta.precio_estimado) : "Actualizando…"}
-                        </div>
-                      </div>
-
-                      {estaPendiente ? (
-                        <div className="space-y-1.5">
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              data-testid={`boton-aceptar-${oferta.id_oferta}`}
-                              disabled={procesandoOfertaId === oferta.id_oferta || bloqueadaPorViajeActivo || !tieneDetallesConfirmados}
-                              onClick={() => void aceptarOferta(oferta)}
-                              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
-                                bloqueadaPorViajeActivo || !tieneDetallesConfirmados
-                                  ? "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                                  : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                              }`}
-                            >
-                              {procesandoOfertaId === oferta.id_oferta ? "Aceptando..." : !tieneDetallesConfirmados ? "Cargando detalles…" : "Aceptar"}
-                            </button>
-                            <button
-                              type="button"
-                              data-testid={`boton-rechazar-${oferta.id_oferta}`}
-                              disabled={procesandoOfertaId === oferta.id_oferta}
-                              onClick={() => void rechazarOferta(oferta)}
-                              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
-                            >
-                              Rechazar
-                            </button>
-                          </div>
-                          {bloqueadaPorViajeActivo && (
-                            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                              Ya tenés otro viaje activo y no podés aceptar esta oferta.
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          data-testid={`motivo-oferta-${oferta.id_oferta}`}
-                          className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-                        >
-                          Motivo: <span className="font-bold text-slate-800 dark:text-slate-200">{describirMotivoOferta(oferta)}</span>
-                        </div>
-                      )}
-                        </div>
-                      );
-                    })}
                   </div>
                 )}
               </div>
