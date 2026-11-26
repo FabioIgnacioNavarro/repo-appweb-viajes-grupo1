@@ -300,6 +300,20 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
       })
     );
 
+    await page.route("**/choferes/yo/ubicacion", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ubic-409",
+          usuario_id: "11111111-1111-4111-8111-111111111111",
+          latitud: -27.4512,
+          longitud: -58.9866,
+          actualizado_at: new Date().toISOString(),
+        }),
+      })
+    );
+
     await page.route("**/choferes/yo/ofertas", (route) =>
       route.fulfill({
         status: 200,

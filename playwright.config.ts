@@ -20,7 +20,8 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     launchOptions: {
-      slowMo: process.env.SLOWMO ? Number(process.env.SLOWMO) : 0
+      slowMo: process.env.SLOWMO ? Number(process.env.SLOWMO) : 0,
+      args: process.env.PLAYWRIGHT_MAXIMIZED === "1" ? ["--start-maximized"] : []
     }
   },
   projects: [
@@ -28,26 +29,29 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        ...(process.env.PLAYWRIGHT_MAXIMIZED === "1" ? { viewport: null, deviceScaleFactor: undefined } : {}),
         ...(process.env.CI ? {} : { channel: "chrome" })
       }
     }
   ],
-  /* Levanta automáticamente el servidor web de desarrollo (React + Vite) y el servidor legacy si no están corriendo */
-  webServer: [
-    {
-      command: `${npmCmd} run dev:web -- --host 127.0.0.1 --port 5173`,
-      url: "http://127.0.0.1:5173",
-      reuseExistingServer: !process.env.CI,
-      timeout: 60 * 1000
-    },
-    {
-      command: `${npmCmd} run demo:web`,
-      url: "http://127.0.0.1:3000/health",
-      reuseExistingServer: !process.env.CI,
-      timeout: 60 * 1000,
-      env: {
-        RUTA_PROVEEDOR: "HAVERSINE"
-      }
-    }
-  ]
+  /* Levanta automáticamente el servidor web de desarrollo (React + Vite) y el servidor legacy solo si no se apunta a un gateway externo */
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : [
+        {
+          command: `${npmCmd} run dev:web -- --host 127.0.0.1 --port 5173`,
+          url: "http://127.0.0.1:5173",
+          reuseExistingServer: !process.env.CI,
+          timeout: 60 * 1000
+        },
+        {
+          command: `${npmCmd} run demo:web`,
+          url: "http://127.0.0.1:3000/health",
+          reuseExistingServer: !process.env.CI,
+          timeout: 60 * 1000,
+          env: {
+            RUTA_PROVEEDOR: "HAVERSINE"
+          }
+        }
+      ]
 });

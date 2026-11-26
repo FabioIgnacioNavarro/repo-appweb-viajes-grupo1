@@ -351,8 +351,8 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
     } catch (causa) { error(res, causa); }
   });
   router.post("/tarifas/autocompletar", async (req, res) => {
-    if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
-      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros o administración pueden buscar sugerencias de direcciones.", detalles: {} } });
+    if (!["PASAJERO", "CHOFER", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
+      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros, choferes o administración pueden buscar sugerencias de direcciones.", detalles: {} } });
       return;
     }
     if (!objeto(req.body) || Object.keys(req.body).some((k) => k !== "consulta" && k !== "centro") || typeof req.body.consulta !== "string") {

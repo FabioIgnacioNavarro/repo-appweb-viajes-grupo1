@@ -181,6 +181,7 @@ export const VistaPasajero: React.FC = () => {
   const [estimacion, setEstimacion] = useState<EstimacionDto | null>(null);
   const [polilineaViaje, setPolilineaViaje] = useState<[number, number][] | undefined>(undefined);
   const [viaje, setViaje] = useState<ViajeDto | null>(null);
+  const [posicionChofer, setPosicionChofer] = useState<PuntoMapa | undefined>(undefined);
   const [cobro, setCobro] = useState<CobroDto | null>(null);
   const [ahora, setAhora] = useState(Date.now());
   const [procesando, setProcesando] = useState(false);
@@ -258,18 +259,38 @@ export const VistaPasajero: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const desuscribir = clienteTiempoReal.on("ESTADO_VIAJE_ACTUALIZADO", (eventoRaw) => {
+    const desuscribirEstado = clienteTiempoReal.on("ESTADO_VIAJE_ACTUALIZADO", (eventoRaw) => {
       const evento = eventoRaw as { datos?: { id_viaje?: string; estado?: string } };
       const datos = evento.datos;
       if (!datos?.id_viaje || !datos.estado) return;
       if (viajeActualRef.current?.id_viaje === datos.id_viaje) {
         setViaje((actual) => actual ? { ...actual, estado: datos.estado! } : actual);
+        if (!ESTADOS_ACTIVOS.has(datos.estado.toLowerCase())) {
+          setPosicionChofer(undefined);
+        }
         if (datos.estado.toLowerCase() === "finalizado") void sincronizarViajeActivo();
       } else {
         void sincronizarViajeActivo();
       }
     });
-    return desuscribir;
+    const desuscribirUbicacion = clienteTiempoReal.on("UBICACION_CHOFER_ACTUALIZADA", (eventoRaw) => {
+      const evento = eventoRaw as {
+        datos?: { id_viaje?: string; latitud?: number; longitud?: number };
+      };
+      const datos = evento.datos;
+      if (typeof datos?.latitud !== "number" || typeof datos?.longitud !== "number") return;
+      if (viajeActualRef.current && datos.id_viaje && viajeActualRef.current.id_viaje !== datos.id_viaje) return;
+      setPosicionChofer({
+        latitud: datos.latitud,
+        longitud: datos.longitud,
+        titulo: "Chofer en movimiento",
+        tipo: "chofer",
+      });
+    });
+    return () => {
+      desuscribirEstado();
+      desuscribirUbicacion();
+    };
   }, [sincronizarViajeActivo]);
 
   const segundosVigencia = estimacion
@@ -939,6 +960,7 @@ export const VistaPasajero: React.FC = () => {
               sinBorde
               origen={origenPinMapa}
               destino={destinoPinMapa}
+              posicionChofer={hayViajeEnCurso ? posicionChofer : undefined}
               rutaGeoJson={rutaMapa}
               onSeleccionarPunto={puedeCancelar ? undefined : manejarPinArrastrado}
             />
