@@ -28,7 +28,7 @@ dominio recibe un actor ya validado mediante un puerto y no conoce el proveedor 
 | `PASAJERO` | Solicitar, confirmar, seguir y cancelar sus viajes | Puede tener ubicación |
 | `CHOFER` | Gestionar disponibilidad, ubicación, ofertas y estados | Puede tener ubicación |
 | `SOPORTE` | Visualizar viajes en curso y cancelar con motivo | No tiene ubicación |
-| `ADMINISTRADOR` | Configurar parámetros y habilitar choferes | No tiene ubicación |
+| `ADMINISTRADOR` | Configurar parámetros, habilitar choferes y operar flujos de pasajero/chofer | No tiene ubicación |
 
 ## Entidades de identidad y autenticación
 

@@ -262,7 +262,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
     try { req.actor = await deps.validador.validar(token); next(); } catch { res.status(401).json({ error: { codigo: "TOKEN_INVALIDO", mensaje: "El token no es válido.", detalles: {} } }); }
   });
   router.post("/viajes/estimacion", async (req, res) => {
-    if (req.actor?.rol !== "PASAJERO") { res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un pasajero puede solicitar una estimación.", detalles: {} } }); return; }
+    if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) { res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un pasajero o administrador puede solicitar una estimación.", detalles: {} } }); return; }
     if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino", "simulacion"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio.", detalles: {} } }); return; }
     const origen = puntoUbicacion(req.body.origen); const destino = puntoUbicacion(req.body.destino);
     if (!origen || !destino || !req.actor) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Origen y destino deben incluir coordenadas numéricas o una dirección válida.", detalles: {} } }); return; }

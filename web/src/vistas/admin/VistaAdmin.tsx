@@ -278,7 +278,7 @@ export const VistaAdmin: React.FC = () => {
       clave: "limites",
       encabezado: "Límites",
       renderizar: (r) => (
-        <span className="font-mono text-xs text-slate-800">
+        <span className="font-mono text-xs text-[#2C2B28] dark:text-slate-200">
           {r.multiplicador_minimo.toFixed(2)}x – {r.multiplicador_maximo.toFixed(2)}x
         </span>
       ),
@@ -287,7 +287,7 @@ export const VistaAdmin: React.FC = () => {
       clave: "demanda",
       encabezado: "Curva demanda",
       ocultarEnMovil: true,
-      renderizar: (r) => <span className="text-xs text-slate-600">{resumirCurva(r.demanda_por_mil)}</span>,
+      renderizar: (r) => <span className="text-xs text-[#5E5B54] dark:text-slate-400">{resumirCurva(r.demanda_por_mil)}</span>,
     },
     {
       clave: "accion",
@@ -455,7 +455,7 @@ export const VistaAdmin: React.FC = () => {
 
           {/* Franjas horarias */}
           <div className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-200">
               Multiplicadores por franja horaria
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -480,10 +480,10 @@ export const VistaAdmin: React.FC = () => {
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-200">
                   Curva de demanda por zona (solicitudes activas × 1000 / choferes)
                 </h3>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-[#5E5B54] dark:text-slate-400">
                   Los umbrales deben crecer y el multiplicador no puede disminuir al aumentar la demanda.
                 </p>
               </div>
@@ -496,13 +496,13 @@ export const VistaAdmin: React.FC = () => {
               {demandaPorMil.map((tramo, idx) => (
                 <div
                   key={`demanda-${idx}`}
-                  className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end rounded-xl border border-slate-200 bg-slate-50 p-3"
+                  className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 p-3"
                 >
                   <div className="sm:col-span-5">
                     {tramo.abierto ? (
                       <div className="space-y-1.5">
-                        <span className="block text-xs font-semibold text-slate-800">Hasta (ratio × 1000)</span>
-                        <div className="min-h-[44px] flex items-center rounded-lg border border-slate-200 bg-slate-100 px-3 text-xs font-medium text-slate-600">
+                        <span className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-200">Hasta (ratio × 1000)</span>
+                        <div className="min-h-[44px] flex items-center rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#E5E0D4] dark:bg-slate-900 px-3 text-xs font-medium text-[#5E5B54] dark:text-slate-300">
                           Sin tope superior (tramo abierto final)
                         </div>
                       </div>
@@ -546,13 +546,13 @@ export const VistaAdmin: React.FC = () => {
 
           {/* Curva de disponibilidad */}
           <div className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-700">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-200">
               Curva por disponibilidad de choferes cercanos
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
               {disponibilidad.map((tramo, idx) => (
-                <div key={`disp-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                  <p className="text-[11px] font-semibold text-slate-600">
+                <div key={`disp-${idx}`} className="rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 p-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300">
                     {tramo.abierto ? "Tramo abierto (más choferes)" : `Hasta ${tramo.hasta} chofer(es)`}
                   </p>
                   <CampoTexto
@@ -575,8 +575,8 @@ export const VistaAdmin: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-            <p className="text-xs text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#DDD8CC] dark:border-slate-800 pt-4">
+            <p className="text-xs text-[#5E5B54] dark:text-slate-400">
               El servidor asigna automáticamente número de versión, autor del JWT y fecha; las versiones previas no se sobreescriben.
             </p>
             <Boton type="submit" cargando={guardando} disabled={cargando || demandaPorMil.length === 0}>

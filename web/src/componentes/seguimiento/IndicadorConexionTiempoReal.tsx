@@ -48,7 +48,7 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
   return (
     <div
       data-testid="indicador-tiempo-real-completo"
-      className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-xs space-y-2 text-xs ${className}`}
+      className={`bg-[#EFECE4] dark:bg-slate-900 rounded-xl border border-[#DDD8CC] dark:border-slate-800 p-3 shadow-xs space-y-2 text-xs ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -57,10 +57,10 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
             data-testid="badge-estado-ws"
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] ${
               estado === "CONECTADO"
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                ? "bg-[#E6EFE8] dark:bg-emerald-950/60 text-[#3B694A] dark:text-emerald-300 border border-[#4A7C59]/30 dark:border-emerald-800"
                 : estado === "CONECTANDO"
-                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                : "bg-rose-50 text-rose-700 border border-rose-200"
+                ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                : "bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
             }`}
           >
             <span
@@ -78,16 +78,16 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
               ? "Reconectando con backoff..."
               : "Desconectado (HTTP Polling)"}
           </span>
-          <span className="text-slate-500 text-[11px] hidden sm:inline">
+          <span className="text-[#5E5B54] dark:text-slate-400 text-[11px] hidden sm:inline">
             Canal bidireccional (Tema 20)
           </span>
         </div>
 
         {/* Métricas rápidas de eventos */}
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <span>Eventos recibidos: <strong data-testid="conteo-eventos-ws" className="text-slate-800 font-mono">{totalEventos}</strong></span>
+        <div className="flex items-center gap-2 text-[11px] text-[#5E5B54] dark:text-slate-400">
+          <span>Eventos recibidos: <strong data-testid="conteo-eventos-ws" className="text-[#2C2B28] dark:text-slate-100 font-mono">{totalEventos}</strong></span>
           {ultimoEvento && (
-            <span className="hidden md:inline bg-slate-100 px-2 py-0.5 rounded text-[10px] font-mono text-slate-700">
+            <span className="hidden md:inline bg-[#F7F5F0] dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] font-mono text-[#2C2B28] dark:text-slate-200 border border-[#DDD8CC] dark:border-slate-700">
               Último: {ultimoEvento.nombre} ({ultimoEvento.fecha})
             </span>
           )}
@@ -96,7 +96,7 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
 
       {/* Controles para probar resiliencia y reconexión en defensas o E2E */}
       {mostrarControlesSimulacion && (
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
+        <div className="pt-2 border-t border-[#DDD8CC] dark:border-slate-800 flex items-center justify-between text-[11px] text-[#5E5B54] dark:text-slate-300">
           <span>Prueba de resiliencia de red:</span>
           <div className="flex items-center gap-2">
             <button

@@ -89,39 +89,39 @@ export const SimuladorChoferGps: React.FC<Props> = ({
   return (
     <div
       data-testid="simulador-gps-chofer"
-      className={`p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs ${className}`}
+      className={`p-4 rounded-xl bg-[#EFECE4] dark:bg-slate-900 border border-[#DDD8CC] dark:border-slate-800 space-y-3 text-xs ${className}`}
     >
       <div className="flex items-center justify-between">
-        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+        <span className="font-bold text-[#2C2B28] dark:text-slate-200 flex items-center gap-1.5">
           <IconoPin size={15} /> Simulador GPS en Resistencia (Demo)
         </span>
         {transmitiendoEnVivo && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#E6EFE8] dark:bg-emerald-950/60 text-[#3B694A] dark:text-emerald-300 text-[10px] font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
             250 req/s pool
           </span>
         )}
       </div>
 
-      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-        <div className="flex justify-between items-center text-slate-500 text-[11px]">
+      <div className="bg-[#F7F5F0] dark:bg-slate-800 p-3 rounded-lg border border-[#DDD8CC] dark:border-slate-700 space-y-1">
+        <div className="flex justify-between items-center text-[#5E5B54] dark:text-slate-400 text-[11px]">
           <span>Próximo punto ({indicePaso + 1}/{RUTA_DEMO_RESISTENCIA.length}):</span>
-          <span className="font-mono text-slate-700">{puntoActual.latitud.toFixed(4)}, {puntoActual.longitud.toFixed(4)}</span>
+          <span className="font-mono text-[#2C2B28] dark:text-slate-200">{puntoActual.latitud.toFixed(4)}, {puntoActual.longitud.toFixed(4)}</span>
         </div>
-        <div className="font-bold text-slate-900 text-sm">{puntoActual.nombre}</div>
+        <div className="font-bold text-[#2C2B28] dark:text-slate-100 text-sm">{puntoActual.nombre}</div>
       </div>
 
       {ultimaUbicacion && (
-        <div className="text-[11px] text-slate-600 bg-emerald-50/50 p-2 rounded-lg border border-emerald-100 flex items-center justify-between">
+        <div className="text-[11px] text-[#3B694A] dark:text-emerald-300 bg-[#E6EFE8] dark:bg-emerald-950/40 p-2 rounded-lg border border-[#4A7C59]/30 dark:border-emerald-800 flex items-center justify-between">
           <span>Último reporte enviado:</span>
-          <strong data-testid="ultima-ubicacion-simulada" className="text-emerald-900 font-mono">
+          <strong data-testid="ultima-ubicacion-simulada" className="text-[#2C2B28] dark:text-emerald-200 font-mono">
             {ultimaUbicacion.nombre}
           </strong>
         </div>
       )}
 
       {errorGps && (
-        <div className="text-[11px] text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
+        <div className="text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 p-2 rounded-lg border border-rose-200 dark:border-rose-800">
           {errorGps}
         </div>
       )}
@@ -132,9 +132,9 @@ export const SimuladorChoferGps: React.FC<Props> = ({
           data-testid="boton-paso-simulacion-gps"
           onClick={avanzarPasoManual}
           disabled={enviando || transmitiendoEnVivo}
-          className="flex-1 py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition cursor-pointer disabled:opacity-50"
+          className="flex-1 py-2 px-3 rounded-lg bg-[#4A7C59] hover:bg-[#3E6A4B] text-white font-bold transition cursor-pointer disabled:opacity-50"
         >
-          {enviando ? "Enviando..." : "Avanzar 1 Posición ↗"}
+          {enviando ? "Enviando..." : "Avanzar 1 Posición"}
         </button>
 
         <button
@@ -144,10 +144,10 @@ export const SimuladorChoferGps: React.FC<Props> = ({
           className={`py-2 px-3 rounded-lg font-bold transition cursor-pointer border ${
             transmitiendoEnVivo
               ? "bg-rose-600 hover:bg-rose-700 text-white border-rose-600"
-              : "bg-white hover:bg-slate-100 text-slate-700 border-slate-300"
+              : "bg-[#F7F5F0] dark:bg-slate-800 hover:bg-[#E5E0D4] dark:hover:bg-slate-700 text-[#2C2B28] dark:text-slate-200 border-[#CEC8BA] dark:border-slate-700"
           }`}
         >
-          {transmitiendoEnVivo ? "⏸ Detener Transmisión" : "▶ Transmisión Continua (2s)"}
+          {transmitiendoEnVivo ? "Detener Transmisión" : "Transmisión Continua (2s)"}
         </button>
       </div>
     </div>

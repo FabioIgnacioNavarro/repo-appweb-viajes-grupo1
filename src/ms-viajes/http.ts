@@ -172,8 +172,9 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.get("/interno/demanda-por-zona", async (pedido, respuesta) => {
     const actor = actorDe(pedido);
     const zonaId = pedido.query.zona_id;
-    if (actor.rol !== "PASAJERO" || typeof zonaId !== "string" || zonaId.length < 1 || zonaId.length > 100 || !deps.consultarDemanda) {
-      respuesta.status(actor.rol !== "PASAJERO" ? 403 : 400).json({ error: { codigo: actor.rol !== "PASAJERO" ? "ROL_NO_AUTORIZADO" : "ENTRADA_INVALIDA", mensaje: "No se pudo consultar la demanda para esa zona.", detalles: {} } }); return;
+    const rolPermitido = actor.rol === "PASAJERO" || actor.rol === "ADMINISTRADOR";
+    if (!rolPermitido || typeof zonaId !== "string" || zonaId.length < 1 || zonaId.length > 100 || !deps.consultarDemanda) {
+      respuesta.status(!rolPermitido ? 403 : 400).json({ error: { codigo: !rolPermitido ? "ROL_NO_AUTORIZADO" : "ENTRADA_INVALIDA", mensaje: "No se pudo consultar la demanda para esa zona.", detalles: {} } }); return;
     }
     const solicitudesActivas = await deps.consultarDemanda.ejecutar(zonaId);
     respuesta.status(200).json({ zona_id: zonaId, solicitudes_activas: solicitudesActivas });
@@ -183,8 +184,9 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
     const actor = actorDe(pedido);
     const parametro = pedido.query.ids_choferes;
     const ids = typeof parametro === "string" ? [...new Set(parametro.split(",").filter((id) => id.length > 0 && id.length <= 200))] : [];
-    if (actor.rol !== "PASAJERO" || !deps.consultarOcupacion || ids.length > 100 || ids.length === 0) {
-      respuesta.status(actor.rol !== "PASAJERO" ? 403 : 400).json({ error: { codigo: actor.rol !== "PASAJERO" ? "ROL_NO_AUTORIZADO" : "ENTRADA_INVALIDA", mensaje: "No se pudo consultar la ocupación.", detalles: {} } }); return;
+    const rolPermitido = actor.rol === "PASAJERO" || actor.rol === "ADMINISTRADOR";
+    if (!rolPermitido || !deps.consultarOcupacion || ids.length > 100 || ids.length === 0) {
+      respuesta.status(!rolPermitido ? 403 : 400).json({ error: { codigo: !rolPermitido ? "ROL_NO_AUTORIZADO" : "ENTRADA_INVALIDA", mensaje: "No se pudo consultar la ocupación.", detalles: {} } }); return;
     }
     const ocupados = await deps.consultarOcupacion.ejecutar(ids);
     respuesta.status(200).json({ ids_choferes_ocupados: ocupados });
@@ -331,7 +333,7 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.get("/choferes/yo/ofertas", async (pedido, respuesta) => {
     try {
       const actor = actorDe(pedido);
-      if (actor.rol !== "CHOFER") throw new ErrorDominio("ROL_NO_AUTORIZADO", "Solo un chofer puede consultar sus ofertas.");
+      if (actor.rol !== "CHOFER" && actor.rol !== "ADMINISTRADOR") throw new ErrorDominio("ROL_NO_AUTORIZADO", "Solo un chofer o administrador puede consultar sus ofertas.");
       const lista = deps.consultarOfertas ? await deps.consultarOfertas.ejecutar(actor) : await deps.ofertas.listarPorChofer(actor.idUsuario);
       const ofertas = await Promise.all(lista.map(async (oferta) => {
         const viaje = await deps.viajes.obtener(oferta.viajeId);

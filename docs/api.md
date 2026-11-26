@@ -107,7 +107,7 @@ Ruta interna entre servicios, bloqueada por Nginx desde el exterior:
 
 #### `POST /interno/viajes/ubicacion-chofer`
 
-`ms-flota` llama esta ruta con el JWT original del chofer y la ubicación ya persistida. `ms-viajes` valida el rol, busca la asignación activa del chofer y solo si el viaje está `CHOFER_EN_CAMINO` o `EN_CURSO` emite al pasajero la ubicación aproximada (`202`). Sin viaje en seguimiento devuelve `204`; otros roles reciben `403`. Una falla de esta notificación no revierte la actualización en Flota.
+`ms-flota` llama esta ruta con el JWT original del chofer (o administrador operando como chofer) y la ubicación ya persistida. `ms-viajes` valida el rol, busca la asignación activa del chofer y solo si el viaje está `CHOFER_EN_CAMINO` o `EN_CURSO` emite al pasajero la ubicación aproximada (`202`). Sin viaje en seguimiento devuelve `204`; otros roles reciben `403`. Una falla de esta notificación no revierte la actualización en Flota.
 
 ---
 
@@ -117,7 +117,7 @@ Ruta interna entre servicios, bloqueada por Nginx desde el exterior:
 
 #### `POST /viajes/estimacion`
 Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, duración, lluvia y franja horaria.
-- **Autorización:** Requiere rol `PASAJERO`.
+- **Autorización:** Requiere rol `PASAJERO` o `ADMINISTRADOR`.
 - **Cuerpo recibido:**
   ```json
   {
@@ -219,7 +219,7 @@ Convierte coordenadas seleccionadas manualmente en el mapa a una dirección legi
 
 #### `POST /viajes`
 Confirma la solicitud de un viaje a partir de una estimación vigente. Congela el precio y los factores de auditoría de forma inmutable.
-- **Autorización:** Requiere rol `PASAJERO`.
+- **Autorización:** Requiere rol `PASAJERO` o `ADMINISTRADOR`.
 - **Encabezados:** `Clave-Idempotencia: <string>`.
 - **Cuerpo recibido:** `{"id_estimacion": "uuid-estimacion"}`.
 - **Respuesta (`201 Created`):** Objeto Viaje en estado `"solicitado"` si se encontraron candidatos o `"sin_choferes_disponibles"` si la búsqueda no encontró ninguno.
@@ -252,30 +252,30 @@ Cancela un viaje según las transiciones y permisos definidos en `docs/modelo.md
 
 #### `POST /viajes/:idViaje/llegada`
 El chofer asignado marca su llegada al punto de encuentro.
-- **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona de `ASIGNADO` a `CHOFER_EN_CAMINO`.
+- **Autorización:** Exclusivo del `CHOFER` asignado (o `ADMINISTRADOR` asignado). Transiciona de `ASIGNADO` a `CHOFER_EN_CAMINO`.
 - **Respuesta (`200 OK`):** Viaje en estado `"chofer_en_camino"`.
 
 #### `POST /viajes/:idViaje/inicio`
 El chofer inicia el recorrido con el pasajero a bordo.
-- **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona a `EN_CURSO`.
+- **Autorización:** Exclusivo del `CHOFER` asignado (o `ADMINISTRADOR` asignado). Transiciona a `EN_CURSO`.
 - **Respuesta (`200 OK`):** Viaje en estado `"en_curso"`.
 
 #### `POST /viajes/:idViaje/finalizacion`
 El chofer finaliza el viaje, fijando el precio final y generando el cobro único.
-- **Autorización:** Exclusivo del `CHOFER` asignado. Transiciona a `FINALIZADO`.
+- **Autorización:** Exclusivo del `CHOFER` asignado (o `ADMINISTRADOR` asignado). Transiciona a `FINALIZADO`.
 - **Respuesta (`200 OK`):** `{ "viaje": { ... }, "cobro": { "id_cobro": "...", "id_viaje": "...", "importe": "8086", "moneda": "ARS", "estado": "fallido", "intentos": 1, "creado_en": "2026-11-18T12:00:00.000Z" } }`.
 - El adaptador falso devuelve un primer fallo reproducible (`fallido`) y permite demostrar luego un reintento exitoso. El viaje queda `finalizado` y el importe del cobro coincide con `precio_final`.
 
 #### `GET /viajes/:idViaje/cobro`
 Consulta el recibo asociado al viaje sin volver a procesar el pago.
-- **Autorización:** Pasajero titular, chofer asignado o `SOPORTE`.
+- **Autorización:** Pasajero titular, chofer asignado, `SOPORTE` o `ADMINISTRADOR`.
 - **Respuesta (`200 OK`):** `{ "id_cobro": "...", "id_viaje": "...", "importe": "8086", "moneda": "ARS", "estado": "fallido", "intentos": 1, "creado_en": "2026-11-18T12:00:00.000Z" }`.
 - **No encontrado (`404`):** `VIAJE_NO_ENCONTRADO` si el viaje no existe; `COBRO_NO_ENCONTRADO` si todavía no generó un cobro.
 - **No autorizado (`403`):** `COBRO_NO_AUTORIZADO` para otros usuarios.
 
 #### `POST /viajes/:idViaje/cobro/reintento`
 Reintenta un cobro fallido del viaje finalizado.
-- **Autorización:** Pasajero titular o `SOPORTE`. El chofer puede consultar el recibo, pero no iniciar un nuevo intento de pago.
+- **Autorización:** Pasajero titular, `SOPORTE` o `ADMINISTRADOR`. El chofer puede consultar el recibo, pero no iniciar un nuevo intento de pago.
 - **Encabezados:** `Clave-Idempotencia: <string>` obligatorio.
 - **Cuerpo:** vacío (`{}` también es válido).
 - **Respuesta (`200 OK`):** objeto Cobro actualizado. Si se repite la misma clave, se devuelve el resultado de ese intento; no se procesa otro pago.
@@ -285,13 +285,13 @@ Reintenta un cobro fallido del viaje finalizado.
 
 #### `GET /choferes/yo/ofertas`
 Lista las ofertas vigentes enviadas al chofer autenticado.
-- **Autorización:** Exclusivo del rol `CHOFER`.
+- **Autorización:** Exclusivo del rol `CHOFER` o `ADMINISTRADOR`.
 - **Respuesta (`200 OK`):** `{"ofertas": [{"id_oferta": "...", "id_viaje": "...", "id_chofer": "...", "estado": "pendiente", "enviada_en": "...", "expira_en": "...", "origen": {"latitud": -27.451, "longitud": -58.986}, "destino": {"latitud": -27.462, "longitud": -58.993}, "precio_estimado": "3700", "moneda": "ARS"}]}`. `origen`, `destino` y `precio_estimado` se leen del viaje confirmado asociado a esa oferta; el importe es el snapshot exacto que aceptó el pasajero, representado como cadena decimal.
 - **Alcance:** Solo incluye ofertas dirigidas al chofer autenticado. El chofer candidato no consulta directamente `GET /viajes/:idViaje` antes de aceptar.
 
 #### `POST /choferes/yo/ofertas/:idOferta/aceptacion`
 El chofer acepta una oferta de viaje antes de su vencimiento (60 segundos).
-- **Autorización:** Exclusivo del `CHOFER` destinatario de la oferta.
+- **Autorización:** Exclusivo del `CHOFER` (o `ADMINISTRADOR`) destinatario de la oferta.
 - **Respuesta (`200 OK`):** Objeto Viaje transicionado a `ASIGNADO`.
 
 #### `POST /choferes/yo/ofertas/:idOferta/rechazo`
@@ -304,13 +304,13 @@ El chofer rechaza la oferta explícitamente.
 
 #### `PATCH /choferes/yo/disponibilidad`
 Cambia el estado de disponibilidad del chofer autenticado.
-- **Autorización:** Exclusivo de rol `CHOFER` habilitado.
+- **Autorización:** Exclusivo de rol `CHOFER` habilitado o `ADMINISTRADOR`.
 - **Cuerpo:** `{"disponibilidad": true}` o `{"disponibilidad": false}`.
 - **Respuesta (`200 OK`):** Datos del chofer con nueva disponibilidad.
 
 #### `POST /choferes/yo/ubicacion`
 Registra la posición GPS actual del chofer.
-- **Autorización:** Exclusivo de rol `CHOFER` habilitado.
+- **Autorización:** Exclusivo de rol `CHOFER` habilitado o `ADMINISTRADOR`.
 - **Cuerpo:** `{"latitud": -27.451, "longitud": -58.986, "actualizado_at"?: ISO-8601, "precision_metros"?: number}`.
 - **Respuesta (`200 OK`):** Última ubicación guardada.
 

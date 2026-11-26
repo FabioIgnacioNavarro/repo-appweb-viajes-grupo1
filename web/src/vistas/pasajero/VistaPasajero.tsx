@@ -33,6 +33,7 @@ interface EstimacionDto {
 
 interface ViajeDto {
   id_viaje: string;
+  pasajero_id?: string;
   id_estimacion: string;
   precio_estimado: string;
   precio_final: string | null;
@@ -212,7 +213,11 @@ export const VistaPasajero: React.FC = () => {
   const sincronizarViajeActivo = useCallback(async () => {
     try {
       const respuesta = await clienteApi.get<DatosViajes>("/viajes");
-      const ordenados = respuesta.viajes
+      const listaFiltrada =
+        sesion?.rol === "ADMINISTRADOR" && sesion.idUsuario
+          ? respuesta.viajes.filter((elemento) => !elemento.pasajero_id || elemento.pasajero_id === sesion.idUsuario)
+          : respuesta.viajes;
+      const ordenados = listaFiltrada
         .sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en));
       const activo = ordenados
         .filter((elemento) => ESTADOS_ACTIVOS.has(elemento.estado.toLowerCase()))

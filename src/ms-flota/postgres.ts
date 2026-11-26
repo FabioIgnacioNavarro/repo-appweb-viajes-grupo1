@@ -23,8 +23,17 @@ export class RepositorioChoferesPostgres implements RepositorioChoferes {
   }
 
   async guardar(chofer: Chofer): Promise<Chofer> {
-    const resultado = await this.pool.query<FilaChofer>(`UPDATE usuario_chofer SET habilitado = $2, disponibilidad = $3, carnet_conducir_validado = $4, fecha_actualizacion = $5 WHERE usuario_id = $1 RETURNING id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado, fecha_creacion, fecha_actualizacion`, [chofer.usuarioId, chofer.habilitado, chofer.disponibilidad, chofer.carnetConducirValidado, chofer.fechaActualizacion]);
-    if (!resultado.rows[0]) throw new Error("El perfil de chofer no existe.");
+    const resultado = await this.pool.query<FilaChofer>(
+      `INSERT INTO usuario_chofer (id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado, fecha_creacion, fecha_actualizacion)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (usuario_id) DO UPDATE SET
+         habilitado = EXCLUDED.habilitado,
+         disponibilidad = EXCLUDED.disponibilidad,
+         carnet_conducir_validado = EXCLUDED.carnet_conducir_validado,
+         fecha_actualizacion = EXCLUDED.fecha_actualizacion
+       RETURNING id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado, fecha_creacion, fecha_actualizacion`,
+      [chofer.id, chofer.usuarioId, chofer.habilitado, chofer.disponibilidad, chofer.carnetConducirValidado, chofer.fechaCreacion, chofer.fechaActualizacion]
+    );
     return mapearChofer(resultado.rows[0]);
   }
 

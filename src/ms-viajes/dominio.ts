@@ -37,7 +37,7 @@ export class PublicarEstadoViaje {
 export class PublicarUbicacionChoferEnViaje {
   constructor(private readonly viajes: RepositorioViajes, private readonly eventos: PublicadorEventosTiempoReal) {}
   async ejecutar(actor: ActorAutenticado, ubicacion: { latitud: number; longitud: number; actualizadoEn: string }): Promise<boolean> {
-    exigirRol(actor, "CHOFER");
+    exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     const viaje = await this.viajes.obtenerActivoPorChofer(actor.idUsuario);
     if (!viaje || viaje.choferId !== actor.idUsuario || !["CHOFER_EN_CAMINO", "EN_CURSO"].includes(viaje.estado)) return false;
     try {
@@ -472,7 +472,7 @@ export class ConfirmarViaje {
     clave: string,
     ahora = new Date()
   ): Promise<{ viaje: Viaje; creado: boolean }> {
-    exigirRol(actor, "PASAJERO");
+    exigirRol(actor, "PASAJERO", "ADMINISTRADOR");
     if (!clave) throw new ErrorDominio("CLAVE_IDEMPOTENCIA_REQUERIDA", "La confirmacion requiere una clave de idempotencia.");
     return await this.ejecutor.ejecutar(actor.idUsuario, clave, "confirmar_viaje", async ({ viajes, idempotencia }) => {
       const anterior = (await idempotencia.obtener(actor.idUsuario, clave, "confirmar_viaje")) as Viaje | undefined;
@@ -523,7 +523,7 @@ export class AceptarOferta {
   ) {}
 
   async ejecutar(actor: ActorAutenticado, ofertaId: string, ahora = new Date()): Promise<Viaje> {
-    exigirRol(actor, "CHOFER");
+    exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     if (this.transaccion) return await this.ejecutarTransaccional(actor, ofertaId, ahora);
 
     const oferta = await this.ofertas.obtener(ofertaId);
@@ -592,7 +592,7 @@ export class RechazarOferta {
   constructor(private readonly ofertas: RepositorioOfertas) {}
 
   async ejecutar(actor: ActorAutenticado, ofertaId: string, ahora = new Date()): Promise<Oferta> {
-    exigirRol(actor, "CHOFER");
+    exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     const oferta = await this.ofertas.obtener(ofertaId);
     if (!oferta) throw new ErrorDominio("OFERTA_NO_ENCONTRADA", "La oferta no existe.");
     if (oferta.choferId !== actor.idUsuario) throw new ErrorDominio("OFERTA_NO_AUTORIZADA", "La oferta no pertenece al chofer.");
@@ -724,7 +724,7 @@ export class MarcarViajeSinChoferesDisponibles {
 export class ConsultarOfertasChofer {
   constructor(private readonly ofertas: RepositorioOfertas, private readonly eventos?: PublicadorEventosTiempoReal) {}
   async ejecutar(actor: ActorAutenticado, ahora = new Date()): Promise<Oferta[]> {
-    exigirRol(actor, "CHOFER");
+    exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     const ofertas = await this.ofertas.listarPorChofer(actor.idUsuario);
     const resultado: Oferta[] = [];
     for (const oferta of ofertas) {
@@ -751,7 +751,7 @@ export class AvanzarViaje {
   constructor(private readonly viajes: RepositorioViajes) {}
 
   async ejecutar(actor: ActorAutenticado, viajeId: string, estado: "CHOFER_EN_CAMINO" | "EN_CURSO", ahora = new Date()): Promise<Viaje> {
-    exigirRol(actor, "CHOFER");
+    exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     if (viaje.choferId !== actor.idUsuario) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El viaje no pertenece al chofer.");
     exigirTransicionViaje(viaje.estado, estado);
@@ -769,7 +769,7 @@ export class FinalizarViaje {
   ) {}
 
   async ejecutar(actor: ActorAutenticado, viajeId: string, ahora = new Date()): Promise<{ viaje: Viaje; cobro: Cobro }> {
-    exigirRol(actor, "CHOFER");
+    exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     if (viaje.choferId !== actor.idUsuario) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El viaje no pertenece al chofer.");
     const cobroExistente = await this.cobros.obtenerPorViaje(viaje.id);
@@ -797,7 +797,8 @@ export class ConsultarCobro {
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     const autorizado = (actor.rol === "PASAJERO" && viaje.pasajeroId === actor.idUsuario)
       || (actor.rol === "CHOFER" && viaje.choferId === actor.idUsuario)
-      || actor.rol === "SOPORTE";
+      || actor.rol === "SOPORTE"
+      || actor.rol === "ADMINISTRADOR";
     if (!autorizado) throw new ErrorDominio("COBRO_NO_AUTORIZADO", "El actor no puede consultar este cobro.");
     const cobro = await this.cobros.obtenerPorViaje(viaje.id);
     if (!cobro) throw new ErrorDominio("COBRO_NO_ENCONTRADO", "El viaje todavía no tiene un cobro.");
@@ -817,7 +818,8 @@ export class ReintentarCobro {
   async ejecutar(actor: ActorAutenticado, viajeId: string, clave: string): Promise<Cobro> {
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     const autorizado = (actor.rol === "PASAJERO" && viaje.pasajeroId === actor.idUsuario)
-      || actor.rol === "SOPORTE";
+      || actor.rol === "SOPORTE"
+      || actor.rol === "ADMINISTRADOR";
     if (!autorizado) throw new ErrorDominio("COBRO_NO_AUTORIZADO", "Solo el pasajero titular o soporte puede reintentar este cobro.");
     if (!clave || clave.length > 200) throw new ErrorDominio("CLAVE_IDEMPOTENCIA_REQUERIDA", "El reintento requiere una clave de idempotencia válida.");
     if (viaje.estado !== "FINALIZADO") throw new ErrorDominio("COBRO_NO_REINTENTABLE", "El viaje debe estar finalizado para procesar el cobro.");
