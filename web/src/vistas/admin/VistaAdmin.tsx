@@ -341,19 +341,19 @@ export const VistaAdmin: React.FC = () => {
             {salud.map((s) => (
               <div
                 key={s.nombre}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
+                className="flex items-center gap-2 rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 px-3 py-2 text-xs"
               >
                 <span
                   className={`h-2.5 w-2.5 rounded-full ${
                     s.estado === "listo"
-                      ? "bg-emerald-600"
+                      ? "bg-[#4A7C59]"
                       : s.estado === "verificando"
                         ? "bg-amber-500"
                         : "bg-slate-400"
                   }`}
                 />
-                <span className="font-mono font-semibold text-slate-900">{s.nombre}</span>
-                <span className="text-slate-600 capitalize">{s.estado}</span>
+                <span className="font-mono font-semibold text-[#2C2B28] dark:text-slate-100">{s.nombre}</span>
+                <span className="text-[#5E5B54] dark:text-slate-300 capitalize">{s.estado}</span>
               </div>
             ))}
           </div>
@@ -363,28 +363,28 @@ export const VistaAdmin: React.FC = () => {
           {activa ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs" data-testid="admin-regla-activa">
               <div>
-                <p className="text-slate-500">Versión activa</p>
-                <p className="font-mono text-base font-bold text-slate-900">v{activa.version}</p>
+                <p className="text-[#5E5B54] dark:text-slate-400">Versión activa</p>
+                <p className="font-mono text-base font-bold text-[#2C2B28] dark:text-slate-100">v{activa.version}</p>
               </div>
               <div>
-                <p className="text-slate-500">Autor</p>
-                <p className="font-mono font-semibold text-slate-900 truncate" title={activa.autor}>
+                <p className="text-[#5E5B54] dark:text-slate-400">Autor</p>
+                <p className="font-mono font-semibold text-[#2C2B28] dark:text-slate-100 truncate" title={activa.autor}>
                   {activa.autor}
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Publicada</p>
-                <p className="font-semibold text-slate-900">{formatearFecha(activa.creada_en)}</p>
+                <p className="text-[#5E5B54] dark:text-slate-400">Publicada</p>
+                <p className="font-semibold text-[#2C2B28] dark:text-slate-100">{formatearFecha(activa.creada_en)}</p>
               </div>
-              <div className="col-span-2 sm:col-span-3 border-t border-slate-100 pt-2 text-slate-600">
+              <div className="col-span-2 sm:col-span-3 border-t border-[#DDD8CC] dark:border-slate-800 pt-2 text-[#5E5B54] dark:text-slate-300">
                 Tarifas base inmutables aquí:{" "}
-                <strong className="text-slate-900">{importePesos(activa.tarifa_base_pesos)}</strong> bajada ·{" "}
-                <strong className="text-slate-900">{importePesos(activa.precio_por_kilometro_pesos)}</strong>/km ·{" "}
-                <strong className="text-slate-900">{importePesos(activa.precio_por_minuto_pesos)}</strong>/min
+                <strong className="text-[#2C2B28] dark:text-slate-100">{importePesos(activa.tarifa_base_pesos)}</strong> bajada ·{" "}
+                <strong className="text-[#2C2B28] dark:text-slate-100">{importePesos(activa.precio_por_kilometro_pesos)}</strong>/km ·{" "}
+                <strong className="text-[#2C2B28] dark:text-slate-100">{importePesos(activa.precio_por_minuto_pesos)}</strong>/min
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-500">{cargando ? "Cargando regla activa..." : "Sin regla cargada."}</p>
+            <p className="text-xs text-[#5E5B54] dark:text-slate-400">{cargando ? "Cargando regla activa..." : "Sin regla cargada."}</p>
           )}
         </Tarjeta>
       </div>

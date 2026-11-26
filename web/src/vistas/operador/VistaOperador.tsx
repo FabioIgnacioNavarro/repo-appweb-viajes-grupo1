@@ -292,19 +292,19 @@ export const VistaOperador: React.FC = () => {
 
       {/* KPIs reales del listado */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total filtrado</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1" data-testid="operador-kpi-total">
+        <div className="rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5E5B54] dark:text-slate-400">Total filtrado</p>
+          <p className="text-xl font-bold text-[#2C2B28] dark:text-slate-100 mt-1" data-testid="operador-kpi-total">
             {cargando ? "—" : total}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">En página actual</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{cargando ? "—" : viajes.length}</p>
+        <div className="rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5E5B54] dark:text-slate-400">En página actual</p>
+          <p className="text-xl font-bold text-[#2C2B28] dark:text-slate-100 mt-1">{cargando ? "—" : viajes.length}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Activos visibles</p>
-          <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{cargando ? "—" : activosEnPagina}</p>
+        <div className="rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5E5B54] dark:text-slate-400">Activos visibles</p>
+          <p className="text-xl font-bold text-[#4A7C59] dark:text-emerald-400 mt-1">{cargando ? "—" : activosEnPagina}</p>
         </div>
       </div>
 
@@ -430,45 +430,45 @@ export const VistaOperador: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-[#5E5B54] dark:text-slate-300">
                 Desglose de factores de tarifa
               </h3>
               <dl className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Zona</dt>
-                  <dd className="font-semibold text-slate-900">{textoFactor(factores.zona_id)}</dd>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Zona</dt>
+                  <dd className="font-semibold text-[#2C2B28] dark:text-slate-100">{textoFactor(factores.zona_id)}</dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Franja horaria</dt>
-                  <dd className="font-semibold text-slate-900 uppercase">{textoFactor(factores.franja_horaria)}</dd>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Franja horaria</dt>
+                  <dd className="font-semibold text-[#2C2B28] dark:text-slate-100 uppercase">{textoFactor(factores.franja_horaria)}</dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Solicitudes / Choferes</dt>
-                  <dd className="font-semibold text-slate-900 font-mono">
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Solicitudes / Choferes</dt>
+                  <dd className="font-semibold text-[#2C2B28] dark:text-slate-100 font-mono">
                     {textoFactor(factores.solicitudes_activas)} / {textoFactor(factores.choferes_disponibles)}
                   </dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Clima ({textoFactor(factores.fuente_clima)})</dt>
-                  <dd className="font-semibold text-slate-900">
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Clima ({textoFactor(factores.fuente_clima)})</dt>
+                  <dd className="font-semibold text-[#2C2B28] dark:text-slate-100">
                     {textoFactor(factores.llueve)} ({textoFactor(factores.precipitacion_mm, " mm")})
                   </dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Factor lluvia</dt>
-                  <dd className="font-mono font-semibold text-slate-900">{textoFactor(factores.factor_lluvia, "x")}</dd>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Factor lluvia</dt>
+                  <dd className="font-mono font-semibold text-[#2C2B28] dark:text-slate-100">{textoFactor(factores.factor_lluvia, "x")}</dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Factor disponibilidad</dt>
-                  <dd className="font-mono font-semibold text-slate-900">{textoFactor(factores.factor_disponibilidad, "x")}</dd>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Factor disponibilidad</dt>
+                  <dd className="font-mono font-semibold text-[#2C2B28] dark:text-slate-100">{textoFactor(factores.factor_disponibilidad, "x")}</dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Factor demanda</dt>
-                  <dd className="font-mono font-semibold text-slate-900">{textoFactor(factores.factor_demanda, "x")}</dd>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Factor demanda</dt>
+                  <dd className="font-mono font-semibold text-[#2C2B28] dark:text-slate-100">{textoFactor(factores.factor_demanda, "x")}</dd>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-2.5">
-                  <dt className="text-slate-500">Factor horario</dt>
-                  <dd className="font-mono font-semibold text-slate-900">{textoFactor(factores.factor_horario, "x")}</dd>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                  <dt className="text-[#5E5B54] dark:text-slate-300">Factor horario</dt>
+                  <dd className="font-mono font-semibold text-[#2C2B28] dark:text-slate-100">{textoFactor(factores.factor_horario, "x")}</dd>
                 </div>
               </dl>
             </div>

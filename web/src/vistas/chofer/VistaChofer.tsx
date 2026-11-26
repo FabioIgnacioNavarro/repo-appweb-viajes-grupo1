@@ -767,19 +767,19 @@ export const VistaChofer: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Columna 1: Bandeja de Ofertas en Tiempo Real */}
         <div className="md:col-span-1 space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+          <div className="bg-[#EFECE4] dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#2C2B28] dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
                 <IconoRayo size={16} aria-hidden="true" /> Ofertas Recibidas
               </h2>
               <span
                 data-testid="indicador-ws-chofer"
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   estadoWs === "CONECTADO"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    ? "bg-[#E6EFE8] dark:bg-emerald-950/60 text-[#3B694A] dark:text-emerald-300 border-[#4A7C59]/30 dark:border-emerald-800"
                     : estadoWs === "CONECTANDO"
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : "bg-slate-100 text-slate-600 border-slate-200"
+                      ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                      : "bg-[#F7F5F0] dark:bg-slate-800 text-[#5E5B54] dark:text-slate-300 border-[#DDD8CC] dark:border-slate-700"
                 }`}
               >
                 {estadoWs === "CONECTADO" ? "WebSocket Activo" : estadoWs === "CONECTANDO" ? "Reconectando..." : "HTTP / Offline"}
@@ -792,7 +792,7 @@ export const VistaChofer: React.FC = () => {
                 id="boton-actualizar-ofertas"
                 type="button"
                 onClick={() => void sincronizarEstadoServidor()}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-600 transition cursor-pointer"
+                className="px-2.5 py-1 rounded-lg border border-[#D4CFC2] dark:border-slate-700 hover:bg-[#E5E0D4] dark:hover:bg-slate-800 text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 transition cursor-pointer"
               >
                 ↻ Sincronizar GET
               </button>
@@ -801,7 +801,7 @@ export const VistaChofer: React.FC = () => {
                 data-testid="boton-simular-oferta"
                 type="button"
                 onClick={simularOfertaEntrante}
-                className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-[11px] font-semibold text-indigo-700 border border-indigo-200 transition cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-[#4A7C59]/15 hover:bg-[#4A7C59]/25 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-[11px] font-semibold text-[#3B694A] dark:text-emerald-300 border border-[#4A7C59]/30 dark:border-emerald-800 transition cursor-pointer"
               >
                 + Simular oferta (60s)
               </button>
@@ -810,7 +810,7 @@ export const VistaChofer: React.FC = () => {
             {!disponible && ofertas.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-inactiva"
-                className="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500"
+                className="p-6 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/50 border border-dashed border-[#D4CFC2] dark:border-slate-700 text-center text-xs text-[#5E5B54] dark:text-slate-400"
               >
                 Activá tu disponibilidad para comenzar a recibir ofertas de pasajeros cercanos.
               </div>

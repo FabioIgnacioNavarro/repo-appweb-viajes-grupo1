@@ -266,9 +266,17 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
   test("en modo normal oculta accesos demo y credenciales de prueba hasta activar Modo dev", async ({ page }) => {
     await page.goto("/#/login");
     await expect(page.getByRole("heading", { name: /Bienvenido a Che Viaje/i })).toBeVisible();
+    await expect(page.getByTestId("login-usuario")).toHaveAttribute("placeholder", "Usuario o correo electrónico");
+    await expect(page.getByTestId("login-contrasena")).toHaveAttribute("type", "password");
+    await page.getByTestId("login-contrasena-alternar-visibilidad").click();
+    await expect(page.getByTestId("login-contrasena")).toHaveAttribute("type", "text");
+    await page.getByTestId("login-contrasena-alternar-visibilidad").click();
+    await expect(page.getByTestId("login-contrasena")).toHaveAttribute("type", "password");
+
     await expect(page.getByText(/ViajesDemo2026!/i)).toHaveCount(0);
     await expect(page.getByTestId("panel-demo-dev")).toHaveCount(0);
     await expect(page.locator("header")).not.toContainText(/Grupo 1|Modo Seguro/i);
+    await expect(page.locator("footer")).not.toContainText(/Microservicios|Arquitectura Hexagonal/i);
 
     await page.getByTestId("boton-modo-dev").click();
     await expect(page.getByTestId("panel-demo-dev")).toBeVisible();
