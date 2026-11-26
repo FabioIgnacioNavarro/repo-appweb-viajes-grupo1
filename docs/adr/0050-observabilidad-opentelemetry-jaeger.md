@@ -57,6 +57,7 @@ Se elige la **Opción C: OpenTelemetry con Jaeger All-in-One**.
    - Nombre de servicio configurable vía variable de entorno `OTEL_SERVICE_NAME`.
    - Exportador OTLP HTTP apuntando a `OTEL_EXPORTER_OTLP_ENDPOINT` (por defecto `http://jaeger:4318/v1/traces`).
    - Propagador estándar W3C Trace Context.
+   - Histograma HTTP `viajes.http.duracion` en segundos con límites explícitos `[0, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 10]`. La selección de percentiles depende de la resolución de estos intervalos; se escogen límites finos para representar latencias de milisegundos sin perder cobertura hasta 10 segundos.
 2. Cada servicio HTTP (`ms-viajes`, `ms-tarifas`, `ms-flota`) importa e inicializa la observabilidad al arrancar.
 3. Se instrumentan las solicitudes entrantes y salientes para capturar el `trace_id` y adjuntarlo a los logs estructurados de la aplicación.
 4. Se agrega el servicio `jaeger` a `docker-compose.yml`, exponiendo el puerto `16686` para la interfaz visual y el puerto `4318` para la recepción de trazas OTLP.
@@ -66,6 +67,7 @@ Se elige la **Opción C: OpenTelemetry con Jaeger All-in-One**.
 - **Positivas:** El sistema cuenta con trazabilidad distribuida de nivel productivo. Se cumple en su totalidad la demostración del Tema 18.
 - **Negativas:** Incremento en el tamaño del `node_modules` y un contenedor más en el Compose.
 - **Riesgo mitigado:** Si Jaeger no está presente, los servicios siguen funcionando con normalidad (resiliencia y fallback seguro).
+- **Precisión de métricas:** Los percentiles de latencia son estimaciones interpoladas entre los límites del histograma. Se fijan intervalos explícitos en segundos para evitar que las latencias HTTP habituales, de milisegundos, queden agrupadas en un bucket genérico de varios segundos.
 
 ## Qué nos haría cambiar de decisión
 
