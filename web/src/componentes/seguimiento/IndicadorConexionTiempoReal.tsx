@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
+import { IconoRayo } from "../comunes";
 
 interface Props {
   className?: string;
@@ -47,7 +48,7 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
   return (
     <div
       data-testid="indicador-tiempo-real-completo"
-      className={`bg-white rounded-xl border border-slate-200 p-3 shadow-xs space-y-2 text-xs ${className}`}
+      className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-xs space-y-2 text-xs ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -103,14 +104,15 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
               data-testid="boton-simular-corte-red"
               disabled={estado !== "CONECTADO"}
               onClick={forzarDesconexion}
-              className={`px-2.5 py-1 rounded font-semibold border transition ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded font-semibold border transition ${
                 estado === "CONECTADO"
-                  ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 cursor-pointer"
-                  : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                  ? "bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 cursor-pointer"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-60"
               }`}
               title="Cierra el WebSocket para observar la reconexión con retroceso exponencial"
             >
-              ⚡ Simular corte de red
+              <IconoRayo size={13} aria-hidden="true" />
+              <span>Simular corte de red</span>
             </button>
             <button
               type="button"
@@ -119,11 +121,11 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
               onClick={reconectar}
               className={`px-2.5 py-1 rounded font-semibold border transition ${
                 estado !== "CONECTADO"
-                  ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 cursor-pointer"
-                  : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-60"
               }`}
             >
-              🔄 Reconectar ahora
+              Reconectar ahora
             </button>
           </div>
         </div>

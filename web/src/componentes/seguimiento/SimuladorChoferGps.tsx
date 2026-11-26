@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { clienteApi } from "../../nucleo/api";
+import { IconoPin } from "../comunes";
 
 export interface PuntoGpsResistencia {
   nombre: string;
@@ -91,8 +92,8 @@ export const SimuladorChoferGps: React.FC<Props> = ({
       className={`p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs ${className}`}
     >
       <div className="flex items-center justify-between">
-        <span className="font-bold text-slate-800 flex items-center gap-1.5">
-          <span>📍</span> Simulador GPS en Resistencia (Demo)
+        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+          <IconoPin size={15} /> Simulador GPS en Resistencia (Demo)
         </span>
         {transmitiendoEnVivo && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">

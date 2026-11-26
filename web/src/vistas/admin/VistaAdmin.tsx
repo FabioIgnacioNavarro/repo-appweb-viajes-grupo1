@@ -251,10 +251,12 @@ export const VistaAdmin: React.FC = () => {
       encabezado: "Versión",
       renderizar: (r) => (
         <div className="flex items-center gap-2">
-          <span className="font-mono font-bold text-slate-900">v{r.version}</span>
+          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">v{r.version}</span>
           <span
             className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-              r.activa ? "bg-emerald-100 text-emerald-900" : "bg-slate-100 text-slate-600"
+              r.activa
+                ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
             }`}
           >
             {r.activa ? "Activa" : "Histórica"}
@@ -265,12 +267,12 @@ export const VistaAdmin: React.FC = () => {
     {
       clave: "autor",
       encabezado: "Autor (JWT)",
-      renderizar: (r) => <span className="font-mono text-xs text-slate-800">{r.autor}</span>,
+      renderizar: (r) => <span className="font-mono text-xs text-slate-800 dark:text-slate-200">{r.autor}</span>,
     },
     {
       clave: "creada_en",
       encabezado: "Fecha servidor",
-      renderizar: (r) => <span className="text-xs text-slate-600">{formatearFecha(r.creada_en)}</span>,
+      renderizar: (r) => <span className="text-xs text-slate-600 dark:text-slate-400">{formatearFecha(r.creada_en)}</span>,
     },
     {
       clave: "limites",
@@ -310,15 +312,15 @@ export const VistaAdmin: React.FC = () => {
     <section className="space-y-6" data-testid="vista-admin">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start gap-3">
-          <span className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
+          <span className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shrink-0">
             <IconoAdmin className="w-5 h-5" />
           </span>
           <div>
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
-              Configuración Global y Reglas de Demanda
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
+              Configuración Global y Reglas de Tarifa
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-              Administración versionada de la política dinámica en <code className="font-mono">ms-tarifas</code>.
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+              Administración versionada de la política de tarifas en <code className="font-mono">ms-tarifas</code>.
             </p>
           </div>
         </div>
@@ -397,8 +399,8 @@ export const VistaAdmin: React.FC = () => {
       <Tarjeta
         titulo={
           <span className="inline-flex items-center gap-2">
-            <IconoRayo className="w-4 h-4 text-amber-600" />
-            Configuración de Variante A (Regla de Precio Dinámico)
+            <IconoRayo className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            Regla de tarifa
           </span>
         }
         subtitulo="Fórmula auditada en ADR 0021: factor_total = limitar(lluvia × disponibilidad × demanda × horario, min, max). Cada cambio crea una versión nueva."

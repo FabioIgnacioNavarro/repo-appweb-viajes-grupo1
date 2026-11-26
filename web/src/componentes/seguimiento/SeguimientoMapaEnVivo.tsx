@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
 import { clienteApi } from "../../nucleo/api";
+import { IconoAuto, IconoBandera, IconoMapa, IconoPin, IconoReloj } from "../comunes";
 
 export interface UbicacionChofer {
   latitud: number;
@@ -27,12 +28,12 @@ interface Props {
   className?: string;
 }
 
-const ETAPAS_VIAJE = [
-  { clave: "solicitado", etiqueta: "Solicitado", icono: "📝" },
-  { clave: "asignado", etiqueta: "Asignado", icono: "🚕" },
-  { clave: "chofer_en_camino", etiqueta: "Chofer en camino", icono: "📍" },
-  { clave: "en_curso", etiqueta: "En curso", icono: "🚀" },
-  { clave: "finalizado", etiqueta: "Finalizado", icono: "🏁" },
+const ETAPAS_VIAJE: Array<{ clave: string; etiqueta: string; renderIcono: () => React.ReactNode }> = [
+  { clave: "solicitado", etiqueta: "Solicitado", renderIcono: () => <IconoReloj size={15} /> },
+  { clave: "asignado", etiqueta: "Asignado", renderIcono: () => <IconoAuto size={15} /> },
+  { clave: "chofer_en_camino", etiqueta: "Chofer en camino", renderIcono: () => <IconoPin size={15} /> },
+  { clave: "en_curso", etiqueta: "En curso", renderIcono: () => <IconoMapa size={15} /> },
+  { clave: "finalizado", etiqueta: "Finalizado", renderIcono: () => <IconoBandera size={15} /> },
 ];
 
 export const SeguimientoMapaEnVivo: React.FC<Props> = ({
@@ -168,10 +169,10 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
             data-testid="boton-sincronizar-canonico"
             onClick={sincronizarEstadoCanonico}
             disabled={recuperandoEstado}
-            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-semibold cursor-pointer transition disabled:opacity-50"
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold cursor-pointer transition disabled:opacity-50"
             title="Consulta canónica HTTP (GET /viajes/:id) para asegurar consistencia"
           >
-            🔄 {recuperandoEstado ? "..." : "Sincronizar"}
+            {recuperandoEstado ? "..." : "Sincronizar"}
           </button>
         </div>
       </div>
@@ -196,7 +197,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
                     : "bg-slate-50 border-slate-200 text-slate-400 font-normal"
                 }`}
               >
-                <span className="text-sm">{etapa.icono}</span>
+                <span className="text-sm" aria-hidden="true">{etapa.renderIcono()}</span>
                 <span className="text-[11px] leading-tight">{etapa.etiqueta}</span>
               </div>
             );
@@ -210,8 +211,8 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
         className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs"
       >
         <div className="flex items-center justify-between">
-          <span className="font-bold text-slate-800 flex items-center gap-1.5">
-            <span>📡</span> Posición del Chofer (difusión por WebSocket)
+          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <IconoPin size={15} aria-hidden="true" /> Posición del Chofer (difusión por WebSocket)
           </span>
           {ubicacionChofer && (
             <span className="text-[10px] text-slate-500 font-mono">

@@ -228,14 +228,14 @@ test.describe("WEB-008 - Panel de Operador (auditoría API-002) y Administrador 
 
     // Verifica listado inicial
     await expect(page.getByTestId("operador-kpi-total")).toHaveText("2");
-    await expect(page.getByText("viaje-op-1").first()).toBeVisible();
-    await expect(page.getByText("viaje-op-2").first()).toBeVisible();
+    await expect(page.locator("table").getByText("viaje-op-1")).toBeVisible();
+    await expect(page.locator("table").getByText("viaje-op-2")).toBeVisible();
 
     // Filtra por estado finalizado
     await page.getByLabel("Estado del viaje").selectOption("finalizado");
     await page.getByRole("button", { name: "Filtrar" }).click();
     await expect(page.getByTestId("operador-kpi-total")).toHaveText("1");
-    await expect(page.getByText("viaje-op-1").first()).toBeVisible();
+    await expect(page.locator("table").getByText("viaje-op-1")).toBeVisible();
     expect(consultasViajes.some((q) => q.includes("estado=finalizado"))).toBe(true);
 
     // Abre modal de auditoría inmutable
@@ -320,7 +320,7 @@ test.describe("WEB-008 - Panel de Operador (auditoría API-002) y Administrador 
     const activaCard = page.getByTestId("admin-regla-activa");
     await expect(activaCard).toContainText("v1");
     await expect(activaCard).toContainText("sistema");
-    await expect(page.getByText(/Variante A \(Regla de Precio Dinámico\)/i)).toBeVisible();
+    await expect(page.getByText(/Regla de tarifa/i)).toBeVisible();
 
     // Edita multiplicador máximo y último tramo de demanda
     await page.getByLabel("Multiplicador máximo").fill("2.5");
@@ -331,7 +331,7 @@ test.describe("WEB-008 - Panel de Operador (auditoría API-002) y Administrador 
     await expect(activaCard).toContainText("v2");
     await expect(activaCard).toContainText("99999999-9999-4999-8999-999999999999");
     await expect(page.getByText(/Regla v2 publicada/i)).toBeVisible();
-    await expect(page.locator("text=Histórica").first()).toBeVisible();
+    await expect(page.locator("table").getByText("Histórica")).toBeVisible();
 
     // Verifica que el cliente nunca envió autor, version, fecha ni precio
     expect(payloadsEnviados.length).toBe(1);

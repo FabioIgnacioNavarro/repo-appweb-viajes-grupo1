@@ -344,15 +344,30 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     }
   });
 
-  test("DEV-001: panel desarrollador permite simular hora y lluvia, ver modificadores y recomendaciones", async ({ page }) => {
+  test("DEV-001: modo dev oculta variables internas en modo pasajero y habilita simulador al activarse", async ({ page }) => {
     const registro = await prepararMocksBase(page);
     await page.goto("/#/login");
     await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
 
+    // Apagar Modo dev si se activó para acceder por perfil demo
+    const botonDev = page.getByTestId("boton-modo-dev");
+    if ((await botonDev.getAttribute("aria-pressed")) === "true") {
+      await botonDev.click();
+    }
+
     await page.locator("#destino-viaje").fill("Shopping Sarmiento, Resistencia");
     await expect(page.getByRole("button", { name: /^Confirmar viaje$/i })).toBeVisible({ timeout: 5000 });
 
+    // En vista normal de pasajero no se muestran variables internas ni panel de simulación
+    await expect(page.getByTestId("panel-desarrollador")).toHaveCount(0);
+    await expect(page.getByTestId("estimacion-multiplicador-dev")).toHaveCount(0);
+    await expect(page.getByTestId("estimacion-factores-dev")).toHaveCount(0);
+
+    // Activar Modo dev desde la esquina superior derecha muestra panel y factores
+    await botonDev.click();
+    await expect(page.getByTestId("estimacion-multiplicador-dev")).toBeVisible();
+    await expect(page.getByTestId("estimacion-factores-dev")).toBeVisible();
     await page.getByTestId("toggle-panel-dev").click();
     await expect(page.getByTestId("sim-lluvia-select")).toBeVisible();
 
