@@ -229,7 +229,7 @@ Al completar la funcionalidad:
 ### 1. Validar Definition of Done
 Verificar que:
 - El criterio de aceptación del backlog esté completamente cumplido.
-- `npm.cmd test` pasa al 100% (cero fallos).
+- `npm.cmd run lint` (ESLint, fronteras hexagonales y tipos) y `npm.cmd test` pasan al 100% (cero fallos).
 - Se actualizaron contratos (`docs/contratos.md`), modelo o ADR si la decisión lo requería.
 
 ### 2. Actualizar `docs/backlog.md`

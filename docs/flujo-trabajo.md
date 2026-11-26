@@ -42,6 +42,7 @@ Para avanzar de forma simultánea minimizando el riesgo de colisiones entre agen
 
 ## Antes de solicitar revisión
 
+- El cambio pasa análisis estático (`npm run lint`: ESLint, fronteras hexagonales y chequeo de tipos de backend, tests y frontend) sin vulnerabilidades altas (`npm audit --audit-level=high`).
 - El cambio tiene tests relevantes, incluyendo casos inválidos y de autorización.
 - Los tests de dominio no requieren servidor ni base real.
 - Se verificaron errores, logs y límites de entrada.
@@ -53,6 +54,7 @@ Para avanzar de forma simultánea minimizando el riesgo de colisiones entre agen
 Una tarea está terminada cuando:
 
 - cumple su criterio de aceptación;
+- pasa análisis estático y auditoría de dependencias (`npm run lint` y `npm audit --audit-level=high`);
 - tiene pruebas reproducibles;
 - respeta los contratos compartidos;
 - documenta decisiones y riesgos;

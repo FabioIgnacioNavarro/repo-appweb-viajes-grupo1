@@ -1,14 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { Pool, type PoolClient, type PoolConfig } from "pg";
+import { Pool, type PoolConfig } from "pg";
 import {
   ErrorDominio,
   estadosOrigenPermitidos,
-  type ActorAutenticado,
   type AsignadorAtomico,
   type Cobro,
   type EjecutorIdempotente,
   type EstadoCobro,
-  type Coordenada,
   type EstadoOferta,
   type EstadoViaje,
   type GeneradorId,

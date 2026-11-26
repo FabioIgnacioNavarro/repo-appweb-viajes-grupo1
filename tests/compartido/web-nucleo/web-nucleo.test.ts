@@ -16,7 +16,6 @@ import {
 import { ValidadorJwtFalso } from "../../../src/compartido/jwt-falso";
 import {
   clienteApi,
-  peticionHttp,
   generarClaveIdempotencia,
   ErrorHttpApi,
 } from "../../../src/compartido/web-nucleo/api";

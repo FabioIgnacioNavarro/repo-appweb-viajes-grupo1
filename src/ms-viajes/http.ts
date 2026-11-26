@@ -1,11 +1,11 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import {
   AceptarOferta, AvanzarViaje, CancelarViaje, ConfirmarViaje, ConsultarViaje,
-  ConsultarAuditoriaTarifa, ConsultarCobro, ConsultarChoferesOcupados, ConsultarDemandaPorZona,
+  ConsultarAuditoriaTarifa, ConsultarCobro,
   ErrorDominio, FinalizarViaje, RechazarOferta, ReintentarCobro,
   ListarViajesOperador,
   type ActorAutenticado, type Cobro, type EstimacionVigente, type RepositorioOfertas, type RepositorioViajes,
-  type EstadoViaje, type Viaje, type Oferta, type PublicadorEventosTiempoReal, type PublicarEstadoViaje,
+  type EstadoViaje, type Viaje, type PublicadorEventosTiempoReal, type PublicarEstadoViaje,
   type PublicarUbicacionChoferEnViaje, type ConsultarOfertasChofer
 } from "./dominio";
 import { ErrorDependenciaHttp } from "../compartido/cliente-servicios";

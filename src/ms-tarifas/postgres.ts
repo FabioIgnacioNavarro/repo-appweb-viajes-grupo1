@@ -1,5 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
-import { ErrorTarifas, type EstimacionTarifa, type FactoresPrecio, type FranjaHoraria, type ReglaTarifa, type RepositorioEstimaciones, type RepositorioVersionesRegla, type RepositorioZonas, type ZonaTarifaria } from "./dominio";
+import { ErrorTarifas, type EstimacionTarifa, type FactoresPrecio, type ReglaTarifa, type RepositorioEstimaciones, type RepositorioVersionesRegla, type RepositorioZonas, type ZonaTarifaria } from "./dominio";
 
 type FilaRegla = {
   version: number;

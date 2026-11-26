@@ -76,7 +76,7 @@ export class ClienteWebSocket {
         try {
           const evento = JSON.parse(event.data) as EventoWebSocket;
           this.despacharEvento(evento);
-        } catch (e) {
+        } catch {
           console.warn("Mensaje WebSocket no deserializable como JSON:", event.data);
         }
       };
@@ -91,7 +91,7 @@ export class ClienteWebSocket {
           this.programarReconexion();
         }
       };
-    } catch (err) {
+    } catch {
       this.reconexionManualPendiente = false;
       this.actualizarEstado("DESCONECTADO");
       this.programarReconexion();

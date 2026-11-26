@@ -4,7 +4,7 @@ import express from "express";
 import { createServer, type Server } from "node:http";
 import { ValidadorJwtJwks } from "../../src/compartido/jwt";
 import { crearAplicacionEmulador } from "../../src/emulador-auth/servidor";
-import { emitirTokenJwt, ACTORES_DEMO } from "../../src/emulador-auth/claves";
+import { emitirTokenJwt } from "../../src/emulador-auth/claves";
 import {
   AceptarOferta,
   AsignadorAtomicoMemoria,
@@ -23,7 +23,6 @@ import {
   RepositorioViajesMemoria,
   type EstimacionVigente,
   type Oferta,
-  type Viaje
 } from "../../src/ms-viajes/dominio";
 import { crearRouterViajes, type DependenciasViajes } from "../../src/ms-viajes/http";
 
@@ -152,7 +151,7 @@ async function peticion(
   });
 
   const texto = await res.text();
-  let json: any = {};
+  let json: unknown;
   try {
     json = JSON.parse(texto);
   } catch {
@@ -313,7 +312,7 @@ test("SEG-002: Escenario 3 - Acceso No Autorizado / RBAC y Usurpación de Recurs
       emisor: EMISOR_TEST,
       audiencia: AUDIENCIA_TEST
     });
-    const tokenChoferA = emitirTokenJwt("usr-chofer-A", "chofer", {
+    const _tokenChoferA = emitirTokenJwt("usr-chofer-A", "chofer", {
       emisor: EMISOR_TEST,
       audiencia: AUDIENCIA_TEST
     });

@@ -58,7 +58,7 @@ async function iniciarServidorFallas(): Promise<ContextoServidorFallas> {
   const idempotencia = new RepositorioIdempotenciaMemoria();
   const asignador = new AsignadorAtomicoMemoria();
 
-  const clienteHttp = new ClienteServiciosHttp({
+  const _clienteHttp = new ClienteServiciosHttp({
     timeoutMs: 100,
     reintentos: 1,
     registrarError: (evento) => erroresRegistrados.push(evento),
