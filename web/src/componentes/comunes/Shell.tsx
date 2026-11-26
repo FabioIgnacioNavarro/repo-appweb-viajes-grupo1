@@ -85,28 +85,28 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-[#F7F5F0] dark:bg-slate-950 text-[#2C2B28] dark:text-slate-100 transition-colors">
       <a
         href="#contenido-principal"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-slate-900 dark:focus:bg-slate-100 focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:text-white dark:focus:text-slate-900"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-[#4A7C59] dark:focus:bg-slate-100 focus:px-3 focus:py-2 focus:text-xs focus:font-semibold focus:text-white dark:focus:text-slate-900"
       >
         Saltar al contenido principal
       </a>
 
       {/* Barra de Navegación Superior */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 transition-colors">
+      <header className="bg-[#EFECE4] dark:bg-slate-900 border-b border-[#DDD8CC] dark:border-slate-800 sticky top-0 z-40 transition-colors">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap items-center justify-between gap-2">
           {/* Logo y Nombre */}
           <button
             type="button"
-            className="flex items-center gap-2.5 cursor-pointer text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-100 min-w-0"
+            className="flex items-center gap-2.5 cursor-pointer text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A7C59] dark:focus-visible:ring-slate-100 min-w-0"
             onClick={() => navegarA(sesion ? "pasajero" : "login")}
           >
-            <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-[#4A7C59] dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shrink-0">
               <IconoAuto size={20} />
             </div>
             <div className="min-w-0 truncate">
-              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-lg tracking-tight">Che Viaje</span>
+              <span className="font-bold text-[#2C2B28] dark:text-slate-100 text-sm sm:text-lg tracking-tight">Che Viaje</span>
             </div>
           </button>
 
@@ -125,7 +125,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                 {sesion.rol === "ADMINISTRADOR" && (
                   <nav
                     aria-label="Navegación entre roles"
-                    className="order-last sm:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto text-sm bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700"
+                    className="order-last sm:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto text-sm bg-[#E5E0D4] dark:bg-slate-800 p-1 rounded-lg border border-[#DDD8CC] dark:border-slate-700"
                   >
                     {enlacesAdmin.map((item) => (
                       <button
@@ -134,8 +134,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                         onClick={() => navegarA(item.ruta)}
                         className={`flex-1 md:flex-none px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition cursor-pointer ${
                           rutaActual === item.ruta
-                            ? "bg-white dark:bg-slate-900 shadow-xs text-indigo-700 dark:text-indigo-400 font-semibold"
-                            : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                            ? "bg-[#F7F5F0] dark:bg-slate-900 shadow-xs text-[#4A7C59] dark:text-emerald-300 font-semibold"
+                            : "text-[#2C2B28] dark:text-slate-300 hover:text-[#4A7C59] dark:hover:text-slate-100"
                         }`}
                       >
                         {item.etiqueta}
@@ -150,7 +150,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             <button
               type="button"
               onClick={alternarTema}
-              className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
+              className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center px-2 py-1.5 text-xs font-semibold rounded-lg text-[#2C2B28] dark:text-slate-200 hover:bg-[#E5E0D4] dark:hover:bg-slate-800 border border-[#CEC8BA] dark:border-slate-700 transition cursor-pointer"
               title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
               aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
               data-testid="boton-tema"
@@ -166,8 +166,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               data-testid="boton-modo-dev"
               className={`min-h-[36px] inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
                 modoDev
-                  ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:border-indigo-500 dark:hover:bg-indigo-600"
-                  : "text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-[#4A7C59] text-white border-[#4A7C59] hover:bg-[#3E6A4B] dark:bg-[#4A7C59] dark:border-[#4A7C59] dark:hover:bg-[#578F68]"
+                  : "text-[#2C2B28] dark:text-slate-200 border-[#CEC8BA] dark:border-slate-700 hover:bg-[#E5E0D4] dark:hover:bg-slate-800"
               }`}
               title={modoDev ? "Desactivar modo desarrollador" : "Activar modo desarrollador"}
             >
@@ -183,7 +183,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                   cerrarSesion();
                   navegarA("login");
                 }}
-                className="min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
+                className="min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg text-[#2C2B28] dark:text-slate-200 hover:bg-[#E5E0D4] dark:hover:bg-slate-800 border border-[#CEC8BA] dark:border-slate-700 transition cursor-pointer"
                 title="Cerrar sesión"
               >
                 Salir
@@ -199,10 +199,9 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       </main>
 
       {/* Pie de Página */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-600 dark:text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <footer className="bg-[#EFECE4] dark:bg-slate-900 border-t border-[#DDD8CC] dark:border-slate-800 py-4 text-center text-xs text-[#5E5B54] dark:text-slate-400">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-center">
           <span>Che Viaje</span>
-          <span className="text-slate-500 dark:text-slate-400">Microservicios · Arquitectura Hexagonal</span>
         </div>
       </footer>
     </div>

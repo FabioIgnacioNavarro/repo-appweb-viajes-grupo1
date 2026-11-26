@@ -189,7 +189,9 @@ export const VistaChofer: React.FC = () => {
         for (const v of respViajes.viajes) {
           mapaViajes.set(v.id_viaje, v);
         }
-        const activo = respViajes.viajes.find((v) => ESTADOS_ACTIVOS_CHOFER.has(v.estado.toLowerCase()));
+        const activo = respViajes.viajes.find(
+          (v) => v.chofer_id === idChoferActual && ESTADOS_ACTIVOS_CHOFER.has(v.estado.toLowerCase())
+        );
         if (activo) {
           setViajeActivo(activo);
         }
@@ -663,25 +665,25 @@ export const VistaChofer: React.FC = () => {
   return (
     <div className="space-y-6" data-testid="vista-chofer">
       {/* Encabezado y Toggle de Disponibilidad */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-[#EFECE4] dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Panel de Chofer</span>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-0.5">
+          <span className="text-xs font-bold text-[#4A7C59] dark:text-emerald-400 uppercase tracking-wider">Panel de Chofer</span>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-[#2C2B28] dark:text-slate-100 mt-0.5">
             Hola, {sesion?.nombre || "Chofer"}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-[#5E5B54] dark:text-slate-400 mt-1">
             Gestioná tu estado de disponibilidad en ms-flota, reportá tu posición GPS y recibí ofertas con vigencia de 60s.
           </p>
         </div>
 
         {/* Toggle de Disponibilidad */}
-        <div className="flex items-center justify-between sm:justify-end gap-3 bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between sm:justify-end gap-3 bg-[#F7F5F0] dark:bg-slate-800/70 p-2.5 rounded-xl border border-[#DDD8CC] dark:border-slate-700">
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Disponibilidad:</span>
+            <span className="text-xs font-semibold text-[#2C2B28] dark:text-slate-200">Disponibilidad:</span>
             <span
               id="estado-disponibilidad-chofer"
               data-testid="estado-disponibilidad-chofer"
-              className="text-[11px] text-slate-500 dark:text-slate-400"
+              className="text-[11px] text-[#5E5B54] dark:text-slate-400"
             >
               {disponible ? "Recibiendo ofertas" : "Fuera de servicio"}
             </span>
@@ -695,8 +697,8 @@ export const VistaChofer: React.FC = () => {
             onClick={() => void alternarDisponibilidad()}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer ${
               disponible
-                ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                ? "bg-[#4A7C59] text-white hover:bg-[#3E6A4B]"
+                : "bg-[#E5E0D4] dark:bg-slate-700 text-[#2C2B28] dark:text-slate-200 hover:bg-[#D7D1C2] dark:hover:bg-slate-600"
             }`}
           >
             {cargandoDisponibilidad
@@ -716,8 +718,8 @@ export const VistaChofer: React.FC = () => {
           role="alert"
           className={`p-4 rounded-xl border text-xs sm:text-sm flex items-start justify-between gap-3 ${
             alertaError.esConflicto409
-              ? "bg-amber-50 border-amber-300 text-amber-900"
-              : "bg-rose-50 border-rose-200 text-rose-800"
+              ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+              : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200"
           }`}
         >
           <div className="space-y-0.5">
@@ -767,19 +769,19 @@ export const VistaChofer: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Columna 1: Bandeja de Ofertas en Tiempo Real */}
         <div className="md:col-span-1 space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+          <div className="bg-[#EFECE4] dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#2C2B28] dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
                 <IconoRayo size={16} aria-hidden="true" /> Ofertas Recibidas
               </h2>
               <span
                 data-testid="indicador-ws-chofer"
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   estadoWs === "CONECTADO"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    ? "bg-[#E6EFE8] dark:bg-emerald-950/60 text-[#3B694A] dark:text-emerald-300 border-[#4A7C59]/30 dark:border-emerald-800"
                     : estadoWs === "CONECTANDO"
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : "bg-slate-100 text-slate-600 border-slate-200"
+                      ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                      : "bg-[#F7F5F0] dark:bg-slate-800 text-[#5E5B54] dark:text-slate-300 border-[#DDD8CC] dark:border-slate-700"
                 }`}
               >
                 {estadoWs === "CONECTADO" ? "WebSocket Activo" : estadoWs === "CONECTANDO" ? "Reconectando..." : "HTTP / Offline"}
@@ -792,7 +794,7 @@ export const VistaChofer: React.FC = () => {
                 id="boton-actualizar-ofertas"
                 type="button"
                 onClick={() => void sincronizarEstadoServidor()}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-600 transition cursor-pointer"
+                className="px-2.5 py-1 rounded-lg border border-[#D4CFC2] dark:border-slate-700 hover:bg-[#E5E0D4] dark:hover:bg-slate-800 text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 transition cursor-pointer"
               >
                 ↻ Sincronizar GET
               </button>
@@ -801,7 +803,7 @@ export const VistaChofer: React.FC = () => {
                 data-testid="boton-simular-oferta"
                 type="button"
                 onClick={simularOfertaEntrante}
-                className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-[11px] font-semibold text-indigo-700 border border-indigo-200 transition cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-[#4A7C59]/15 hover:bg-[#4A7C59]/25 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-[11px] font-semibold text-[#3B694A] dark:text-emerald-300 border border-[#4A7C59]/30 dark:border-emerald-800 transition cursor-pointer"
               >
                 + Simular oferta (60s)
               </button>
@@ -810,14 +812,14 @@ export const VistaChofer: React.FC = () => {
             {!disponible && ofertas.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-inactiva"
-                className="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500"
+                className="p-6 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/50 border border-dashed border-[#D4CFC2] dark:border-slate-700 text-center text-xs text-[#5E5B54] dark:text-slate-400"
               >
                 Activá tu disponibilidad para comenzar a recibir ofertas de pasajeros cercanos.
               </div>
             ) : ofertas.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-vacia"
-                className="p-6 rounded-xl bg-emerald-50/40 border border-dashed border-emerald-200 text-center text-xs text-emerald-800"
+                className="p-6 rounded-xl bg-[#E6EFE8] dark:bg-emerald-950/30 border border-dashed border-[#4A7C59]/30 dark:border-emerald-800 text-center text-xs text-[#3B694A] dark:text-emerald-300"
               >
                 Estás disponible y en línea. Esperando nuevas solicitudes de viaje cercanas...
               </div>
@@ -835,14 +837,14 @@ export const VistaChofer: React.FC = () => {
                       data-testid={`tarjeta-oferta-${oferta.id_oferta}`}
                       className={`p-4 rounded-xl border space-y-3 transition ${
                         estaPendiente
-                          ? "border-indigo-200 bg-indigo-50/40"
+                          ? "border-[#4A7C59]/40 dark:border-emerald-800 bg-[#E6EFE8]/70 dark:bg-emerald-950/30"
                           : oferta.estado === "aceptada"
-                            ? "border-emerald-200 bg-emerald-50/40"
-                            : "border-slate-200 bg-slate-50 opacity-85"
+                            ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30"
+                            : "border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 opacity-90"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-indigo-950 truncate" title={oferta.id_oferta}>
+                        <span className="text-xs font-bold text-[#2C2B28] dark:text-slate-100 truncate" title={oferta.id_oferta}>
                           Oferta #{oferta.id_oferta}
                         </span>
                         {estaPendiente ? (
@@ -850,23 +852,23 @@ export const VistaChofer: React.FC = () => {
                             data-testid={`cuenta-regresiva-${oferta.id_oferta}`}
                             className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border ${
                               segundosRestantes <= 10
-                                ? "text-rose-700 bg-rose-100 border-rose-300 animate-pulse"
-                                : "text-rose-600 bg-rose-50 border-rose-200"
+                                ? "text-rose-700 dark:text-rose-200 bg-rose-100 dark:bg-rose-950/60 border-rose-300 dark:border-rose-700 animate-pulse"
+                                : "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800"
                             }`}
                           >
-                            ⏱ {segundosRestantes}s
+                            {segundosRestantes}s
                           </span>
                         ) : (
                           <span
                             data-testid={`estado-oferta-${oferta.id_oferta}`}
-                            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700"
+                            className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#E5E0D4] dark:bg-slate-700 text-[#2C2B28] dark:text-slate-200"
                           >
                             {oferta.estado.toUpperCase()}
                           </span>
                         )}
                       </div>
 
-                      <div className="text-xs space-y-1 text-slate-700">
+                      <div className="text-xs space-y-1 text-[#2C2B28] dark:text-slate-300">
                         <div>
                           <span className="font-semibold text-slate-500 dark:text-slate-400">Viaje:</span>{" "}
                           <span className="font-mono text-[11px]">{oferta.id_viaje}</span>
@@ -937,9 +939,9 @@ export const VistaChofer: React.FC = () => {
         {/* Columna 2 y 3: Viaje Asignado, Controles de Transición y Reporte de Ubicación */}
         <div className="md:col-span-1 lg:col-span-2 space-y-6">
           {/* Tarjeta de Viaje Asignado y Máquina de Estados */}
-          <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+          <div className="bg-[#EFECE4] dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#2C2B28] dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
                 <IconoAuto size={16} aria-hidden="true" /> Viaje Asignado
               </h2>
               <span
@@ -947,10 +949,10 @@ export const VistaChofer: React.FC = () => {
                 data-testid="estado-viaje-chofer"
                 className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${
                   tieneViajeEnCurso
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    ? "bg-[#E6EFE8] dark:bg-emerald-950/60 text-[#3B694A] dark:text-emerald-300 border-[#4A7C59]/30 dark:border-emerald-800"
                     : estadoNormalizado === "finalizado"
-                      ? "bg-indigo-50 text-indigo-800 border-indigo-200"
-                      : "bg-slate-100 text-slate-600 border-slate-200"
+                      ? "bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800"
+                      : "bg-[#F7F5F0] dark:bg-slate-800 text-[#5E5B54] dark:text-slate-300 border-[#DDD8CC] dark:border-slate-700"
                 }`}
               >
                 {etiquetaEstadoViaje(viajeActivo?.estado)}
@@ -1009,7 +1011,7 @@ export const VistaChofer: React.FC = () => {
               </div>
             </>
             ) : (
-              <div className="p-5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-500">
+              <div className="p-5 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/50 border border-dashed border-[#D4CFC2] dark:border-slate-700 text-center text-xs text-[#5E5B54] dark:text-slate-400">
                 No tenés un viaje activo en este momento. Aceptá una oferta de la bandeja para asignarte un recorrido.
               </div>
             )}
@@ -1019,17 +1021,17 @@ export const VistaChofer: React.FC = () => {
               <div
                 id="resumen-cobro-chofer"
                 data-testid="resumen-cobro-chofer"
-                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${ultimoCobro.estado === "confirmado" ? "bg-emerald-50 border-emerald-200 text-emerald-950" : ultimoCobro.estado === "fallido" ? "bg-rose-50 border-rose-200 text-rose-950" : "bg-amber-50 border-amber-200 text-amber-950"}`}
+                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${ultimoCobro.estado === "confirmado" ? "bg-[#E6EFE8] dark:bg-emerald-950/40 border-[#4A7C59]/30 dark:border-emerald-800 text-[#2C2B28] dark:text-emerald-200" : ultimoCobro.estado === "fallido" ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-950 dark:text-rose-200" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-950 dark:text-amber-200"}`}
               >
                 <div>
-                  <span className={`font-bold uppercase tracking-wider text-[10px] block ${ultimoCobro.estado === "confirmado" ? "text-emerald-700" : ultimoCobro.estado === "fallido" ? "text-rose-700" : "text-amber-700"}`}>
+                  <span className={`font-bold uppercase tracking-wider text-[10px] block ${ultimoCobro.estado === "confirmado" ? "text-[#3B694A] dark:text-emerald-300" : ultimoCobro.estado === "fallido" ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300"}`}>
                     Recibo de Cobro Generado
                   </span>
                   <span className="font-semibold">
                     Cobro #{ultimoCobro.id_cobro} — Estado: {ultimoCobro.estado.toUpperCase()}
                   </span>
                 </div>
-                <span className={`text-base font-extrabold ${ultimoCobro.estado === "confirmado" ? "text-emerald-800" : ultimoCobro.estado === "fallido" ? "text-rose-800" : "text-amber-800"}`}>
+                <span className={`text-base font-extrabold ${ultimoCobro.estado === "confirmado" ? "text-[#3B694A] dark:text-emerald-300" : ultimoCobro.estado === "fallido" ? "text-rose-800 dark:text-rose-300" : "text-amber-800 dark:text-amber-300"}`}>
                   {formatearImporteArs(ultimoCobro.importe)}
                 </span>
               </div>
@@ -1045,8 +1047,8 @@ export const VistaChofer: React.FC = () => {
                 onClick={() => void marcarChoferEnCamino()}
                 className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
                   puedeMarcarEnCamino
-                    ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 cursor-pointer shadow-xs"
-                    : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                    ? "bg-[#4A7C59] hover:bg-[#3E6A4B] text-white border-[#4A7C59] cursor-pointer shadow-xs"
+                    : "bg-[#E5E0D4] dark:bg-slate-800 text-[#7A776F] dark:text-slate-500 border-[#D4CFC2] dark:border-slate-700 cursor-not-allowed"
                 }`}
               >
                 1. Chofer en Camino
@@ -1059,8 +1061,8 @@ export const VistaChofer: React.FC = () => {
                 onClick={() => void iniciarViajeEnCurso()}
                 className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
                   puedeIniciarViaje
-                    ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 cursor-pointer shadow-xs"
-                    : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                    ? "bg-[#4A7C59] hover:bg-[#3E6A4B] text-white border-[#4A7C59] cursor-pointer shadow-xs"
+                    : "bg-[#E5E0D4] dark:bg-slate-800 text-[#7A776F] dark:text-slate-500 border-[#D4CFC2] dark:border-slate-700 cursor-not-allowed"
                 }`}
               >
                 2. Iniciar Viaje
@@ -1073,8 +1075,8 @@ export const VistaChofer: React.FC = () => {
                 onClick={() => void finalizarYCobrarViaje()}
                 className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
                   puedeFinalizarViaje
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 cursor-pointer shadow-xs"
-                    : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                    ? "bg-[#4A7C59] hover:bg-[#3E6A4B] text-white border-[#4A7C59] cursor-pointer shadow-xs"
+                    : "bg-[#E5E0D4] dark:bg-slate-800 text-[#7A776F] dark:text-slate-500 border-[#D4CFC2] dark:border-slate-700 cursor-not-allowed"
                 }`}
               >
                 3. Finalizar y Cobrar
@@ -1083,13 +1085,13 @@ export const VistaChofer: React.FC = () => {
           </div>
 
           {/* Tarjeta de Envío de Ubicación Manual y Simulación GPS en Resistencia */}
-          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="bg-[#EFECE4] dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+                <h2 className="text-sm font-bold text-[#2C2B28] dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
                   <IconoPin size={16} aria-hidden="true" /> Reporte de Ubicación y Simulador GPS
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-[#5E5B54] dark:text-slate-400 mt-0.5">
                   Envía coordenadas a <code className="font-mono text-[11px]">POST /choferes/yo/ubicacion</code> (ms-flota).
                 </p>
               </div>
@@ -1100,7 +1102,7 @@ export const VistaChofer: React.FC = () => {
                   type="button"
                   disabled={enviandoUbicacion}
                   onClick={() => void avanzarPasoRutaSimulada()}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-[#CEC8BA] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 hover:bg-[#E5E0D4] dark:hover:bg-slate-700 text-[#2C2B28] dark:text-slate-200 text-xs font-bold transition cursor-pointer"
                 >
                   Avanzar 1 paso GPS
                 </button>
@@ -1112,10 +1114,10 @@ export const VistaChofer: React.FC = () => {
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                     simulandoGps
                       ? "bg-amber-600 hover:bg-amber-700 text-white"
-                      : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      : "bg-[#4A7C59]/15 dark:bg-emerald-950/50 hover:bg-[#4A7C59]/25 dark:hover:bg-emerald-900/60 text-[#3B694A] dark:text-emerald-300 border border-[#4A7C59]/30 dark:border-emerald-800"
                   }`}
                 >
-                  {simulandoGps ? "⏹ Detener ruta (2s)" : "▶ Simular ruta cada 2s"}
+                  {simulandoGps ? "Detener ruta (2s)" : "Simular ruta cada 2s"}
                 </button>
               </div>
             </div>
@@ -1123,7 +1125,7 @@ export const VistaChofer: React.FC = () => {
             {/* Formulario de envío manual de coordenadas */}
             <form onSubmit={(e) => void manejarEnvioUbicacionManual(e)} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               <div>
-                <label htmlFor="input-latitud-chofer" className="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label htmlFor="input-latitud-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
                   Latitud (Resistencia)
                 </label>
                 <input
@@ -1133,11 +1135,11 @@ export const VistaChofer: React.FC = () => {
                   step="0.0001"
                   value={latitudInput}
                   onChange={(e) => setLatitudInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
                 />
               </div>
               <div>
-                <label htmlFor="input-longitud-chofer" className="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label htmlFor="input-longitud-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
                   Longitud (Resistencia)
                 </label>
                 <input
@@ -1147,7 +1149,7 @@ export const VistaChofer: React.FC = () => {
                   step="0.0001"
                   value={longitudInput}
                   onChange={(e) => setLongitudInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
                 />
               </div>
               <button
@@ -1155,7 +1157,7 @@ export const VistaChofer: React.FC = () => {
                 data-testid="boton-enviar-ubicacion"
                 type="submit"
                 disabled={enviandoUbicacion}
-                className="w-full py-2 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition cursor-pointer"
+                className="w-full py-2 px-4 rounded-lg bg-[#4A7C59] hover:bg-[#3E6A4B] text-white text-xs font-bold transition cursor-pointer"
               >
                 {enviandoUbicacion ? "Enviando..." : "Enviar Ubicación"}
               </button>
@@ -1165,20 +1167,20 @@ export const VistaChofer: React.FC = () => {
             <div
               id="ultima-ubicacion-chofer"
               data-testid="ultima-ubicacion-chofer"
-              className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600"
+              className="p-3 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/70 border border-[#DDD8CC] dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[#5E5B54] dark:text-slate-300"
             >
               {ultimaUbicacion ? (
                 <>
                   <div>
-                    <span className="font-semibold text-slate-800">Última ubicación reportada: </span>
+                    <span className="font-semibold text-[#2C2B28] dark:text-slate-100">Última ubicación reportada: </span>
                     <span className="font-mono">
                       [{ultimaUbicacion.latitud.toFixed(4)}, {ultimaUbicacion.longitud.toFixed(4)}]
                     </span>
                     {ultimaUbicacion.etiqueta && (
-                      <span className="ml-2 text-emerald-700 font-semibold">— {ultimaUbicacion.etiqueta}</span>
+                      <span className="ml-2 text-[#4A7C59] dark:text-emerald-400 font-semibold">— {ultimaUbicacion.etiqueta}</span>
                     )}
                   </div>
-                  <span className="text-[11px] font-mono text-slate-500">
+                  <span className="text-[11px] font-mono text-[#5E5B54] dark:text-slate-400">
                     {new Date(ultimaUbicacion.actualizado_at).toLocaleTimeString("es-AR")}
                   </span>
                 </>

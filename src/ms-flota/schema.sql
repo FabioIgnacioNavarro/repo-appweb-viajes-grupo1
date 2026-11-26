@@ -35,5 +35,7 @@ CREATE INDEX IF NOT EXISTS ix_ubicacion_historica_viaje_fecha ON ubicacion_histo
 
 -- Datos de prueba reproducibles; no son credenciales ni datos personales.
 INSERT INTO usuario_chofer (id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado)
-VALUES ('11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', TRUE, FALSE, TRUE)
+VALUES
+  ('11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111', TRUE, FALSE, TRUE),
+  ('99999999-9999-4999-8999-999999999999', '99999999-9999-4999-8999-999999999999', TRUE, FALSE, TRUE)
 ON CONFLICT (usuario_id) DO NOTHING;

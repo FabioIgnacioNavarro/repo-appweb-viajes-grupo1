@@ -33,6 +33,7 @@ interface EstimacionDto {
 
 interface ViajeDto {
   id_viaje: string;
+  pasajero_id?: string;
   id_estimacion: string;
   precio_estimado: string;
   precio_final: string | null;
@@ -187,6 +188,7 @@ export const VistaPasajero: React.FC = () => {
   const [panelDevActivo, setPanelDevActivo] = useState(false);
   const [parametrosSimulacion, setParametrosSimulacion] = useState<ParametrosSimulacion>({});
   const parametrosSimulacionRef = useRef<ParametrosSimulacion>({});
+  const modoDevRef = useRef(modoDev);
   const claveConfirmacion = useRef<string | null>(null);
   const claveReintentoCobro = useRef<{ viajeId: string; valor: string } | null>(null);
   const bloqueoEnvio = useRef(false);
@@ -196,13 +198,26 @@ export const VistaPasajero: React.FC = () => {
   const debounceEstimacionRef = useRef<number | null>(null);
 
   useEffect(() => {
+    modoDevRef.current = modoDev;
+    if (!modoDev) {
+      setPanelDevActivo(false);
+      parametrosSimulacionRef.current = {};
+      setParametrosSimulacion({});
+    }
+  }, [modoDev]);
+
+  useEffect(() => {
     viajeActualRef.current = viaje;
   }, [viaje]);
 
   const sincronizarViajeActivo = useCallback(async () => {
     try {
       const respuesta = await clienteApi.get<DatosViajes>("/viajes");
-      const ordenados = respuesta.viajes
+      const listaFiltrada =
+        sesion?.rol === "ADMINISTRADOR" && sesion.idUsuario
+          ? respuesta.viajes.filter((elemento) => !elemento.pasajero_id || elemento.pasajero_id === sesion.idUsuario)
+          : respuesta.viajes;
+      const ordenados = listaFiltrada
         .sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en));
       const activo = ordenados
         .filter((elemento) => ESTADOS_ACTIVOS.has(elemento.estado.toLowerCase()))
@@ -329,7 +344,7 @@ export const VistaPasajero: React.FC = () => {
         origen: puntoOrigen,
         destino: puntoDestino
       };
-      if (haySimulacion) {
+      if (modoDevRef.current && haySimulacion) {
         cuerpo.simulacion = {
           ...(sim.hora !== undefined ? { hora: sim.hora } : {}),
           ...(sim.llueve !== undefined ? { llueve: sim.llueve } : {}),
@@ -573,11 +588,11 @@ export const VistaPasajero: React.FC = () => {
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6" aria-labelledby="titulo-pasajero">
-      <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
+      <div className="flex flex-col justify-between gap-3 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Panel de pasajero</p>
-          <h1 id="titulo-pasajero" className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">Hola, {sesion?.nombre || "Pasajero"}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Cotizá tu recorrido y confirmá el precio antes de pedir el viaje.</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#4A7C59] dark:text-emerald-400">Panel de pasajero</p>
+          <h1 id="titulo-pasajero" className="mt-1 text-2xl font-extrabold text-[#2C2B28] dark:text-slate-100">Hola, {sesion?.nombre || "Pasajero"}</h1>
+          <p className="mt-1 text-sm text-[#5E5B54] dark:text-slate-400">Cotizá tu recorrido y confirmá el precio antes de pedir el viaje.</p>
         </div>
       </div>
 
@@ -586,7 +601,7 @@ export const VistaPasajero: React.FC = () => {
           <strong>{error.codigo}:</strong> {error.mensaje}
         </div>
       )}
-      {aviso && <p role="status" className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">{aviso}</p>}
+      {aviso && <p role="status" className="rounded-xl border border-[#4A7C59]/30 dark:border-emerald-900/60 bg-[#E6EFE8] dark:bg-emerald-950/30 px-4 py-3 text-sm text-[#2C2B28] dark:text-emerald-200">{aviso}</p>}
 
       {modoDev && (
         <PanelDesarrollador
@@ -602,12 +617,12 @@ export const VistaPasajero: React.FC = () => {
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-5">
-          <form onSubmit={solicitarEstimacion} className="space-y-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm" aria-label="Calcular estimación del viaje">
+          <form onSubmit={solicitarEstimacion} className="space-y-4 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 p-5 shadow-sm" aria-label="Calcular estimación del viaje">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900 dark:text-slate-100">Tu recorrido</h2>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ingresá un destino o tocá el mapa para cotizar al instante.</p>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-100">Tu recorrido</h2>
+              <p className="mt-1 text-xs text-[#5E5B54] dark:text-slate-400">Ingresá un destino o tocá el mapa para cotizar al instante.</p>
             </div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="origen-viaje">
+            <label className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-300" htmlFor="origen-viaje">
               Origen
               <input
                 id="origen-viaje"
@@ -621,12 +636,12 @@ export const VistaPasajero: React.FC = () => {
                   programarEstimacionAutomatica(nuevoOrigen, destino, null, pinManualDestino);
                 }}
                 disabled={puedeCancelar}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-950 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
                 placeholder="Juan B. Justo 4, Resistencia"
                 required
               />
             </label>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="destino-viaje">
+            <label className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-300" htmlFor="destino-viaje">
               Destino
               <input
                 id="destino-viaje"
@@ -653,77 +668,77 @@ export const VistaPasajero: React.FC = () => {
                   );
                 }}
                 disabled={puedeCancelar}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm font-normal outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-950 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
                 placeholder="Ej.: Shopping Sarmiento, Resistencia"
                 required
               />
             </label>
             {calculandoEstimacion && (
-              <p className="text-xs font-medium text-indigo-600" role="status">
+              <p className="text-xs font-medium text-[#4A7C59] dark:text-emerald-400" role="status">
                 Calculando ruta y precio…
               </p>
             )}
-            {puedeCancelar && <p className="text-xs text-amber-700">Terminá o cancelá el viaje activo antes de solicitar otro.</p>}
+            {puedeCancelar && <p className="text-xs text-amber-800 dark:text-amber-300">Terminá o cancelá el viaje activo antes de solicitar otro.</p>}
           </form>
 
           {estimacion && !viaje && (
-            <section className="space-y-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 p-5" aria-labelledby="titulo-precio">
+            <section className="space-y-4 rounded-2xl border border-[#4A7C59]/30 dark:border-slate-700 bg-[#EFECE4] dark:bg-slate-900 p-5" aria-labelledby="titulo-precio">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 id="titulo-precio" className="text-xs font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Precio estimado</h2>
-                  <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{importePesos(estimacion.precio_estimado)}</p>
+                  <h2 id="titulo-precio" className="text-xs font-bold uppercase tracking-wide text-[#4A7C59] dark:text-emerald-400">Precio estimado</h2>
+                  <p className="mt-1 text-3xl font-extrabold tracking-tight text-[#2C2B28] dark:text-slate-100">{importePesos(estimacion.precio_estimado)}</p>
                   {modoDev && (
-                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-testid="estimacion-meta-dev">{estimacion.zona} · regla v{estimacion.version_regla}</p>
+                    <p className="mt-1 text-xs text-[#5E5B54] dark:text-slate-300" data-testid="estimacion-meta-dev">{estimacion.zona} · regla v{estimacion.version_regla}</p>
                   )}
                 </div>
                 {modoDev && (
-                  <span className="rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm font-extrabold text-amber-900 dark:text-amber-300" data-testid="estimacion-multiplicador-dev">
+                  <span className="rounded-lg border border-[#4A7C59]/40 dark:border-amber-700 bg-[#F7F5F0] dark:bg-slate-800 px-2.5 py-1.5 text-sm font-extrabold text-[#4A7C59] dark:text-amber-300" data-testid="estimacion-multiplicador-dev">
                     ×{estimacion.multiplicador_demanda.toFixed(2)}
                   </span>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-800 p-3"><span className="block text-slate-500 dark:text-slate-400">Distancia</span><strong className="mt-1 block text-slate-900 dark:text-slate-100">{(estimacion.distancia_metros / 1000).toFixed(1)} km</strong></div>
-                <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-800 p-3"><span className="block text-slate-500 dark:text-slate-400">Duración aprox.</span><strong className="mt-1 block text-slate-900 dark:text-slate-100">{Math.max(1, Math.ceil(estimacion.duracion_segundos / 60))} min</strong></div>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-3"><span className="block text-[#5E5B54] dark:text-slate-300">Distancia</span><strong className="mt-1 block text-[#2C2B28] dark:text-slate-100">{(estimacion.distancia_metros / 1000).toFixed(1)} km</strong></div>
+                <div className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-3"><span className="block text-[#5E5B54] dark:text-slate-300">Duración aprox.</span><strong className="mt-1 block text-[#2C2B28] dark:text-slate-100">{Math.max(1, Math.ceil(estimacion.duracion_segundos / 60))} min</strong></div>
               </div>
 
               {modoDev && (
                 <div data-testid="estimacion-factores-dev">
-                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Factores del precio</h3>
+                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#4A7C59] dark:text-emerald-300">Factores del precio</h3>
                   <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                     {camposFactor.map((campo) => (
-                      <div key={campo.clave} className="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-white/80 dark:bg-slate-800/80 p-2.5">
-                        <dt className="text-slate-500 dark:text-slate-400">{campo.etiqueta}</dt>
-                        <dd className="mt-0.5 font-semibold capitalize text-slate-900 dark:text-slate-100">{campo.mostrar(estimacion.factores_precio[campo.clave])}</dd>
+                      <div key={campo.clave} className="rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 p-2.5">
+                        <dt className="text-[#5E5B54] dark:text-slate-300">{campo.etiqueta}</dt>
+                        <dd className="mt-0.5 font-semibold capitalize text-[#2C2B28] dark:text-slate-100">{campo.mostrar(estimacion.factores_precio[campo.clave])}</dd>
                       </div>
                     ))}
                   </dl>
                 </div>
               )}
 
-              <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${segundosVigencia > 0 ? "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300" : "bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300"}`} aria-live="polite">
+              <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${segundosVigencia > 0 ? "bg-[#F7F5F0] dark:bg-slate-800 text-[#4A7C59] dark:text-emerald-300 border border-[#DDD8CC] dark:border-slate-700" : "bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300"}`} aria-live="polite">
                 {segundosVigencia > 0 ? `Este precio vence en ${formatearTiempo(segundosVigencia)}` : "La estimación venció. Volvé a elegir destino para recalcular."}
               </div>
-              <button type="button" onClick={() => void confirmarViaje()} disabled={procesando || calculandoEstimacion || segundosVigencia <= 0} className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => void confirmarViaje()} disabled={procesando || calculandoEstimacion || segundosVigencia <= 0} className="w-full rounded-xl bg-[#4A7C59] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#3E6A4B] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
                 {procesando ? "Confirmando…" : "Confirmar viaje"}
               </button>
             </section>
           )}
 
           {viaje && (
-            <section className="space-y-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-slate-900 p-5 shadow-sm" aria-labelledby="titulo-viaje-activo">
+            <section className="space-y-4 rounded-2xl border border-[#4A7C59]/30 dark:border-emerald-900/50 bg-[#EFECE4] dark:bg-slate-900 p-5 shadow-sm" aria-labelledby="titulo-viaje-activo">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 id="titulo-viaje-activo" className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <h2 id="titulo-viaje-activo" className="text-xs font-bold uppercase tracking-wide text-[#5E5B54] dark:text-slate-400">
                     {estadoViaje === "sin_choferes_disponibles" ? "Sin chofer disponible" : estadoViaje === "finalizado" ? "Viaje finalizado" : "Viaje confirmado"}
                   </h2>
-                  <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">{importePesos(viaje.precio_final ?? viaje.precio_estimado)}</p>
+                  <p className="mt-1 text-2xl font-extrabold text-[#2C2B28] dark:text-slate-100">{importePesos(viaje.precio_final ?? viaje.precio_estimado)}</p>
                 </div>
                 <InsigniaEstadoViaje estado={viaje.estado} />
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400">El precio y sus factores se mantienen congelados desde la confirmación.</p>
-              <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-200 dark:border-red-800/60 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-red-700 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-50">
+              <p className="text-xs text-[#5E5B54] dark:text-slate-400">El precio y sus factores se mantienen congelados desde la confirmación.</p>
+              <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-300 dark:border-red-800/60 bg-[#F7F5F0] dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-red-700 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-50">
                 {procesando ? "Procesando…" : puedeCancelar ? "Cancelar viaje" : etiquetaEstado(viaje.estado)}
               </button>
             </section>
@@ -758,15 +773,15 @@ export const VistaPasajero: React.FC = () => {
           )}
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm lg:sticky lg:top-24" aria-label="Recorrido estimado">
-          <div className="flex flex-col justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-5 py-4 sm:flex-row sm:items-center">
+        <section className="overflow-hidden rounded-2xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 shadow-sm lg:sticky lg:top-24" aria-label="Recorrido estimado">
+          <div className="flex flex-col justify-between gap-2 border-b border-[#DDD8CC] dark:border-slate-800 px-5 py-4 sm:flex-row sm:items-center">
             <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Recorrido</h2>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Tocá el mapa o arrastrá los pines para ajustar tu viaje.</p>
+              <h2 className="text-sm font-bold text-[#2C2B28] dark:text-slate-100">Recorrido</h2>
+              <p className="mt-0.5 text-xs text-[#5E5B54] dark:text-slate-400">Tocá el mapa o arrastrá los pines para ajustar tu viaje.</p>
             </div>
-            {estimacion && <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{(estimacion.distancia_metros / 1000).toFixed(1)} km · {Math.ceil(estimacion.duracion_segundos / 60)} min</span>}
+            {estimacion && <span className="text-xs font-semibold text-[#5E5B54] dark:text-slate-300">{(estimacion.distancia_metros / 1000).toFixed(1)} km · {Math.ceil(estimacion.duracion_segundos / 60)} min</span>}
           </div>
-          <div className="relative h-[440px] bg-slate-100 dark:bg-slate-950">
+          <div className="relative h-[440px] bg-[#E5E0D4] dark:bg-slate-950">
             <MapaLeaflet
               altura="440px"
               sinBorde
@@ -776,7 +791,7 @@ export const VistaPasajero: React.FC = () => {
               onSeleccionarPunto={puedeCancelar ? undefined : manejarPinArrastrado}
             />
             {!estimacion && !viaje && (
-              <div className="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-[400] rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 shadow-xs">
+              <div className="pointer-events-none absolute top-3 left-3 right-3 sm:right-auto z-[400] rounded-lg border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0]/95 dark:bg-slate-900/95 px-3 py-2 text-xs text-[#2C2B28] dark:text-slate-200 shadow-xs">
                 Elegí un destino escribiendo la dirección o tocando el mapa para calcular el precio automáticamente.
               </div>
             )}

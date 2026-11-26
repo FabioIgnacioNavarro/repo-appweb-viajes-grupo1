@@ -201,10 +201,10 @@ export const VistaLogin: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto py-8 sm:py-12 space-y-8" data-testid="vista-login">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#2C2B28] dark:text-slate-100 tracking-tight">
           Bienvenido a Che Viaje
         </h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+        <p className="text-sm text-[#5E5B54] dark:text-slate-400 max-w-md mx-auto leading-relaxed">
           Iniciá sesión con tu cuenta para pedir viajes o gestionar tu jornada.
         </p>
       </div>
@@ -219,7 +219,7 @@ export const VistaLogin: React.FC = () => {
               autoComplete="username"
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
-              placeholder="tu usuario"
+              placeholder="Usuario o correo electrónico"
               required
             />
             <CampoTexto
@@ -260,28 +260,28 @@ export const VistaLogin: React.FC = () => {
       </div>
 
       {modoDev && (
-        <details open className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4 sm:p-5 space-y-4 shadow-xs" data-testid="panel-demo-dev">
-          <summary className="cursor-pointer font-semibold text-sm text-slate-800 dark:text-slate-200">
+        <details open className="rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 p-4 sm:p-5 space-y-4 shadow-xs" data-testid="panel-demo-dev">
+          <summary className="cursor-pointer font-semibold text-sm text-[#2C2B28] dark:text-slate-200">
             Opciones de acceso para demo y desarrollo
           </summary>
 
-          <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
-            En el emulador local: usuarios <code className="font-mono font-semibold text-slate-800 dark:text-slate-200">ana</code>, <code className="font-mono font-semibold text-slate-800 dark:text-slate-200">carlos</code>, <code className="font-mono font-semibold text-slate-800 dark:text-slate-200">lucia</code> o <code className="font-mono font-semibold text-slate-800 dark:text-slate-200">martin</code>; contraseña de prueba <code className="font-mono font-semibold text-slate-800 dark:text-slate-200">ViajesDemo2026!</code>.
+          <p className="mt-3 text-xs text-[#5E5B54] dark:text-slate-400">
+            En el emulador local: usuarios <code className="font-mono font-semibold text-[#2C2B28] dark:text-slate-200">ana</code>, <code className="font-mono font-semibold text-[#2C2B28] dark:text-slate-200">carlos</code>, <code className="font-mono font-semibold text-[#2C2B28] dark:text-slate-200">lucia</code> o <code className="font-mono font-semibold text-[#2C2B28] dark:text-slate-200">martin</code>; contraseña de prueba <code className="font-mono font-semibold text-[#2C2B28] dark:text-slate-200">ViajesDemo2026!</code>.
           </p>
 
           <div className="mt-4 space-y-6">
             {/* Selector de modo de emisión de credenciales */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 px-4 py-3 text-xs">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">Modo de emisión de credenciales:</span>
-              <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-200/70 dark:bg-slate-800 p-1 w-full sm:w-auto" role="group" aria-label="Modo de token">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#F7F5F0] dark:bg-slate-950/60 px-4 py-3 text-xs">
+              <span className="font-semibold text-[#2C2B28] dark:text-slate-200">Modo de emisión de credenciales:</span>
+              <div className="flex flex-wrap items-center gap-1 rounded-lg bg-[#E5E0D4] dark:bg-slate-800 p-1 w-full sm:w-auto" role="group" aria-label="Modo de token">
                 <button
                   type="button"
                   data-testid="modo-token-emulador"
                   onClick={() => setModoToken("emulador")}
                   className={`flex-1 sm:flex-none min-h-[36px] px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
                     modoToken === "emulador"
-                      ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
-                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                      ? "bg-[#F7F5F0] dark:bg-slate-900 text-[#4A7C59] dark:text-emerald-300 shadow-xs"
+                      : "text-[#5E5B54] dark:text-slate-300 hover:text-[#2C2B28] dark:hover:text-slate-100"
                   }`}
                 >
                   Emulador JWKS (RS256)
@@ -292,8 +292,8 @@ export const VistaLogin: React.FC = () => {
                   onClick={() => setModoToken("falso")}
                   className={`flex-1 sm:flex-none min-h-[36px] px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
                     modoToken === "falso"
-                      ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
-                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
+                      ? "bg-[#F7F5F0] dark:bg-slate-900 text-[#4A7C59] dark:text-emerald-300 shadow-xs"
+                      : "text-[#5E5B54] dark:text-slate-300 hover:text-[#2C2B28] dark:hover:text-slate-100"
                   }`}
                   title="Solo para entornos locales con JWT_MODO=falso fuera de producción"
                 >
@@ -310,7 +310,7 @@ export const VistaLogin: React.FC = () => {
                   type="button"
                   disabled={cargando}
                   onClick={() => iniciarConPerfil(p)}
-                  className={`p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 text-left transition-all cursor-pointer flex flex-col justify-between gap-4 group ${p.colorBorde}`}
+                  className={`p-5 rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#F7F5F0] dark:bg-slate-800/60 hover:bg-[#FCFBF8] dark:hover:bg-slate-800 text-left transition-all cursor-pointer flex flex-col justify-between gap-4 group ${p.colorBorde}`}
                 >
                   <div className="space-y-3 w-full">
                     <div className="flex items-start justify-between gap-2">

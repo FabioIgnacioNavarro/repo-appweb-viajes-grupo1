@@ -49,18 +49,36 @@ export function distanciaHaversineMetros(origen: Coordenada, destino: Coordenada
 }
 
 function exigirChofer(actor: ActorAutenticado): void {
-  if (actor.rol !== "CHOFER") throw new ErrorFlota("ROL_NO_AUTORIZADO", "Solo un chofer puede ejecutar esta operación.");
+  if (actor.rol !== "CHOFER" && actor.rol !== "ADMINISTRADOR") {
+    throw new ErrorFlota("ROL_NO_AUTORIZADO", "Solo un chofer o administrador puede ejecutar esta operación.");
+  }
 }
 function exigirChoferExistente(chofer: Chofer | undefined): Chofer {
   if (!chofer) throw new ErrorFlota("CHOFER_NO_ENCONTRADO", "El perfil de chofer no existe.");
   return chofer;
+}
+async function obtenerOHabilitarChofer(choferes: RepositorioChoferes, actor: ActorAutenticado, ahora: Date): Promise<Chofer> {
+  const existente = await choferes.obtenerPorUsuario(actor.idUsuario);
+  if (existente) return existente;
+  if (actor.rol === "ADMINISTRADOR") {
+    return choferes.guardar({
+      id: actor.idUsuario,
+      usuarioId: actor.idUsuario,
+      habilitado: true,
+      disponibilidad: false,
+      carnetConducirValidado: true,
+      fechaCreacion: new Date(ahora),
+      fechaActualizacion: new Date(ahora),
+    });
+  }
+  return exigirChoferExistente(undefined);
 }
 
 export class CambiarDisponibilidadChofer {
   constructor(private readonly choferes: RepositorioChoferes) {}
   async ejecutar(actor: ActorAutenticado, disponibilidad: boolean, ahora = new Date()): Promise<Chofer> {
     exigirChofer(actor);
-    const chofer = exigirChoferExistente(await this.choferes.obtenerPorUsuario(actor.idUsuario));
+    const chofer = await obtenerOHabilitarChofer(this.choferes, actor, ahora);
     if (!chofer.habilitado || !chofer.carnetConducirValidado) throw new ErrorFlota("CHOFER_NO_HABILITADO", "El chofer no está habilitado para operar.");
     return this.choferes.guardar({ ...chofer, disponibilidad, fechaActualizacion: new Date(ahora) });
   }
@@ -70,7 +88,7 @@ export class RegistrarUbicacionActual {
   constructor(private readonly choferes: RepositorioChoferes, private readonly ubicaciones: RepositorioUbicaciones, private readonly id: () => string) {}
   async ejecutar(actor: ActorAutenticado, coordenada: Coordenada, actualizadoAt = new Date(), precisionMetros?: number): Promise<UbicacionActual> {
     exigirChofer(actor); validarCoordenada(coordenada);
-    const chofer = exigirChoferExistente(await this.choferes.obtenerPorUsuario(actor.idUsuario));
+    const chofer = await obtenerOHabilitarChofer(this.choferes, actor, actualizadoAt);
     if (!chofer.habilitado || !chofer.carnetConducirValidado) throw new ErrorFlota("CHOFER_NO_HABILITADO", "El chofer no está habilitado para informar ubicación.");
     if (Number.isNaN(actualizadoAt.getTime())) throw new ErrorFlota("FECHA_INVALIDA", "La fecha de ubicación no es válida.");
     if (precisionMetros !== undefined && (!Number.isFinite(precisionMetros) || precisionMetros < 0)) throw new ErrorFlota("PRECISION_INVALIDA", "La precisión debe ser un número positivo.");
