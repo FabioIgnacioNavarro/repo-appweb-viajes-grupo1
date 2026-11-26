@@ -358,7 +358,7 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     await expect(alerta409).toBeVisible();
     await expect(alerta409).toContainText("La oferta ya no está disponible");
     await expect(alerta409).toContainText("ASIGNACION_EN_CONFLICTO");
-    await expect(page.getByTestId("motivo-oferta-oferta-409")).toContainText("Ya tomada por otro chofer");
+    await expect(page.getByTestId("tarjeta-oferta-oferta-409")).toHaveCount(0);
 
     // Validar layout responsive en 768px y 1024px
     await page.setViewportSize({ width: 768, height: 1024 });
