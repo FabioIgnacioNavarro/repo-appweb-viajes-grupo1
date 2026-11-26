@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Rol } from "./tipos";
-import { estaAutenticado, obtenerSesion, suscribirSesion } from "./sesion";
+import { obtenerSesion, suscribirSesion } from "./sesion";
 
 export type Ruta = "login" | "pasajero" | "chofer" | "operador" | "admin" | "no_autorizado";
 

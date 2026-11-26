@@ -392,7 +392,7 @@ test("adaptador PostgreSQL de ms-viajes: concurrencia, idempotencia e invariante
     const actorPasajero: ActorAutenticado = { idUsuario: pasajeroId, rol: "PASAJERO" };
     const actorChofer: ActorAutenticado = { idUsuario: choferId, rol: "CHOFER" };
 
-    const [resAceptar, resCancelar] = await Promise.allSettled([
+    const [_resAceptar, _resCancelar] = await Promise.allSettled([
       aceptar.ejecutar(actorChofer, oferta.id, ahora),
       cancelar.ejecutar(actorPasajero, viajeId, "Cambio de planes", ahora)
     ]);

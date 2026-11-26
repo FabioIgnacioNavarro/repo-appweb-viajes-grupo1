@@ -526,7 +526,7 @@ function obtenerDocker(argumentos, entrada) {
     return execFileSync(comando, resto, { cwd: RAIZ, input: entrada, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
   } catch (error) {
     const detalle = String(error.stderr ?? error.message).trim().split(/\r?\n/).slice(-3).join(" ");
-    throw new Error(`Falló ${comando} ${resto.slice(0, 3).join(" ")}: ${detalle}`);
+    throw new Error(`Falló ${comando} ${resto.slice(0, 3).join(" ")}: ${detalle}`, { cause: error });
   }
 }
 

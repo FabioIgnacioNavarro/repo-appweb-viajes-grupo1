@@ -1,5 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
-import { distanciaHaversineMetros, type Chofer, type ChoferCercano, type Coordenada, type RepositorioChoferes, type RepositorioUbicaciones, type UbicacionActual } from "./dominio";
+import { type Chofer, type ChoferCercano, type Coordenada, type RepositorioChoferes, type RepositorioUbicaciones, type UbicacionActual } from "./dominio";
 
 type FilaChofer = {
   id: string; usuario_id: string; habilitado: boolean; disponibilidad: boolean;

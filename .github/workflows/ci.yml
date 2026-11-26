@@ -11,6 +11,32 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  analisis-estatico:
+    name: Análisis estático, Lint y Seguridad
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar ESLint, fronteras hexagonales y chequeo de tipos
+        run: npm run lint
+
+      - name: Auditar vulnerabilidades de dependencias (high/critical)
+        run: npm audit --audit-level=high
+
+      - name: Validar sintaxis de Docker Compose
+        run: docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml config --quiet
+
   unit-integracion:
     name: Build, Unit e Integración PostgreSQL
     runs-on: ubuntu-latest
@@ -138,6 +164,9 @@ jobs:
 
       - name: Levantar pila completa en Docker Compose
         run: docker compose up -d --build --wait
+
+      - name: Validar configuración de Nginx en vivo
+        run: docker compose exec -T nginx nginx -t
 
       - name: Ejecutar suite E2E contra Nginx Gateway
         env:

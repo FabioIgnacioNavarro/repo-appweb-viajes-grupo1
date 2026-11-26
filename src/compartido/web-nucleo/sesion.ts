@@ -113,7 +113,7 @@ export function decodificarPayloadJwt(token: string): Record<string, unknown> {
 
     return JSON.parse(json);
   } catch (err) {
-    throw new Error("No se pudo decodificar el payload del token JWT.");
+    throw new Error("No se pudo decodificar el payload del token JWT.", { cause: err });
   }
 }
 
@@ -170,7 +170,7 @@ export function obtenerSesion(): UsuarioSesion | null {
         return sesionEnMemoria;
       }
     }
-  } catch (e) {
+  } catch {
     // Fallback silencioso ante modo privado estricto
   }
 
@@ -215,7 +215,7 @@ export function iniciarSesion(token: string, datosOpcionales?: Partial<UsuarioSe
     if (typeof window !== "undefined" && window.sessionStorage) {
       window.sessionStorage.setItem(CLAVE_STORAGE, JSON.stringify(nuevaSesion));
     }
-  } catch (e) {
+  } catch {
     // En entornos sin storage, se mantiene en memoria
   }
 
@@ -235,7 +235,7 @@ export function cerrarSesion(motivo?: string): void {
     if (typeof window !== "undefined" && window.sessionStorage) {
       window.sessionStorage.removeItem(CLAVE_STORAGE);
     }
-  } catch (e) {
+  } catch {
     // Ignorar
   }
   notificarCambio();

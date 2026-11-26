@@ -152,6 +152,13 @@ test.describe("SEG-003 / SEG-005 - Hardening del front y CSP", () => {
     await page.route("**/choferes/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ofertas: [] }) })
     );
+    await page.route("**/tarifas/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ direccion: "Av. Colón 450, Córdoba" }),
+      })
+    );
     await page.route("https://tile.openstreetmap.org/**", async (route) => {
       solicitudesTiles += 1;
       await route.fulfill({

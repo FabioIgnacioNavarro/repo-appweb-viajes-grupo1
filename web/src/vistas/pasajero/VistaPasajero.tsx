@@ -214,9 +214,7 @@ export const VistaPasajero: React.FC = () => {
           : respuesta.viajes;
       const ordenados = listaFiltrada
         .sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en));
-      const activo = ordenados
-        .filter((elemento) => ESTADOS_ACTIVOS.has(elemento.estado.toLowerCase()))
-        [0];
+      const activo = ordenados.find((elemento) => ESTADOS_ACTIVOS.has(elemento.estado.toLowerCase()));
       const ultimoFinalizado = ordenados.find((elemento) => elemento.estado.toLowerCase() === "finalizado");
       const viajeMostrable = activo ?? ultimoFinalizado ?? null;
       setViaje(viajeMostrable);
@@ -234,10 +232,10 @@ export const VistaPasajero: React.FC = () => {
     } catch {
       // La vista conserva el estado visible si el backend no está disponible temporalmente.
     }
-  }, []);
+  }, [sesion?.idUsuario, sesion?.rol]);
 
   useEffect(() => {
-    if (sesion?.rol !== "PASAJERO") return;
+    if (sesion?.rol !== "PASAJERO" && sesion?.rol !== "ADMINISTRADOR") return;
     void sincronizarViajeActivo();
     return clienteTiempoReal.alReconectar(() => { void sincronizarViajeActivo(); });
   }, [sesion?.rol, sincronizarViajeActivo]);
@@ -296,20 +294,24 @@ export const VistaPasajero: React.FC = () => {
     return undefined;
   }, [estimacion, polilineaViaje]);
 
+  const origenLatitud = origenMapa?.latitud;
+  const origenLongitud = origenMapa?.longitud;
   const origenPinMapa = useMemo<PuntoMapa | undefined>(
     () =>
-      origenMapa
-        ? { latitud: origenMapa.latitud, longitud: origenMapa.longitud, titulo: origen, tipo: "origen" }
+      origenLatitud !== undefined && origenLongitud !== undefined
+        ? { latitud: origenLatitud, longitud: origenLongitud, titulo: origen, tipo: "origen" }
         : undefined,
-    [origenMapa?.latitud, origenMapa?.longitud, origen]
+    [origenLatitud, origenLongitud, origen]
   );
 
+  const destinoLatitud = destinoMapa?.latitud;
+  const destinoLongitud = destinoMapa?.longitud;
   const destinoPinMapa = useMemo<PuntoMapa | undefined>(
     () =>
-      destinoMapa
-        ? { latitud: destinoMapa.latitud, longitud: destinoMapa.longitud, titulo: destino, tipo: "destino" }
+      destinoLatitud !== undefined && destinoLongitud !== undefined
+        ? { latitud: destinoLatitud, longitud: destinoLongitud, titulo: destino, tipo: "destino" }
         : undefined,
-    [destinoMapa?.latitud, destinoMapa?.longitud, destino]
+    [destinoLatitud, destinoLongitud, destino]
   );
 
   const invalidarEstimacion = useCallback(() => {
