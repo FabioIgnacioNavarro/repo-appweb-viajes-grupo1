@@ -14,7 +14,8 @@ Esta carpeta reúne el diseño y la evidencia del trabajo práctico. Se completa
 - [Backlog](backlog.md): tareas, prioridades y criterios de aceptación.
 - [Mediciones](mediciones.md): plan reproducible para la tarea pesada y la concurrencia.
 - [Ataque cruzado](ataque.md): plantilla para registrar intentos y hallazgos.
-- [Temas especiales de cátedra](temas-catedra.md): justificación de temas elegidos (18, 19, 20) y descartados (1 - Redis).
+- [Temas especiales de cátedra](temas-catedra.md): justificación de temas elegidos (18, 19, 20), uso documentado de microservicios (Tema 4) y tema descartado (1 - Redis).
+- [Demostración de Microservicios (Tema 4)](demo-microservicios.md): arquitectura por servicio, costos frente a un monolito modular y prueba reproducible ante caída controlada.
 - [Demostración de Observabilidad](demo-observabilidad.md): guía paso a paso para la demo de trazas distribuidas y errores en Jaeger (Tema 18).
 - [Informe técnico](informe.md): arquitectura, decisiones, mediciones registradas, seguridad y limitaciones conocidas.
 - [Guion de demostración](guion-demo.md): preparación, tiempos y secuencia para presentar los flujos del proyecto.

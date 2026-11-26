@@ -51,7 +51,20 @@ Este documento registra los temas especiales seleccionados por el grupo para su 
 
 ---
 
-## 2. Tema Descartado y Justificación Técnica
+## 2. Tema Base Documentado en la Arquitectura
+
+### Tema 4 — Arquitectura: Monolito modular y microservicios
+* **Pregunta guía:** ¿Cuándo conviene separar un módulo como servicio y qué costo introduce?
+* **Justificación en el proyecto:**
+  * Aunque no forma parte de los 3 temas especiales elegidos (18, 19 y 20), toda la plataforma implementa explícitamente una separación en **tres microservicios independientes** (`ms-viajes`, `ms-tarifas` y `ms-flota`) manteniendo dentro de cada uno una **arquitectura hexagonal modular** ([ADR 0016](adr/0016-microservicios-y-autenticacion-externa.md)).
+  * Se decidió separar servicios para aislar cargas heterogéneas (actualizaciones GPS frecuentes en `ms-flota`, integraciones externas y cálculo dinámico en `ms-tarifas`, y consistencia transaccional de viajes/cobros en `ms-viajes`), obligar a explicitar contratos HTTP ([docs/api.md](api.md)) y separar datos sin consultas SQL cruzadas.
+  * **Costos asumidos:** introduce llamadas por red HTTP en lugar de memoria ([ADR 0030](adr/0030-integracion-http-entre-servicios.md)), manejo explícito de timeouts, reintentos limitados y fallo cerrado `503 DEPENDENCIA_NO_DISPONIBLE` ([ADR 0022](adr/0022-fallas-dependencias-entre-servicios.md), [ADR 0023](adr/0023-timeouts-reintentos-servicios.md)), necesidad de propagar identidad JWT y trazas W3C `traceparent`, y mayor complejidad operativa en Compose/Nginx.
+* **Demostración práctica documentada:**
+  * Verificación local de fronteras hexagonales (`npm run lint:arquitectura`) y pruebas de resiliencia ante fallas simuladas (`tests/ms-viajes/fallas-dependencias.test.ts`), además del paso a paso en Docker Compose provocando la caída controlada de `ms-flota` en [docs/demo-microservicios.md](demo-microservicios.md).
+
+---
+
+## 3. Tema Descartado y Justificación Técnica
 
 ### Tema 1 — Datos y caché: Redis: caché y datos efímeros
 * **Pregunta guía de la cátedra:** ¿Qué datos conviene mantener en memoria y cómo evitar información obsoleta?
