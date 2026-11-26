@@ -4,7 +4,7 @@ import { ErrorDominio, type Coordenada, type EstimacionVigente, type FuenteCandi
 type RespuestaEstimacion = {
   id_estimacion: string; precio_estimado: string; moneda: string; multiplicador_demanda: number;
   factores_precio: Record<string, unknown>; version_regla: number; creada_en: string; vigente_hasta: string;
-  origen: { latitud: number; longitud: number }; destino: { latitud: number; longitud: number };
+  origen: { latitud: number; longitud: number; direccion?: string }; destino: { latitud: number; longitud: number; direccion?: string };
 };
 
 export class ClienteTarifasHttp {
@@ -40,4 +40,9 @@ export class ClienteFlotaHttp implements FuenteCandidatos {
 }
 
 function fechaValida(valor: unknown): valor is string { return typeof valor === "string" && Number.isFinite(Date.parse(valor)); }
-function coordenadaValida(valor: unknown): valor is Coordenada { return typeof valor === "object" && valor !== null && "latitud" in valor && "longitud" in valor && Number.isFinite((valor as Coordenada).latitud) && Number.isFinite((valor as Coordenada).longitud); }
+function coordenadaValida(valor: unknown): valor is Coordenada {
+  if (typeof valor !== "object" || valor === null || !("latitud" in valor) || !("longitud" in valor)) return false;
+  const punto = valor as Coordenada;
+  return Number.isFinite(punto.latitud) && Number.isFinite(punto.longitud) &&
+    (punto.direccion === undefined || (typeof punto.direccion === "string" && punto.direccion.length <= 500));
+}

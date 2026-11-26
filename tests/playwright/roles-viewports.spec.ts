@@ -112,7 +112,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
   }) => {
     // 1.1 Iniciar en pantalla de Login
     await page.goto("/#/login");
-    await expect(page.locator("h1")).toContainText(/Bienvenido a Che Viaje/i);
+    await expect(page.locator("h1")).toContainText(/Bienvenido a Viapp/i);
 
     // 1.2 PASAJERO: Ana Gómez
     await iniciarConPerfilDemo(page, /Ana Gómez/i);
@@ -285,7 +285,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page).toHaveURL(/#\/login/);
 
     // Verificar que en login no queda ninguna sesión activa
-    await expect(page.locator("header")).toContainText("Che Viaje");
+    await expect(page.locator("header")).toContainText("Viapp");
     await expect(page.getByTestId("boton-modo-dev")).toBeVisible();
     await expect(page.locator("header button:has-text('Salir')")).toHaveCount(0);
   });

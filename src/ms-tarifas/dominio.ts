@@ -1,4 +1,4 @@
-export interface Coordenada { latitud: number; longitud: number; }
+export interface Coordenada { latitud: number; longitud: number; direccion?: string; }
 export interface ZonaTarifaria {
   id: string;
   nombre: string;
@@ -314,20 +314,24 @@ export class CrearEstimacion {
   ) {}
 
   private async resolverPunto(punto: PuntoUbicacion, centroReferencia?: Coordenada): Promise<Coordenada> {
+    const direccion = typeof punto.direccion === "string" ? punto.direccion.trim() : undefined;
+    if (typeof punto.direccion === "string" && (!direccion || direccion.length > 500)) {
+      throw new ErrorTarifas("DIRECCION_INVALIDA", "La dirección debe contener entre 1 y 500 caracteres.");
+    }
     if ("latitud" in punto && "longitud" in punto && typeof punto.latitud === "number" && typeof punto.longitud === "number") {
       validarCoordenada(punto);
-      return punto;
+      return { latitud: punto.latitud, longitud: punto.longitud, ...(direccion ? { direccion } : {}) };
     }
-    if ("direccion" in punto && typeof punto.direccion === "string") {
+    if (direccion) {
       if (!this.geocodificador) {
         throw new ErrorTarifas("GEOCODIFICADOR_NO_CONFIGURADO", "No se configuró un geocodificador para resolver direcciones en texto.");
       }
       const coord = await this.geocodificador.geocodificar(
-        punto.direccion,
+        direccion,
         centroReferencia ? { centro: centroReferencia } : undefined
       );
       validarCoordenada(coord);
-      return coord;
+      return { latitud: coord.latitud, longitud: coord.longitud, direccion };
     }
     throw new ErrorTarifas("COORDENADAS_INVALIDAS", "El punto de ubicación no es válido.");
   }

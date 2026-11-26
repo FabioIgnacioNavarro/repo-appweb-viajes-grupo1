@@ -27,7 +27,8 @@ type FilaZona = {
 
 type FilaEstimacion = {
   id: string; pasajero_id: string; origen_latitud: string; origen_longitud: string;
-  destino_latitud: string; destino_longitud: string; zona_id: string; zona_nombre: string;
+  destino_latitud: string; destino_longitud: string; origen_direccion: string | null; destino_direccion: string | null;
+  zona_id: string; zona_nombre: string;
   zona_latitud_centro: string; zona_longitud_centro: string; zona_radio_metros: number;
   zona_horaria: string; precio_estimado: string; distancia_metros: number;
   duracion_segundos: number; proveedor_ruta: EstimacionTarifa["proveedorRuta"];
@@ -141,11 +142,13 @@ export class RepositorioEstimacionesPostgres implements RepositorioEstimaciones 
   async guardar(estimacion: EstimacionTarifa): Promise<void> {
     await this.pool.query(`INSERT INTO tarifa.estimacion (
       id, pasajero_id, origen_latitud, origen_longitud, destino_latitud, destino_longitud,
+      origen_direccion, destino_direccion,
       zona_id, precio_estimado, distancia_metros, duracion_segundos, proveedor_ruta, polilinea,
       multiplicador_demanda_escalado, factores_precio, version_regla, creada_en, vigente_hasta
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`, [
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`, [
       estimacion.id, estimacion.pasajeroId, estimacion.origen.latitud, estimacion.origen.longitud,
-      estimacion.destino.latitud, estimacion.destino.longitud, estimacion.zona.id,
+      estimacion.destino.latitud, estimacion.destino.longitud, estimacion.origen.direccion ?? null,
+      estimacion.destino.direccion ?? null, estimacion.zona.id,
       estimacion.precioEstimado.toString(), estimacion.distanciaMetros, estimacion.duracionSegundos,
       estimacion.proveedorRuta, estimacion.polilinea ?? null, estimacion.multiplicadorDemandaEscalado,
       JSON.stringify(estimacion.factoresPrecio), estimacion.versionRegla, estimacion.creadaEn, estimacion.vigenteHasta
@@ -154,6 +157,7 @@ export class RepositorioEstimacionesPostgres implements RepositorioEstimaciones 
   async obtener(id: string): Promise<EstimacionTarifa | undefined> {
     const resultado = await this.pool.query<FilaEstimacion>(`SELECT e.id, e.pasajero_id,
       e.origen_latitud, e.origen_longitud, e.destino_latitud, e.destino_longitud,
+      e.origen_direccion, e.destino_direccion,
       z.id AS zona_id, z.nombre AS zona_nombre, z.latitud_centro AS zona_latitud_centro,
       z.longitud_centro AS zona_longitud_centro, z.radio_metros AS zona_radio_metros,
       z.zona_horaria, e.precio_estimado, e.distancia_metros, e.duracion_segundos,
@@ -165,8 +169,8 @@ export class RepositorioEstimacionesPostgres implements RepositorioEstimaciones 
     if (!fila) return undefined;
     return {
       id: fila.id, pasajeroId: fila.pasajero_id,
-      origen: { latitud: Number(fila.origen_latitud), longitud: Number(fila.origen_longitud) },
-      destino: { latitud: Number(fila.destino_latitud), longitud: Number(fila.destino_longitud) },
+      origen: { latitud: Number(fila.origen_latitud), longitud: Number(fila.origen_longitud), ...(fila.origen_direccion ? { direccion: fila.origen_direccion } : {}) },
+      destino: { latitud: Number(fila.destino_latitud), longitud: Number(fila.destino_longitud), ...(fila.destino_direccion ? { direccion: fila.destino_direccion } : {}) },
       zona: { id: fila.zona_id, nombre: fila.zona_nombre, centro: { latitud: Number(fila.zona_latitud_centro), longitud: Number(fila.zona_longitud_centro) }, radioMetros: fila.zona_radio_metros, zonaHoraria: fila.zona_horaria },
       precioEstimado: BigInt(fila.precio_estimado), moneda: "ARS", distanciaMetros: fila.distancia_metros,
       duracionSegundos: fila.duracion_segundos, proveedorRuta: fila.proveedor_ruta,

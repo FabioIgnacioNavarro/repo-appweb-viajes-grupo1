@@ -36,9 +36,11 @@ const objeto = (valor: unknown): valor is Record<string, unknown> => typeof valo
 function puntoUbicacion(valor: unknown): PuntoUbicacion | undefined {
   if (!objeto(valor)) return undefined;
   if (typeof valor.latitud === "number" && typeof valor.longitud === "number") {
-    return { latitud: valor.latitud, longitud: valor.longitud };
+    const direccion = typeof valor.direccion === "string" ? valor.direccion.trim() : undefined;
+    if (direccion !== undefined && (!direccion || direccion.length > 500)) return undefined;
+    return { latitud: valor.latitud, longitud: valor.longitud, ...(direccion ? { direccion } : {}) };
   }
-  if (typeof valor.direccion === "string" && valor.direccion.trim().length > 0) {
+  if (typeof valor.direccion === "string" && valor.direccion.trim().length > 0 && valor.direccion.trim().length <= 500) {
     return { direccion: valor.direccion.trim() };
   }
   return undefined;

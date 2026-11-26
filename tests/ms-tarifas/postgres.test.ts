@@ -176,7 +176,7 @@ test("RepositorioEstimacionesPostgres guarda y recupera estimaciones con BIGINT 
 
   await repo.guardar(estimacion);
   assert.equal(parametrosGuardados.length, 1);
-  assert.equal(parametrosGuardados[0]?.[7], "3700");
+  assert.equal(parametrosGuardados[0]?.[9], "3700");
 
   const recuperada = await repo.obtener("est-pg-1");
   assert.ok(recuperada);

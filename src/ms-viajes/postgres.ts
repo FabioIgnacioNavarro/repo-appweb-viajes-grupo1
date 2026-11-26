@@ -38,6 +38,8 @@ type FilaViaje = {
   origen_longitud: string;
   destino_latitud: string;
   destino_longitud: string;
+  origen_direccion: string | null;
+  destino_direccion: string | null;
   moneda: string;
   precio_estimado: string;
   precio_final: string | null;
@@ -106,11 +108,13 @@ function mapearViaje(fila: FilaViaje): Viaje {
     choferId: fila.chofer_usuario_id ?? undefined,
     origen: {
       latitud: Number(fila.origen_latitud),
-      longitud: Number(fila.origen_longitud)
+      longitud: Number(fila.origen_longitud),
+      ...(fila.origen_direccion ? { direccion: fila.origen_direccion } : {})
     },
     destino: {
       latitud: Number(fila.destino_latitud),
-      longitud: Number(fila.destino_longitud)
+      longitud: Number(fila.destino_longitud),
+      ...(fila.destino_direccion ? { direccion: fila.destino_direccion } : {})
     },
     estimacionId: fila.estimacion_id,
     precioEstimado: fila.precio_estimado, // BIGINT en pg viene como string exacto (ADR 0007)
@@ -171,13 +175,15 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
           `INSERT INTO viajes.viaje (
             id, pasajero_usuario_id, chofer_usuario_id, estimacion_id, estado,
             origen_latitud, origen_longitud, destino_latitud, destino_longitud,
+            origen_direccion, destino_direccion,
             moneda, precio_estimado, precio_final, multiplicador_demanda, factores_precio,
             creado_en, asignado_en, iniciado_en, finalizado_en, cancelado_en, motivo_cancelacion, fecha_actualizacion
           ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
-            $10, $11, $12, $13, $14,
-            $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP
+            $10, $11,
+            $12, $13, $14, $15, $16,
+            $17, $18, $19, $20, $21, $22, CURRENT_TIMESTAMP
           )
           RETURNING *`,
           [
@@ -190,6 +196,8 @@ export class RepositorioViajesPostgres implements RepositorioViajes {
             viaje.origen.longitud,
             viaje.destino.latitud,
             viaje.destino.longitud,
+            viaje.origen.direccion ?? null,
+            viaje.destino.direccion ?? null,
             viaje.moneda,
             viaje.precioEstimado,
             viaje.precioFinal ?? null,

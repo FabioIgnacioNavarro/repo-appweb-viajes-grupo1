@@ -20,6 +20,9 @@ dominio recibe un actor ya validado mediante un puerto y no conoce el proveedor 
 - `UsuarioChofer` contiene únicamente información específica del perfil de chofer.
 - No se crea `UsuarioPasajero` mientras el pasajero no tenga atributos propios adicionales.
 - Todas las tablas tienen un `id` propio, según la convención del proyecto.
+- Los puntos de origen y destino guardan sus coordenadas y, si el pasajero ingresó una dirección,
+  también conservan ese texto para mostrarlo en las ofertas del chofer. La dirección no interviene
+  en los cálculos de distancia ni de precio.
 
 ## Actores y roles
 
