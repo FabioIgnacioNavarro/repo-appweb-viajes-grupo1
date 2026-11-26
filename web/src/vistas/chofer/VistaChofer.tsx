@@ -4,7 +4,7 @@ import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
 import { useModoDesarrollador } from "../../nucleo/modoDesarrollador";
 import { IndicadorConexionTiempoReal, SeguimientoMapaEnVivo } from "../../componentes/seguimiento";
-import { IconoAlerta, IconoAuto, IconoCheck, IconoPin, IconoRayo } from "../../componentes/comunes";
+import { IconoAlerta, IconoAuto, IconoCheck, IconoPin, IconoRayo, Modal } from "../../componentes/comunes";
 
 export interface CoordenadaChofer {
   latitud: number;
@@ -63,6 +63,13 @@ export const RUTA_SIMULADA_RESISTENCIA: Array<{ latitud: number; longitud: numbe
 ];
 
 const ESTADOS_ACTIVOS_CHOFER = new Set(["asignado", "chofer_en_camino", "en_curso"]);
+const ESTADOS_HISTORIAL_CHOFER = new Set([
+  "finalizado",
+  "cancelado_por_pasajero",
+  "cancelado_por_chofer",
+  "cancelado_por_operador",
+  "cancelado",
+]);
 
 export function calcularSegundosRestantes(expiraEnIso: string, ahoraMs = Date.now()): number {
   const expiraMs = Date.parse(expiraEnIso);
@@ -143,11 +150,15 @@ export const VistaChofer: React.FC = () => {
 
   // Ofertas y cuenta regresiva de 60s
   const [ofertas, setOfertas] = useState<OfertaDto[]>([]);
+  const [idOfertaEmergente, setIdOfertaEmergente] = useState<string | null>(null);
   const [ahoraMs, setAhoraMs] = useState<number>(() => Date.now());
   const [procesandoOfertaId, setProcesandoOfertaId] = useState<string | null>(null);
 
-  // Viaje activo, historial reciente y cobro al finalizar
+  // El viaje activo queda separado del historial persistido del chofer.
   const [viajeActivo, setViajeActivo] = useState<ViajeChoferDto | null>(null);
+  const [viajeCerradoReciente, setViajeCerradoReciente] = useState<ViajeChoferDto | null>(null);
+  const [viajesChofer, setViajesChofer] = useState<ViajeChoferDto[]>([]);
+  const [mostrarHistorialViajes, setMostrarHistorialViajes] = useState(false);
   const [ultimoCobro, setUltimoCobro] = useState<CobroChoferDto | null>(null);
   const [procesandoTransicion, setProcesandoTransicion] = useState<boolean>(false);
 
@@ -157,6 +168,10 @@ export const VistaChofer: React.FC = () => {
   const [estadoWs, setEstadoWs] = useState<EstadoConexionWs>(clienteTiempoReal.obtenerEstado());
 
   const tieneViajeEnCurso = Boolean(viajeActivo && ESTADOS_ACTIVOS_CHOFER.has(viajeActivo.estado.toLowerCase()));
+
+  const guardarViajeEnLista = (viaje: ViajeChoferDto) => {
+    setViajesChofer((prev) => [viaje, ...prev.filter((item) => item.id_viaje !== viaje.id_viaje)]);
+  };
 
   // Sincronizar estado inicial desde backend (GET chofer, ofertas y viajes)
   const sincronizarEstadoServidor = useCallback(async () => {
@@ -188,15 +203,24 @@ export const VistaChofer: React.FC = () => {
 
       const mapaViajes = new Map<string, ViajeChoferDto>();
       if (respViajes?.viajes) {
+        // Las ofertas apuntan a viajes todavía sin asignar; se usan para completar sus detalles.
         for (const v of respViajes.viajes) {
           mapaViajes.set(v.id_viaje, v);
         }
-        const activo = respViajes.viajes.find(
+        const propios = respViajes.viajes.filter((v) => v.chofer_id === idChoferActual);
+        const activo = propios.find(
           (v) => v.chofer_id === idChoferActual && ESTADOS_ACTIVOS_CHOFER.has(v.estado.toLowerCase())
         );
-        if (activo) {
-          setViajeActivo(activo);
-        }
+        setViajesChofer((prev) => {
+          const idsServidor = new Set(propios.map((v) => v.id_viaje));
+          const viajesDemo = prev.filter((v) => v.id_viaje.startsWith("viaje-demo-") && !idsServidor.has(v.id_viaje));
+          return [...propios, ...viajesDemo];
+        });
+        setViajeActivo(activo ?? null);
+        const cerradoReciente = propios
+          .filter((v) => ESTADOS_HISTORIAL_CHOFER.has(v.estado.toLowerCase()))
+          .sort((a, b) => Date.parse(b.finalizado_en ?? b.cancelado_en ?? b.creado_en) - Date.parse(a.finalizado_en ?? a.cancelado_en ?? a.creado_en))[0];
+        setViajeCerradoReciente(activo ? null : cerradoReciente ?? null);
       }
 
       if (respOfertas?.ofertas) {
@@ -221,6 +245,18 @@ export const VistaChofer: React.FC = () => {
     }
   }, [idChoferActual]);
 
+  // Cada oferta pendiente abre una ventana emergente. Si hay varias, se muestran en orden.
+  useEffect(() => {
+    const pendientes = ofertas.filter(
+      (oferta) => oferta.estado === "pendiente" && calcularSegundosRestantes(oferta.expira_en) > 0
+    );
+    setIdOfertaEmergente((actual) =>
+      actual && pendientes.some((oferta) => oferta.id_oferta === actual)
+        ? actual
+        : pendientes[0]?.id_oferta ?? null
+    );
+  }, [ofertas]);
+
   useEffect(() => {
     void sincronizarEstadoServidor();
   }, [sincronizarEstadoServidor]);
@@ -230,14 +266,17 @@ export const VistaChofer: React.FC = () => {
     const intervalo = setInterval(() => {
       const instante = Date.now();
       setAhoraMs(instante);
-      setOfertas((previas) =>
-        previas.map((oferta) => {
+      setOfertas((previas) => {
+        let cambio = false;
+        const actualizadas = previas.map((oferta) => {
           if (oferta.estado === "pendiente" && Date.parse(oferta.expira_en) <= instante) {
-            return { ...oferta, estado: "vencida", motivo: "vigencia_vencida" };
+            cambio = true;
+            return { ...oferta, estado: "vencida" as const, motivo: "vigencia_vencida" };
           }
           return oferta;
-        })
-      );
+        });
+        return cambio ? actualizadas : previas;
+      });
     }, 1000);
     return () => clearInterval(intervalo);
   }, []);
@@ -304,10 +343,23 @@ export const VistaChofer: React.FC = () => {
       if (nombreEvento === "ESTADO_VIAJE_ACTUALIZADO" || nombreEvento === "VIAJE_ACTUALIZADO") {
         const idViaje = String(datos.id_viaje ?? datos.id ?? "");
         const nuevoEstado = String(datos.estado ?? "").toLowerCase();
+        setViajesChofer((prev) =>
+          prev.map((viaje) =>
+            viaje.id_viaje === idViaje
+              ? {
+                  ...viaje,
+                  estado: nuevoEstado,
+                  ...(nuevoEstado === "finalizado" ? { finalizado_en: String(datos.actualizado_en ?? new Date().toISOString()) } : {}),
+                }
+              : viaje
+          )
+        );
         setViajeActivo((prev) => {
           if (!prev || prev.id_viaje !== idViaje) return prev;
+          if (ESTADOS_HISTORIAL_CHOFER.has(nuevoEstado)) return null;
           return { ...prev, estado: nuevoEstado };
         });
+        if (ESTADOS_HISTORIAL_CHOFER.has(nuevoEstado)) void sincronizarEstadoServidor();
       }
     });
 
@@ -442,6 +494,7 @@ export const VistaChofer: React.FC = () => {
     setSimulandoGps(false);
     setOfertas((prev) => prev.filter((oferta) => !oferta.id_oferta.startsWith("oferta-demo-")));
     setViajeActivo((prev) => prev?.id_viaje.startsWith("viaje-demo-") ? null : prev);
+    setViajesChofer((prev) => prev.filter((viaje) => !viaje.id_viaje.startsWith("viaje-demo-")));
     setUltimoCobro((prev) => prev?.id_cobro.startsWith("cobro-demo-") ? null : prev);
   }, [modoDev]);
 
@@ -487,6 +540,8 @@ export const VistaChofer: React.FC = () => {
         `/choferes/yo/ofertas/${encodeURIComponent(oferta.id_oferta)}/aceptacion`,
         {}
       );
+      guardarViajeEnLista(viajeAsignado);
+      setViajeCerradoReciente(null);
       setViajeActivo(viajeAsignado);
       setOfertas((prev) =>
         prev.map((item) =>
@@ -517,6 +572,8 @@ export const VistaChofer: React.FC = () => {
             estado: "asignado",
             creado_en: new Date().toISOString(),
           };
+          guardarViajeEnLista(simulado);
+          setViajeCerradoReciente(null);
           setViajeActivo(simulado);
           setOfertas((prev) =>
             prev.map((item) => (item.id_oferta === oferta.id_oferta ? { ...item, estado: "aceptada" } : item))
@@ -593,11 +650,14 @@ export const VistaChofer: React.FC = () => {
         `/viajes/${encodeURIComponent(viajeActivo.id_viaje)}/llegada`,
         {}
       );
+      guardarViajeEnLista(actualizado);
       setViajeActivo(actualizado);
       setMensajeExito("Estado actualizado: Chofer en camino al punto de encuentro.");
     } catch (err) {
       if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
-        setViajeActivo({ ...viajeActivo, estado: "chofer_en_camino" });
+        const simulado = { ...viajeActivo, estado: "chofer_en_camino" };
+        guardarViajeEnLista(simulado);
+        setViajeActivo(simulado);
       } else if (err instanceof ErrorHttpApi) {
         setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
       }
@@ -616,11 +676,14 @@ export const VistaChofer: React.FC = () => {
         `/viajes/${encodeURIComponent(viajeActivo.id_viaje)}/inicio`,
         {}
       );
+      guardarViajeEnLista(actualizado);
       setViajeActivo(actualizado);
       setMensajeExito("Viaje en curso con el pasajero a bordo.");
     } catch (err) {
       if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
-        setViajeActivo({ ...viajeActivo, estado: "en_curso", iniciado_en: new Date().toISOString() });
+        const simulado = { ...viajeActivo, estado: "en_curso", iniciado_en: new Date().toISOString() };
+        guardarViajeEnLista(simulado);
+        setViajeActivo(simulado);
       } else if (err instanceof ErrorHttpApi) {
         setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
       }
@@ -633,13 +696,16 @@ export const VistaChofer: React.FC = () => {
     if (!viajeActivo || viajeActivo.estado.toLowerCase() !== "en_curso") return;
     setProcesandoTransicion(true);
     setAlertaError(null);
+    setMensajeExito(null);
 
     try {
       const resultado = await clienteApi.post<{ viaje: ViajeChoferDto; cobro: CobroChoferDto }>(
         `/viajes/${encodeURIComponent(viajeActivo.id_viaje)}/finalizacion`,
         {}
       );
-      setViajeActivo(resultado.viaje);
+      guardarViajeEnLista(resultado.viaje);
+      setViajeCerradoReciente(resultado.viaje);
+      setViajeActivo(null);
       setUltimoCobro(resultado.cobro);
       setMensajeExito(resultado.cobro.estado === "confirmado"
         ? `Viaje finalizado. Cobro ${resultado.cobro.id_cobro} confirmado.`
@@ -652,15 +718,23 @@ export const VistaChofer: React.FC = () => {
           precio_final: viajeActivo.precio_estimado,
           finalizado_en: new Date().toISOString(),
         };
-        setViajeActivo(finalizado);
+        guardarViajeEnLista(finalizado);
+        setViajeCerradoReciente(finalizado);
+        setViajeActivo(null);
         setUltimoCobro({
           id_cobro: `cobro-demo-${Date.now()}`,
           importe: viajeActivo.precio_estimado,
           moneda: "ARS",
           estado: "confirmado",
         });
+        setMensajeExito("Viaje finalizado. El cobro de demostración quedó confirmado.");
       } else if (err instanceof ErrorHttpApi) {
         setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
+      } else {
+        setAlertaError({
+          codigo: "ERROR_FINALIZACION",
+          mensaje: "No se pudo finalizar el viaje. El recorrido sigue activo; revisá la conexión e intentá otra vez.",
+        });
       }
     } finally {
       setProcesandoTransicion(false);
@@ -671,6 +745,24 @@ export const VistaChofer: React.FC = () => {
   const puedeMarcarEnCamino = estadoNormalizado === "asignado" && !procesandoTransicion;
   const puedeIniciarViaje = estadoNormalizado === "chofer_en_camino" && !procesandoTransicion;
   const puedeFinalizarViaje = estadoNormalizado === "en_curso" && !procesandoTransicion;
+  const ofertasPendientes = ofertas.filter(
+    (oferta) => oferta.estado === "pendiente" && calcularSegundosRestantes(oferta.expira_en, ahoraMs) > 0
+  );
+  const ofertasAnteriores = ofertas.filter((oferta) => !ofertasPendientes.some((pendiente) => pendiente.id_oferta === oferta.id_oferta));
+  const ofertaEmergente = ofertas.find((oferta) => oferta.id_oferta === idOfertaEmergente && oferta.estado === "pendiente");
+  const historialViajes = viajesChofer
+    .filter((viaje) => viaje.chofer_id === idChoferActual && ESTADOS_HISTORIAL_CHOFER.has(viaje.estado.toLowerCase()))
+    .sort((a, b) => Date.parse(b.finalizado_en ?? b.cancelado_en ?? b.creado_en) - Date.parse(a.finalizado_en ?? a.cancelado_en ?? a.creado_en));
+  const estadoVisibleViaje = viajeActivo?.estado ?? viajeCerradoReciente?.estado;
+  const segundosOfertaEmergente = ofertaEmergente
+    ? calcularSegundosRestantes(ofertaEmergente.expira_en, ahoraMs)
+    : 0;
+  const ofertaEmergenteBloqueada = Boolean(
+    ofertaEmergente && tieneViajeEnCurso && viajeActivo?.id_viaje !== ofertaEmergente.id_viaje
+  );
+  const ofertaEmergenteConDetalles = Boolean(
+    ofertaEmergente?.origen && ofertaEmergente.destino && ofertaEmergente.precio_estimado
+  );
 
   return (
     <div className="space-y-6" data-testid="vista-chofer">
@@ -819,14 +911,14 @@ export const VistaChofer: React.FC = () => {
               </button>}
             </div>
 
-            {!disponible && ofertas.length === 0 ? (
+            {!disponible && ofertasPendientes.length === 0 && ofertasAnteriores.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-inactiva"
                 className="p-6 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/50 border border-dashed border-[#D4CFC2] dark:border-slate-700 text-center text-xs text-[#5E5B54] dark:text-slate-400"
               >
                 Activá tu disponibilidad para comenzar a recibir ofertas de pasajeros cercanos.
               </div>
-            ) : ofertas.length === 0 ? (
+            ) : ofertasPendientes.length === 0 && ofertasAnteriores.length === 0 ? (
               <div
                 data-testid="bandeja-ofertas-vacia"
                 className="p-6 rounded-xl bg-[#E6EFE8] dark:bg-emerald-950/30 border border-dashed border-[#4A7C59]/30 dark:border-emerald-800 text-center text-xs text-[#3B694A] dark:text-emerald-300"
@@ -835,24 +927,45 @@ export const VistaChofer: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3" data-testid="lista-ofertas-chofer">
-                {ofertas.map((oferta) => {
-                  const segundosRestantes = calcularSegundosRestantes(oferta.expira_en, ahoraMs);
-                  const estaPendiente = oferta.estado === "pendiente" && segundosRestantes > 0;
-                  const bloqueadaPorViajeActivo = tieneViajeEnCurso && viajeActivo?.id_viaje !== oferta.id_viaje;
-                  const tieneDetallesConfirmados = Boolean(oferta.origen && oferta.destino && oferta.precio_estimado);
-
-                  return (
-                    <div
-                      key={oferta.id_oferta}
-                      data-testid={`tarjeta-oferta-${oferta.id_oferta}`}
-                      className={`p-4 rounded-xl border space-y-3 transition ${
-                        estaPendiente
-                          ? "border-[#4A7C59]/40 dark:border-emerald-800 bg-[#E6EFE8]/70 dark:bg-emerald-950/30"
-                          : oferta.estado === "aceptada"
-                            ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30"
-                            : "border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 opacity-90"
-                      }`}
+                {ofertasPendientes.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#4A7C59]/30 dark:border-emerald-800 bg-[#E6EFE8] dark:bg-emerald-950/30 p-3">
+                    <span className="text-xs font-semibold text-[#3B694A] dark:text-emerald-300">
+                      {ofertasPendientes.length === 1
+                        ? "Tenés una oferta pendiente. Se abrió una ventana para responder."
+                        : `Tenés ${ofertasPendientes.length} ofertas pendientes para responder.`}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="boton-ver-oferta-pendiente"
+                      onClick={() => setIdOfertaEmergente(ofertasPendientes[0]?.id_oferta ?? null)}
+                      className="rounded-lg bg-[#4A7C59] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#3E6A4B] cursor-pointer"
                     >
+                      Ver oferta
+                    </button>
+                  </div>
+                )}
+
+                {ofertasAnteriores.length > 0 && (
+                  <div className="space-y-2" data-testid="historial-ofertas-respondidas">
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-[#5E5B54] dark:text-slate-400">Ofertas anteriores</h3>
+                    {ofertasAnteriores.map((oferta) => {
+                      const segundosRestantes = calcularSegundosRestantes(oferta.expira_en, ahoraMs);
+                      const estaPendiente = oferta.estado === "pendiente" && segundosRestantes > 0;
+                      const bloqueadaPorViajeActivo = tieneViajeEnCurso && viajeActivo?.id_viaje !== oferta.id_viaje;
+                      const tieneDetallesConfirmados = Boolean(oferta.origen && oferta.destino && oferta.precio_estimado);
+
+                      return (
+                        <div
+                          key={oferta.id_oferta}
+                          data-testid={`tarjeta-oferta-${oferta.id_oferta}`}
+                          className={`p-4 rounded-xl border space-y-3 transition ${
+                            estaPendiente
+                              ? "border-[#4A7C59]/40 dark:border-emerald-800 bg-[#E6EFE8]/70 dark:bg-emerald-950/30"
+                              : oferta.estado === "aceptada"
+                                ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30"
+                                : "border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 opacity-90"
+                          }`}
+                        >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-bold text-[#2C2B28] dark:text-slate-100 truncate" title={oferta.id_oferta}>
                           Oferta #{oferta.id_oferta}
@@ -938,9 +1051,11 @@ export const VistaChofer: React.FC = () => {
                           Motivo: <span className="font-bold text-slate-800 dark:text-slate-200">{describirMotivoOferta(oferta)}</span>
                         </div>
                       )}
-                    </div>
-                  );
-                })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -960,12 +1075,12 @@ export const VistaChofer: React.FC = () => {
                 className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${
                   tieneViajeEnCurso
                     ? "bg-[#E6EFE8] dark:bg-emerald-950/60 text-[#3B694A] dark:text-emerald-300 border-[#4A7C59]/30 dark:border-emerald-800"
-                    : estadoNormalizado === "finalizado"
+                    : estadoVisibleViaje?.toLowerCase() === "finalizado"
                       ? "bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800"
                       : "bg-[#F7F5F0] dark:bg-slate-800 text-[#5E5B54] dark:text-slate-300 border-[#DDD8CC] dark:border-slate-700"
                 }`}
               >
-                {etiquetaEstadoViaje(viajeActivo?.estado)}
+                {etiquetaEstadoViaje(estadoVisibleViaje)}
               </span>
             </div>
 
@@ -1022,7 +1137,7 @@ export const VistaChofer: React.FC = () => {
             </>
             ) : (
               <div className="p-5 rounded-xl bg-[#F7F5F0] dark:bg-slate-800/50 border border-dashed border-[#D4CFC2] dark:border-slate-700 text-center text-xs text-[#5E5B54] dark:text-slate-400">
-                No tenés un viaje activo en este momento. Aceptá una oferta de la bandeja para asignarte un recorrido.
+                No tenés un viaje activo en este momento. Cuando llegue una solicitud, vas a poder responder desde su ventana emergente.
               </div>
             )}
 
@@ -1089,9 +1204,16 @@ export const VistaChofer: React.FC = () => {
                     : "bg-[#E5E0D4] dark:bg-slate-800 text-[#7A776F] dark:text-slate-500 border-[#D4CFC2] dark:border-slate-700 cursor-not-allowed"
                 }`}
               >
-                3. Finalizar y Cobrar
+                {procesandoTransicion ? "Finalizando..." : "3. Finalizar y Cobrar"}
               </button>
             </div>
+            {viajeActivo && !procesandoTransicion && estadoNormalizado !== "en_curso" && (
+              <p className="text-right text-[11px] text-[#5E5B54] dark:text-slate-400" role="note">
+                {estadoNormalizado === "asignado"
+                  ? "Primero marcá que vas en camino; después iniciá el viaje para habilitar la finalización."
+                  : "Iniciá el viaje para habilitar el botón “Finalizar y Cobrar”."}
+              </p>
+            )}
           </div>
 
           {/* Reporte de ubicación y controles de simulación */}
@@ -1201,6 +1323,146 @@ export const VistaChofer: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <section
+        aria-label="Historial de viajes del chofer"
+        data-testid="historial-viajes-chofer"
+        className="rounded-2xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 shadow-xs"
+      >
+        <button
+          type="button"
+          data-testid="boton-toggle-historial-viajes"
+          aria-expanded={mostrarHistorialViajes}
+          aria-controls="lista-historial-viajes-chofer"
+          onClick={() => setMostrarHistorialViajes((visible) => !visible)}
+          className="flex w-full items-center justify-between gap-3 p-4 sm:p-5 text-left cursor-pointer"
+        >
+          <span className="text-sm font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-100">
+            Historial de viajes
+          </span>
+          <span className="flex items-center gap-2 text-xs font-semibold text-[#5E5B54] dark:text-slate-300">
+            {historialViajes.length} viajes
+            <span aria-hidden="true">{mostrarHistorialViajes ? "−" : "+"}</span>
+          </span>
+        </button>
+
+        {mostrarHistorialViajes && (
+          <div id="lista-historial-viajes-chofer" className="space-y-3 border-t border-[#DDD8CC] dark:border-slate-800 p-4 sm:p-5">
+            {historialViajes.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/60 p-5 text-center text-xs text-[#5E5B54] dark:text-slate-400">
+                Todavía no hay viajes anteriores.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {historialViajes.map((viaje) => {
+                  const fecha = Date.parse(viaje.finalizado_en ?? viaje.cancelado_en ?? viaje.creado_en);
+                  const fechaLegible = Number.isNaN(fecha)
+                    ? "Fecha no disponible"
+                    : new Date(fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+                  return (
+                    <li
+                      key={viaje.id_viaje}
+                      data-testid={`viaje-historial-${viaje.id_viaje}`}
+                      className="grid grid-cols-1 gap-3 rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 p-4 sm:grid-cols-2"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] text-[#5E5B54] dark:text-slate-400">{viaje.id_viaje}</span>
+                          <span className="rounded-md bg-[#E5E0D4] dark:bg-slate-700 px-2 py-0.5 text-[11px] font-bold text-[#2C2B28] dark:text-slate-200">
+                            {etiquetaEstadoViaje(viaje.estado)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#5E5B54] dark:text-slate-400">{fechaLegible}</p>
+                      </div>
+                      <div className="space-y-1 text-xs text-[#2C2B28] dark:text-slate-200">
+                        <p><span className="font-semibold">Origen:</span> {viaje.origen.direccion ?? `${viaje.origen.latitud.toFixed(4)}, ${viaje.origen.longitud.toFixed(4)}`}</p>
+                        <p><span className="font-semibold">Destino:</span> {viaje.destino.direccion ?? `${viaje.destino.latitud.toFixed(4)}, ${viaje.destino.longitud.toFixed(4)}`}</p>
+                        <p className="pt-1 font-extrabold">Importe: {formatearImporteArs(viaje.precio_final ?? viaje.precio_estimado)}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
+
+      {ofertaEmergente && (
+        <Modal
+          abierto
+          titulo="Nueva oferta de viaje"
+          onCerrar={() => setIdOfertaEmergente(null)}
+          pie={(
+            <>
+              {ofertaEmergenteBloqueada && (
+                <p className="basis-full text-xs text-amber-800 dark:text-amber-300">
+                  Ya tenés otro viaje activo y no podés aceptar esta oferta.
+                </p>
+              )}
+              <button
+                type="button"
+                data-testid={`boton-aceptar-${ofertaEmergente.id_oferta}`}
+                disabled={
+                  procesandoOfertaId === ofertaEmergente.id_oferta || ofertaEmergenteBloqueada ||
+                  !ofertaEmergenteConDetalles || segundosOfertaEmergente <= 0
+                }
+                onClick={() => void aceptarOferta(ofertaEmergente)}
+                className="min-w-28 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400 cursor-pointer"
+              >
+                {procesandoOfertaId === ofertaEmergente.id_oferta
+                  ? "Aceptando..."
+                  : !ofertaEmergenteConDetalles
+                    ? "Cargando detalles…"
+                    : "Aceptar"}
+              </button>
+              <button
+                type="button"
+                data-testid={`boton-rechazar-${ofertaEmergente.id_oferta}`}
+                disabled={procesandoOfertaId === ofertaEmergente.id_oferta || segundosOfertaEmergente <= 0}
+                onClick={() => void rechazarOferta(ofertaEmergente)}
+                className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              >
+                Rechazar
+              </button>
+            </>
+          )}
+        >
+          <div
+            data-testid={`tarjeta-oferta-${ofertaEmergente.id_oferta}`}
+            className="space-y-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate font-semibold">Viaje #{ofertaEmergente.id_viaje}</span>
+              <span
+                data-testid={`cuenta-regresiva-${ofertaEmergente.id_oferta}`}
+                className={`shrink-0 rounded-md border px-2 py-1 font-mono font-bold ${
+                  segundosOfertaEmergente <= 10
+                    ? "border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-700 dark:bg-rose-950/60 dark:text-rose-200"
+                    : "border-[#4A7C59]/30 bg-[#E6EFE8] text-[#3B694A] dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                }`}
+              >
+                {segundosOfertaEmergente > 0 ? `${segundosOfertaEmergente}s` : "Vencida"}
+              </span>
+            </div>
+            <div className="space-y-2 rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 p-4">
+              <p><span className="font-semibold text-[#5E5B54] dark:text-slate-400">Origen:</span> {ofertaEmergente.origen?.direccion ?? (ofertaEmergente.origen ? `${ofertaEmergente.origen.latitud}, ${ofertaEmergente.origen.longitud}` : "Cargando dirección…")}</p>
+              <p><span className="font-semibold text-[#5E5B54] dark:text-slate-400">Destino:</span> {ofertaEmergente.destino?.direccion ?? (ofertaEmergente.destino ? `${ofertaEmergente.destino.latitud}, ${ofertaEmergente.destino.longitud}` : "Cargando dirección…")}</p>
+              <p className="border-t border-[#DDD8CC] dark:border-slate-700 pt-2 text-base font-extrabold">
+                Precio confirmado: {ofertaEmergente.precio_estimado ? formatearImporteArs(ofertaEmergente.precio_estimado) : "Cargando…"}
+              </p>
+            </div>
+            {alertaError && (
+              <p role="alert" className="rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200">
+                {alertaError.mensaje}
+              </p>
+            )}
+            {ofertaEmergenteBloqueada && (
+              <p className="text-xs text-amber-800 dark:text-amber-300">Finalizá tu viaje actual para poder aceptar otra oferta.</p>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
