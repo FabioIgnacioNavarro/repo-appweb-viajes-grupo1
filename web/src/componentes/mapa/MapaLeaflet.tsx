@@ -49,7 +49,7 @@ function firmaEncuadre(
 }
 
 export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
-  origen = ORIGEN_POR_DEFECTO,
+  origen,
   destino,
   posicionChofer,
   rutaGeoJson,
@@ -118,7 +118,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     mapa.on("click", (evento: L.LeafletMouseEvent) => {
       const cb = onSeleccionarPuntoRef.current;
       if (!cb) return;
-      cb("destino", [evento.latlng.lat, evento.latlng.lng]);
+      cb(origenActualRef.current ? "destino" : "origen", [evento.latlng.lat, evento.latlng.lng]);
     });
 
     const timer = setTimeout(() => {
