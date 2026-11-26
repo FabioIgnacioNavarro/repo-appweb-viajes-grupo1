@@ -69,11 +69,23 @@ npm.cmd run dev:web
 
 Abrí `http://localhost:5173`; Vite reenvía las llamadas de API y WebSocket al gateway local. Para entrar con identidades compatibles con los datos sintéticos sembrados por Compose, usá la opción de token manual y los actores documentados en `requests/flujo-e2e.http`.
 
-El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL los ejecuta al crear un volumen vacío. Un volumen existente no vuelve a ejecutar scripts nuevos. En ese caso, aplicar las migraciones/esquemas correspondientes antes de repetir la demo. Por ejemplo, para actualizar una base anterior que aún no tenga el contador de intentos de cobro:
+El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL los ejecuta al crear un volumen vacío. Un volumen existente no vuelve a ejecutar scripts nuevos. En ese caso, actualizar el esquema existente antes de repetir la demo. En particular, versiones antiguas de `viajes.cobro` pueden conservar una restricción que solo permite `CONFIRMADO`, aunque el flujo necesita guardar primero un cobro `PENDIENTE`. La migración siguiente es segura de repetir y conserva los registros:
 
 ```powershell
-docker compose exec postgres psql -U viajes -d viajes -c "ALTER TABLE viajes.cobro ADD COLUMN IF NOT EXISTS intentos INTEGER NOT NULL DEFAULT 1;"
+@'
+BEGIN;
+ALTER TABLE viajes.cobro ADD COLUMN IF NOT EXISTS intentos INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS cobro_estado_check;
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS ck_cobro_estado;
+ALTER TABLE viajes.cobro ADD CONSTRAINT ck_cobro_estado CHECK (estado IN ('PENDIENTE', 'FALLIDO', 'CONFIRMADO'));
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS cobro_intentos_check;
+ALTER TABLE viajes.cobro DROP CONSTRAINT IF EXISTS ck_cobro_intentos;
+ALTER TABLE viajes.cobro ADD CONSTRAINT ck_cobro_intentos CHECK (intentos >= 0);
+COMMIT;
+'@ | docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U viajes -d viajes
 ```
+
+Si un viaje ya quedó finalizado pero no recibió cobro, después de actualizar el servicio y aplicar esta migración se puede usar **“Ver o completar recibo”** en el historial del chofer. La operación conserva el precio final y reutiliza el único cobro del viaje.
 
 La conexión desde el host usa el puerto `5434`; entre contenedores PostgreSQL escucha en `5432`.
 
