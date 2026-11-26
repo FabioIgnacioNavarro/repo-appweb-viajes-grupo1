@@ -203,10 +203,11 @@ export const VistaChofer: React.FC = () => {
 
       const mapaViajes = new Map<string, ViajeChoferDto>();
       if (respViajes?.viajes) {
-        const propios = respViajes.viajes.filter((v) => v.chofer_id === idChoferActual);
-        for (const v of propios) {
+        // Las ofertas apuntan a viajes todavía sin asignar; se usan para completar sus detalles.
+        for (const v of respViajes.viajes) {
           mapaViajes.set(v.id_viaje, v);
         }
+        const propios = respViajes.viajes.filter((v) => v.chofer_id === idChoferActual);
         const activo = propios.find(
           (v) => v.chofer_id === idChoferActual && ESTADOS_ACTIVOS_CHOFER.has(v.estado.toLowerCase())
         );
