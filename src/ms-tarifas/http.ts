@@ -260,12 +260,12 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
   router.get("/health", (_req, res) => res.json({ estado: "activo", servicio: "ms-tarifas" }));
   router.get("/ready", async (_req, res) => { try { await deps.comprobarBase(); res.json({ estado: "listo", servicio: "ms-tarifas" }); } catch { res.status(503).json({ estado: "no_listo", servicio: "ms-tarifas" }); } });
   router.use(express.json({ limit: "10kb" }));
-  router.use(async (req: Request, res: Response, next: NextFunction) => {
+  const autenticar = async (req: Request, res: Response, next: NextFunction) => {
     const token = req.header("Authorization")?.match(/^Bearer ([^ ]+)$/)?.[1];
     if (!token) { res.status(401).json({ error: { codigo: "TOKEN_REQUERIDO", mensaje: "Se requiere Authorization Bearer.", detalles: {} } }); return; }
     try { req.actor = await deps.validador.validar(token); next(); } catch { res.status(401).json({ error: { codigo: "TOKEN_INVALIDO", mensaje: "El token no es válido.", detalles: {} } }); }
-  });
-  router.post("/viajes/estimacion", async (req, res) => {
+  };
+  router.post("/viajes/estimacion", autenticar, async (req, res) => {
     if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) { res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un pasajero o administrador puede solicitar una estimación.", detalles: {} } }); return; }
     if (!objeto(req.body) || Object.keys(req.body).some((key) => !["origen", "destino", "simulacion"].includes(key))) { res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Se requieren origen y destino, sin campos de precio.", detalles: {} } }); return; }
     const origen = puntoUbicacion(req.body.origen); const destino = puntoUbicacion(req.body.destino);
@@ -294,7 +294,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
 
     try { res.status(201).json(dto(await deps.estimar(req.actor.idUsuario, origen, destino, req.header("Authorization")!.slice(7), simulacion))); } catch (causa) { error(res, causa); }
   });
-  router.get("/estimaciones/:idEstimacion", async (req, res) => {
+  router.get<{ idEstimacion: string }>("/estimaciones/:idEstimacion", autenticar, async (req, res) => {
     try {
       const e = await deps.estimaciones.obtener(req.params.idEstimacion);
       if (!e) { res.status(404).json({ error: { codigo: "ESTIMACION_NO_ENCONTRADA", mensaje: "No existe la estimación.", detalles: {} } }); return; }
@@ -303,7 +303,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       res.json(dto(e));
     } catch (causa) { error(res, causa); }
   });
-  router.get("/reglas/demanda", async (req, res) => {
+  router.get("/reglas/demanda", autenticar, async (req, res) => {
     if (req.actor?.rol !== "ADMINISTRADOR") {
       res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un administrador puede consultar la configuración de reglas de demanda.", detalles: {} } });
       return;
@@ -317,7 +317,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       res.json({ activa: reglaDto(snapshot.activa), historial: snapshot.historial.map(reglaDto) });
     } catch (causa) { error(res, causa); }
   });
-  router.put("/reglas/demanda", async (req, res) => {
+  router.put("/reglas/demanda", autenticar, async (req, res) => {
     if (req.actor?.rol !== "ADMINISTRADOR" || !req.actor.idUsuario) {
       res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo un administrador puede modificar las reglas de demanda.", detalles: {} } });
       return;
@@ -332,7 +332,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       res.json({ activa: reglaDto(snapshot.activa), historial: snapshot.historial.map(reglaDto) });
     } catch (causa) { error(res, causa); }
   });
-  router.post("/tarifas/geocodificacion-inversa", async (req, res) => {
+  router.post("/tarifas/geocodificacion-inversa", autenticar, async (req, res) => {
     if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
       res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros o administración pueden resolver direcciones en el mapa.", detalles: {} } });
       return;
@@ -350,7 +350,7 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       res.json({ direccion, coordenada });
     } catch (causa) { error(res, causa); }
   });
-  router.post("/tarifas/autocompletar", async (req, res) => {
+  router.post("/tarifas/autocompletar", autenticar, async (req, res) => {
     if (!["PASAJERO", "CHOFER", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
       res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros, choferes o administración pueden buscar sugerencias de direcciones.", detalles: {} } });
       return;
@@ -378,6 +378,9 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
       res.json({ sugerencias });
     } catch (causa) { error(res, causa); }
   });
+  // Preserva el 401 actual para rutas desconocidas; las rutas válidas ya pasan
+  // por autenticar después de que Express haya asignado req.route.
+  router.use(autenticar);
   router.use(manejarErrorCuerpoHttp);
   return router;
 }

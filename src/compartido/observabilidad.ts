@@ -3,12 +3,25 @@ import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { BatchLogRecordProcessor, type LogRecordProcessor } from "@opentelemetry/sdk-logs";
-import { PeriodicExportingMetricReader, type IMetricReader } from "@opentelemetry/sdk-metrics";
+import { AggregationType, PeriodicExportingMetricReader, type IMetricReader, type ViewOptions } from "@opentelemetry/sdk-metrics";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace";
 import type { NextFunction, Request, Response } from "express";
 
 let sdkInstancia: NodeSDK | null = null;
+
+// El instrumento mide en segundos. Estos límites, también en segundos, dan
+// resolución de milisegundos para las latencias HTTP que muestra Grafana.
+const vistasMetricasHttp: ViewOptions[] = [{
+  meterName: "viajes.http",
+  instrumentName: "viajes.http.duracion",
+  aggregation: {
+    type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM,
+    options: {
+      boundaries: [0, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 10]
+    }
+  }
+}];
 
 export interface ContextoTrazaActivo {
   traceId?: string;
@@ -73,6 +86,7 @@ export function iniciarObservabilidad(nombreServicio: string): void {
     traceExporter: exportadorTrazas,
     spanProcessors: exportadorTrazas ? undefined : [descartarSpansSinDestino],
     metricReaders,
+    views: vistasMetricasHttp,
     logRecordProcessors: procesadoresLogs
   });
 

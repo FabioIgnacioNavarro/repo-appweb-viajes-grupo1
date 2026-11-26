@@ -135,3 +135,42 @@ test("POST /auth/login está deshabilitado en producción", async () => {
     await cerrarServidor(server);
   }
 });
+
+test("POST /auth/registro crea pasajero/chofer, permite login posterior y bloquea roles privilegiados", async () => {
+  const { base, server } = await iniciarServidor();
+  try {
+    const registro = await fetch(`${base}/auth/registro`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: "laura.chofer", nombre: "Laura Chofer", contrasena: "ClaveSegura2026!", rol: "chofer" })
+    });
+    assert.equal(registro.status, 201);
+    const cuerpoReg = await registro.json() as { token: string; perfil: { usuario: string; rol: string } };
+    assert.equal(cuerpoReg.perfil.usuario, "laura.chofer");
+    assert.equal(cuerpoReg.perfil.rol, "chofer");
+    assert.ok(cuerpoReg.token);
+
+    const duplicado = await fetch(`${base}/auth/registro`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: "laura.chofer", contrasena: "ClaveSegura2026!", rol: "pasajero" })
+    });
+    assert.equal(duplicado.status, 409);
+
+    const adminProhibido = await fetch(`${base}/auth/registro`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: "intruso", contrasena: "ClaveSegura2026!", rol: "administrador" })
+    });
+    assert.equal(adminProhibido.status, 403);
+
+    const loginNuevo = await fetch(`${base}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: "laura.chofer", contrasena: "ClaveSegura2026!" })
+    });
+    assert.equal(loginNuevo.status, 200);
+  } finally {
+    await cerrarServidor(server);
+  }
+});

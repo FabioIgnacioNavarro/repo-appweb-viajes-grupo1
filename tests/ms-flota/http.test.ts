@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { ValidadorJwtFalso } from "../../src/compartido/jwt-falso";
-import { AutorizadorUbicacionBasico, ErrorFlota, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioViajesActivosMemoria, type Chofer } from "../../src/ms-flota/dominio";
+import { AutorizadorUbicacionBasico, ErrorFlota, RepositorioChoferesMemoria, RepositorioUbicacionesMemoria, RepositorioVehiculosMemoria, RepositorioViajesActivosMemoria, type Chofer } from "../../src/ms-flota/dominio";
 import { crearRouterFlota, type DependenciasFlota } from "../../src/ms-flota/http";
 
 async function iniciar(deps: DependenciasFlota): Promise<{ base: string; server: Server }> {
@@ -50,7 +50,6 @@ test("ms-flota excluye choferes ocupados y falla cerrado si viajes no responde",
   } finally { await terminar(server); }
 });
 
-
 test("ms-flota aplica autorizacion por recurso al consultar chofer y ubicacion", async () => {
   const ctx = datos();
   const jwtAjeno = ctx.tokens.generar({ idUsuario: "pasajero-invalido", rol: "PASAJERO" });
@@ -83,5 +82,54 @@ test("ms-flota reenvía la ubicación persistida con JWT y no falla si el canal 
     assert.equal(recibidos.length, 1);
     assert.equal((recibidos[0] as { token: string }).token, jwt);
     assert.equal((recibidos[0] as { actor: { idUsuario: string } }).actor.idUsuario, "chofer-disponible");
+  } finally { await terminar(server); }
+});
+
+test("ms-flota expone alta de choferes, registro/asignación de vehículos y habilitación administrativa con RBAC", async () => {
+  const ctx = datos();
+  ctx.deps.vehiculos = new RepositorioVehiculosMemoria();
+  const jwtAdmin = ctx.tokens.generar({ idUsuario: "admin-1", rol: "ADMINISTRADOR" });
+  const jwtNuevoChofer = ctx.tokens.generar({ idUsuario: "chofer-alta", rol: "CHOFER" });
+  const { base, server } = await iniciar(ctx.deps);
+  try {
+    const alta = await fetch(`${base}/choferes`, { method: "POST", headers: { Authorization: `Bearer ${jwtNuevoChofer}`, "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(alta.status, 201);
+    assert.equal((await alta.json() as { habilitado: boolean }).habilitado, false);
+
+    const auto = await fetch(`${base}/vehiculos`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${jwtAdmin}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ patente: "AD555EF", tipo_vehiculo: "AUTOMOVIL", marca: "Fiat", modelo: "Cronos", anio_fabricacion: 2024, color: "Blanco", capacidad_pasajeros: 4 })
+    });
+    assert.equal(auto.status, 201);
+    const vehiculoCreado = await auto.json() as { id: string; patente: string };
+
+    const prohibidoHabilitar = await fetch(`${base}/choferes/chofer-alta/habilitacion`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${jwtNuevoChofer}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ habilitado: true })
+    });
+    assert.equal(prohibidoHabilitar.status, 403);
+
+    const habilitar = await fetch(`${base}/choferes/chofer-alta/habilitacion`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${jwtAdmin}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ habilitado: true, carnet_conducir_validado: true })
+    });
+    assert.equal(habilitar.status, 200);
+
+    const asignar = await fetch(`${base}/choferes/chofer-alta/vehiculo`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${jwtAdmin}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ id_vehiculo: vehiculoCreado.id })
+    });
+    assert.equal(asignar.status, 200);
+
+    const lista = await fetch(`${base}/choferes`, { headers: { Authorization: `Bearer ${jwtAdmin}` } });
+    assert.equal(lista.status, 200);
+    const cuerpoLista = await lista.json() as { choferes: Array<{ usuario_id: string; habilitado: boolean; vehiculo_activo: { patente: string } | null }> };
+    const encontrado = cuerpoLista.choferes.find((c) => c.usuario_id === "chofer-alta");
+    assert.equal(encontrado?.habilitado, true);
+    assert.equal(encontrado?.vehiculo_activo?.patente, "AD555EF");
   } finally { await terminar(server); }
 });

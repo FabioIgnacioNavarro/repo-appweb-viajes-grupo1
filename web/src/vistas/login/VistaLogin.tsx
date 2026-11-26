@@ -85,6 +85,11 @@ export const VistaLogin: React.FC = () => {
   const [modoToken, setModoToken] = useState<ModoEmisionToken>("emulador");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [regUsuario, setRegUsuario] = useState("");
+  const [regNombre, setRegNombre] = useState("");
+  const [regContrasena, setRegContrasena] = useState("");
+  const [regRol, setRegRol] = useState<"pasajero" | "chofer">("pasajero");
+  const [avisoRegistro, setAvisoRegistro] = useState<string | null>(null);
 
   useEffect(() => {
     const aviso = consumirAvisoSesion();
@@ -198,6 +203,44 @@ export const VistaLogin: React.FC = () => {
     }
   };
 
+  const registrarNuevaCuenta = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCargando(true);
+    setError(null);
+    setAvisoRegistro(null);
+    try {
+      const resp = await fetch("/auth/registro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          usuario: regUsuario,
+          nombre: regNombre || regUsuario,
+          contrasena: regContrasena,
+          rol: regRol,
+        }),
+      });
+      const datos = (await resp.json().catch(() => null)) as { token?: string; error?: { mensaje?: string } } | null;
+      if (!resp.ok || !datos?.token) {
+        setError(datos?.error?.mensaje ?? "No se pudo registrar la cuenta.");
+        return;
+      }
+      if (regRol === "chofer") {
+        await fetch("/choferes", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${datos.token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ carnet_conducir_validado: false }),
+        }).catch(() => null);
+        setAvisoRegistro("Cuenta de chofer creada. Un administrador debe validar tu perfil y asignar un vehículo.");
+      }
+      const sesion = iniciarSesion(datos.token);
+      navegarA(rutaPorDefectoParaRol(sesion.rol));
+    } catch {
+      setError("No se pudo conectar con el servicio de identidad.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto py-8 sm:py-12 space-y-8" data-testid="vista-login">
       <div className="space-y-2 text-center">
@@ -257,6 +300,33 @@ export const VistaLogin: React.FC = () => {
             </button>
           </div>
         )}
+
+        <details className="rounded-xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900/80 p-4 text-xs shadow-xs">
+          <summary className="cursor-pointer font-semibold text-[#2C2B28] dark:text-slate-200">
+            ¿No tenés cuenta? Registrar pasajero o chofer
+          </summary>
+          <form onSubmit={registrarNuevaCuenta} className="mt-3 space-y-3">
+            <CampoTexto id="reg-usuario" etiqueta="Usuario" value={regUsuario} onChange={(e) => setRegUsuario(e.target.value)} placeholder="ej. laura" required />
+            <CampoTexto id="reg-nombre" etiqueta="Nombre completo" value={regNombre} onChange={(e) => setRegNombre(e.target.value)} placeholder="Laura Pérez" />
+            <CampoTexto id="reg-contrasena" etiqueta="Contraseña (mín. 6 caracteres)" type="password" value={regContrasena} onChange={(e) => setRegContrasena(e.target.value)} required />
+            <div className="space-y-1">
+              <label htmlFor="reg-rol" className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-200">Rol</label>
+              <select
+                id="reg-rol"
+                value={regRol}
+                onChange={(e) => setRegRol(e.target.value as "pasajero" | "chofer")}
+                className="w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+              >
+                <option value="pasajero">Pasajero</option>
+                <option value="chofer">Chofer (requiere habilitación de admin)</option>
+              </select>
+            </div>
+            {avisoRegistro && <p className="text-emerald-800 dark:text-emerald-300">{avisoRegistro}</p>}
+            <Boton type="submit" variante="secundario" anchoCompleto disabled={cargando || !regUsuario.trim() || regContrasena.length < 6}>
+              Crear cuenta
+            </Boton>
+          </form>
+        </details>
       </div>
 
       {modoDev && (

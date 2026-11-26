@@ -20,11 +20,19 @@ cd repo-appweb-viajes-grupo1
 Copy-Item .env.example .env
 ```
 
-### 2. Instalar dependencias y compilar TypeScript
+### 2. Instalar dependencias, preparar entorno y verificar calidad
 ```powershell
 npm.cmd ci
+npm.cmd run setup
+npm.cmd run lint
 npm.cmd run build
 ```
+
+> **Comandos reproducibles de preparación y calidad (`package.json`):**
+> - `npm.cmd run setup`: copia `.env.example` a `.env` si falta y, cuando `DATABASE_URL` está definida, aplica de forma idempotente `src/ms-flota/schema.sql`, `src/ms-tarifas/schema.sql` y `src/ms-viajes/schema.sql`.
+> - `npm.cmd run seed`: carga y verifica de forma idempotente los datos sintéticos iniciales (chofer `carlos`, vehículo `AA123BB`, zona `resistencia` y regla tarifaria v1) cuando `DATABASE_URL` está definida.
+> - `npm.cmd run lint`: ejecuta ESLint, verificación de fronteras hexagonales (`scripts/verificar-arquitectura.mjs`) y chequeo de tipos TypeScript (`server`, `tests` y `web`).
+> - Al levantar Docker Compose por primera vez, PostgreSQL monta los mismos scripts en `/docker-entrypoint-initdb.d`, por lo que esquemas y semilla quedan cargados automáticamente.
 
 ### 3. Validar y levantar la plataforma completa en Docker Compose
 ```powershell
@@ -33,7 +41,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Compose inicializa automáticamente los esquemas de los tres servicios y carga un chofer sintético de prueba. Esperá a que `postgres`, el emulador de identidad, los tres microservicios y el gateway figuren saludables. Luego comprobá el acceso público:
+Compose inicializa automáticamente los esquemas de los tres servicios y carga el chofer de prueba (`carlos`) con su vehículo asignado (`AA123BB`), además de las zonas y reglas de tarifa. Esperá a que `postgres`, el emulador de identidad, los tres microservicios y el gateway figuren saludables. Luego comprobá el acceso público:
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/health
@@ -42,7 +50,16 @@ Invoke-RestMethod http://localhost:8080/ready/tarifas
 Invoke-RestMethod http://localhost:8080/ready/flota
 ```
 
-El emulador ofrece actores sintéticos para la demo. Los tokens del proveedor falso solo se aceptan en desarrollo; no usar ese modo en producción.
+### Roles y cuentas de prueba (Emulador OIDC / JWKS)
+
+El emulador local (`auth-emulator`) ofrece cuentas ficticias reproducibles para login (`POST /auth/login`), emisión directa (`POST /auth/token`) y registro local de pasajeros o choferes (`POST /auth/registro`). Contraseña predeterminada: `ViajesDemo2026!` (configurable con `AUTH_DEMO_PASSWORD`). Deshabilitado en `NODE_ENV=production`.
+
+| Usuario | Email | Rol | UUID (`sub` / `id_usuario`) | Uso principal en pruebas y demo |
+|---|---|---|---|---|
+| `ana` | `ana@viajes.local` | `PASAJERO` | `22222222-2222-4222-8222-222222222222` | Cotizar, confirmar, seguir el viaje en tiempo real y consultar recibo. |
+| `carlos` | `carlos@viajes.local` | `CHOFER` | `11111111-1111-4111-8111-111111111111` | Habilitado y con vehículo `AA123BB`; activa disponibilidad, envía GPS, acepta ofertas y finaliza viajes. |
+| `lucia` | `lucia@viajes.local` | `SOPORTE` | `44444444-4444-4444-8444-444444444444` | Listado global paginado/filtrado de viajes, auditoría inmutable de tarifas y cancelación operativa. |
+| `martin` | `martin@viajes.local` | `ADMINISTRADOR` | `99999999-9999-4999-8999-999999999999` | Reglas dinámicas versionadas (`ms-tarifas`), alta/habilitación de choferes y asignación de vehículos (`ms-flota`). |
 
 ### 4. Ejecutar pruebas y flujo E2E
 ```powershell

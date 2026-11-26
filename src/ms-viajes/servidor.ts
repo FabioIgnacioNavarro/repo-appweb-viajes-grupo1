@@ -5,10 +5,10 @@ import { iniciarObservabilidad, middlewareObservabilidad } from "../compartido/o
 
 iniciarObservabilidad("ms-viajes");
 
-import { crearValidadorJwtDesdeEntorno } from "../compartido/jwt-falso";
+import { crearValidadorJwtDesdeEntorno, ValidadorJwtFalso } from "../compartido/jwt-falso";
 import {
   AceptarOferta, AsignadorAtomicoMemoria, AvanzarViaje, CancelarViaje, ConsultarCobro, ConsultarOfertasChofer, ConfirmarViaje,
-  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, ListarViajesOperador, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta, ReintentarCobro,
+  ConsultarAuditoriaTarifa, ConsultarChoferesOcupados, ConsultarDemandaPorZona, ConsultarViaje, CrearOfertasParaCandidatos, FinalizarViaje, GeneradorIdMemoria, ListarViajesOperador, ProcesarVencimientoOfertas, PublicarEstadoViaje, PublicarUbicacionChoferEnViaje, RechazarOferta, ReintentarCobro,
   MarcarViajeSinChoferesDisponibles,
   RepositorioCobrosMemoria, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria,
   RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente
@@ -58,8 +58,54 @@ const clienteHttp = new ClienteServiciosHttp({ timeoutMs: timeoutServicio, reint
 const clienteTarifas = new ClienteTarifasHttp(exigirBaseInterna(process.env.MS_TARIFAS_URL, "MS_TARIFAS_URL"), clienteHttp);
 const clienteFlota = new ClienteFlotaHttp(exigirBaseInterna(process.env.MS_FLOTA_URL, "MS_FLOTA_URL"), clienteHttp, Number(process.env.RADIO_BUSQUEDA_CHOFERES_METROS ?? "5000"));
 
+const ofertasPorRonda = Number(process.env.OFERTAS_POR_RONDA ?? "1");
+const vigenciaOfertaMs = Number(process.env.VIGENCIA_OFERTA_MS ?? "30000");
+const intervaloVencimientoMs = Number(process.env.INTERVALO_VENCIMIENTO_OFERTAS_MS ?? "5000");
+
+let tokenSistemaCache: { token: string; venceEnMs: number } | undefined;
+async function obtenerTokenSistema(): Promise<string> {
+  if (tokenSistemaCache && tokenSistemaCache.venceEnMs > Date.now() + 15_000) {
+    return tokenSistemaCache.token;
+  }
+  if (process.env.JWT_MODO === "falso") {
+    const tokenFalso = new ValidadorJwtFalso().generar({ idUsuario: "sistema-viajes", rol: "ADMINISTRADOR" });
+    tokenSistemaCache = { token: tokenFalso, venceEnMs: Date.now() + 300_000 };
+    return tokenFalso;
+  }
+  const baseAuth = process.env.AUTH_EMULATOR_URL || (process.env.JWT_JWKS_URL ? new URL(process.env.JWT_JWKS_URL).origin : "");
+  if (!baseAuth) throw new Error("No hay origen de tokens de sistema configurado para reofertar viajes.");
+  const respuesta = await fetch(`${baseAuth}/auth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id_usuario: "sistema-viajes", rol: "administrador", expira_en_segundos: 300 }),
+    signal: AbortSignal.timeout(timeoutServicio)
+  });
+  if (!respuesta.ok) throw new Error(`No se pudo emitir token de sistema (${respuesta.status}).`);
+  const datos = (await respuesta.json()) as { token?: string };
+  if (!datos.token) throw new Error("El proveedor no devolvió un token de sistema.");
+  tokenSistemaCache = { token: datos.token, venceEnMs: Date.now() + 240_000 };
+  return datos.token;
+}
+
 const confirmar = new ConfirmarViaje(viajes, idempotencia, ids, ejecutorIdempotente);
-const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(confirmar, clienteFlota, new CrearOfertasParaCandidatos(ofertas, ids), new MarcarViajeSinChoferesDisponibles(viajes), eventosTiempoReal);
+const crearOfertas = new CrearOfertasParaCandidatos(ofertas, ids);
+const sinChoferesDisponibles = new MarcarViajeSinChoferesDisponibles(viajes);
+const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(confirmar, clienteFlota, crearOfertas, sinChoferesDisponibles, eventosTiempoReal, {
+  maxOfertasPorRonda: Number.isFinite(ofertasPorRonda) && ofertasPorRonda > 0 ? ofertasPorRonda : undefined,
+  vigenciaMs: Number.isFinite(vigenciaOfertaMs) && vigenciaOfertaMs > 0 ? vigenciaOfertaMs : 30_000
+});
+const procesarVencimientos = new ProcesarVencimientoOfertas(
+  ofertas,
+  viajes,
+  crearOfertas,
+  sinChoferesDisponibles,
+  async (viaje) => clienteFlota.buscar(viaje.origen, await obtenerTokenSistema()),
+  eventosTiempoReal,
+  {
+    maxOfertasPorRonda: Number.isFinite(ofertasPorRonda) && ofertasPorRonda > 0 ? ofertasPorRonda : undefined,
+    vigenciaMs: Number.isFinite(vigenciaOfertaMs) && vigenciaOfertaMs > 0 ? vigenciaOfertaMs : 30_000
+  }
+);
 
 const consultarDemanda = pool ? new ConsultarDemandaPorZonaPostgres(pool) : new ConsultarDemandaPorZona(viajes);
 const consultarOcupacion = pool ? new ConsultarChoferesOcupadosPostgres(pool) : new ConsultarChoferesOcupados(viajes);
@@ -87,7 +133,10 @@ const dependencias = {
   eventosTiempoReal,
   publicarEstado,
   publicarUbicacion,
-  consultarOfertas: new ConsultarOfertasChofer(ofertas, eventosTiempoReal)
+  consultarOfertas: new ConsultarOfertasChofer(ofertas, eventosTiempoReal),
+  procesarSiguienteTrasRechazo: async (viajeId: string) => {
+    await procesarVencimientos.intentarSiguienteParaViaje(viajeId);
+  }
 };
 
 aplicacion.use(middlewareObservabilidad("ms-viajes"));
@@ -111,7 +160,20 @@ aplicacion.use(crearRouterViajes(dependencias));
 
 servidor.listen(puerto, () => console.log(`ms-viajes disponible en http://localhost:${puerto}`));
 
+let barridoEnCurso = false;
+const intervaloVencimientos = Number.isFinite(intervaloVencimientoMs) && intervaloVencimientoMs > 0
+  ? setInterval(() => {
+    if (barridoEnCurso) return;
+    barridoEnCurso = true;
+    void procesarVencimientos.ejecutar().catch(() => undefined).finally(() => {
+      barridoEnCurso = false;
+    });
+  }, intervaloVencimientoMs)
+  : undefined;
+intervaloVencimientos?.unref();
+
 async function cerrar(): Promise<void> {
+  if (intervaloVencimientos) clearInterval(intervaloVencimientos);
   await eventosTiempoReal.cerrar();
   await new Promise<void>((resolver) => servidor.close(() => resolver()));
   await pool?.end();

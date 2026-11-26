@@ -15,6 +15,7 @@ export default defineConfig({
     proxy: {
       "/viajes": "http://localhost:8080",
       "/choferes": "http://localhost:8080",
+      "/vehiculos": "http://localhost:8080",
       "/estimaciones": "http://localhost:8080",
       "/reglas": "http://localhost:8080",
       "/tarifas": "http://localhost:8080",

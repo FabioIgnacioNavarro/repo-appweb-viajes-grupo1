@@ -38,6 +38,7 @@ export interface DependenciasViajes {
   publicarEstado?: PublicarEstadoViaje;
   publicarUbicacion?: PublicarUbicacionChoferEnViaje;
   consultarOfertas?: ConsultarOfertasChofer;
+  procesarSiguienteTrasRechazo?: (viajeId: string) => Promise<void>;
 }
 
 declare global {
@@ -355,6 +356,9 @@ export function crearRouterViajes(deps: DependenciasViajes): express.Router {
   router.post("/choferes/yo/ofertas/:idOferta/rechazo", async (pedido, respuesta) => {
     try {
       const oferta = await deps.rechazar.ejecutar(actorDe(pedido), pedido.params.idOferta);
+      if (deps.procesarSiguienteTrasRechazo) {
+        try { await deps.procesarSiguienteTrasRechazo(oferta.viajeId); } catch { /* Mejor esfuerzo tras rechazo. */ }
+      }
       respuesta.status(200).json(ofertaDto(oferta));
     } catch (error) { errorHttp(error, respuesta); }
   });

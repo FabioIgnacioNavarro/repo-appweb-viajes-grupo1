@@ -41,6 +41,27 @@ interface RespuestaReglasDto {
   historial: ReglaDemandaDto[];
 }
 
+interface VehiculoFlotaDto {
+  id: string;
+  patente: string;
+  tipo_vehiculo: string;
+  marca: string;
+  modelo: string;
+  anio_fabricacion: number;
+  color: string;
+  capacidad_pasajeros: number;
+  estado: "ACTIVO" | "INACTIVO";
+}
+
+interface ChoferFlotaDto {
+  id: string;
+  usuario_id: string;
+  habilitado: boolean;
+  disponibilidad: boolean;
+  carnet_conducir_validado: boolean;
+  vehiculo_activo: VehiculoFlotaDto | null;
+}
+
 interface EstadoServicio {
   nombre: string;
   estado: "listo" | "degradado" | "verificando";
@@ -106,6 +127,20 @@ export const VistaAdmin: React.FC = () => {
   const [demandaPorMil, setDemandaPorMil] = useState<Array<{ hasta: string; multiplicador: string; abierto: boolean }>>([]);
   const [disponibilidad, setDisponibilidad] = useState<Array<{ hasta: string; multiplicador: string; abierto: boolean }>>([]);
 
+  // Estado de Gestión de Flota (choferes, habilitación y vehículos en ms-flota)
+  const [choferesFlota, setChoferesFlota] = useState<ChoferFlotaDto[]>([]);
+  const [vehiculosFlota, setVehiculosFlota] = useState<VehiculoFlotaDto[]>([]);
+  const [nuevoChoferId, setNuevoChoferId] = useState("");
+  const [patente, setPatente] = useState("");
+  const [tipoVehiculo, setTipoVehiculo] = useState("AUTOMOVIL");
+  const [marca, setMarca] = useState("");
+  const [modelo, setModelo] = useState("");
+  const [anioVehiculo, setAnioVehiculo] = useState("2024");
+  const [colorVehiculo, setColorVehiculo] = useState("");
+  const [capacidadVehiculo, setCapacidadVehiculo] = useState("4");
+  const [vehiculoSeleccionadoPorChofer, setVehiculoSeleccionadoPorChofer] = useState<Record<string, string>>({});
+  const [cargandoFlota, setCargandoFlota] = useState(false);
+
   const aplicarReglaAlFormulario = useCallback((regla: ReglaDemandaDto) => {
     setMinMult(String(regla.multiplicador_minimo));
     setMaxMult(String(regla.multiplicador_maximo));
@@ -170,10 +205,109 @@ export const VistaAdmin: React.FC = () => {
     }
   }, [aplicarReglaAlFormulario]);
 
+  const cargarFlota = useCallback(async () => {
+    setCargandoFlota(true);
+    try {
+      const [resChoferes, resVehiculos] = await Promise.all([
+        clienteApi.get<{ choferes?: ChoferFlotaDto[] }>("/choferes").catch(() => null),
+        clienteApi.get<{ vehiculos?: VehiculoFlotaDto[] }>("/vehiculos").catch(() => null),
+      ]);
+      if (Array.isArray(resChoferes?.choferes)) setChoferesFlota(resChoferes.choferes);
+      if (Array.isArray(resVehiculos?.vehiculos)) setVehiculosFlota(resVehiculos.vehiculos);
+    } finally {
+      setCargandoFlota(false);
+    }
+  }, []);
+
   useEffect(() => {
     void verificarSalud();
     void cargarReglas();
-  }, [verificarSalud, cargarReglas]);
+    void cargarFlota();
+  }, [verificarSalud, cargarReglas, cargarFlota]);
+
+  const registrarChoferAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoChoferId.trim()) return;
+    setCargandoFlota(true);
+    try {
+      await clienteApi.post("/choferes", {
+        usuario_id: nuevoChoferId.trim(),
+        habilitado: false,
+        carnet_conducir_validado: true,
+      });
+      setNuevoChoferId("");
+      await cargarFlota();
+      setToast({ mensaje: "Perfil de chofer registrado (pendiente de habilitación).", tipo: "exito" });
+    } catch (err) {
+      const msg = err instanceof ErrorHttpApi ? `${err.codigo}: ${err.mensaje}` : "No se pudo registrar el chofer.";
+      setToast({ mensaje: msg, tipo: "error" });
+    } finally {
+      setCargandoFlota(false);
+    }
+  };
+
+  const alternarHabilitacionChofer = async (chofer: ChoferFlotaDto) => {
+    setCargandoFlota(true);
+    try {
+      await clienteApi.patch(`/choferes/${encodeURIComponent(chofer.usuario_id)}/habilitacion`, {
+        habilitado: !chofer.habilitado,
+        carnet_conducir_validado: true,
+      });
+      await cargarFlota();
+      setToast({
+        mensaje: !chofer.habilitado ? "Chofer habilitado para operar." : "Chofer inhabilitado.",
+        tipo: "exito",
+      });
+    } catch (err) {
+      const msg = err instanceof ErrorHttpApi ? `${err.codigo}: ${err.mensaje}` : "No se pudo actualizar la habilitación.";
+      setToast({ mensaje: msg, tipo: "error" });
+    } finally {
+      setCargandoFlota(false);
+    }
+  };
+
+  const registrarVehiculoAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCargandoFlota(true);
+    try {
+      await clienteApi.post("/vehiculos", {
+        patente,
+        tipo_vehiculo: tipoVehiculo,
+        marca,
+        modelo,
+        anio_fabricacion: Number(anioVehiculo),
+        color: colorVehiculo,
+        capacidad_pasajeros: Number(capacidadVehiculo),
+      });
+      setPatente("");
+      setMarca("");
+      setModelo("");
+      setColorVehiculo("");
+      await cargarFlota();
+      setToast({ mensaje: "Vehículo registrado en flota.", tipo: "exito" });
+    } catch (err) {
+      const msg = err instanceof ErrorHttpApi ? `${err.codigo}: ${err.mensaje}` : "No se pudo registrar el vehículo.";
+      setToast({ mensaje: msg, tipo: "error" });
+    } finally {
+      setCargandoFlota(false);
+    }
+  };
+
+  const asignarVehiculo = async (usuarioId: string) => {
+    const idVehiculo = vehiculoSeleccionadoPorChofer[usuarioId] || vehiculosFlota[0]?.id;
+    if (!idVehiculo) return;
+    setCargandoFlota(true);
+    try {
+      await clienteApi.put(`/choferes/${encodeURIComponent(usuarioId)}/vehiculo`, { id_vehiculo: idVehiculo });
+      await cargarFlota();
+      setToast({ mensaje: "Vehículo asignado al chofer.", tipo: "exito" });
+    } catch (err) {
+      const msg = err instanceof ErrorHttpApi ? `${err.codigo}: ${err.mensaje}` : "No se pudo asignar el vehículo.";
+      setToast({ mensaje: msg, tipo: "error" });
+    } finally {
+      setCargandoFlota(false);
+    }
+  };
 
   const actualizarTramoDemanda = (idx: number, campo: "hasta" | "multiplicador", valor: string) => {
     setDemandaPorMil((prev) => prev.map((item, i) => (i === idx ? { ...item, [campo]: valor } : item)));
@@ -602,6 +736,114 @@ export const VistaAdmin: React.FC = () => {
           onReintentar={() => void cargarReglas()}
           descripcionAccesible="Historial versionado de reglas de demanda"
         />
+      </Tarjeta>
+
+      {/* Gestión de Flota: Choferes, Habilitación y Vehículos */}
+      <Tarjeta
+        titulo="Gestión de Flota: Choferes y Vehículos"
+        subtitulo="Alta, validación/habilitación administrativa y asignación de vehículos en ms-flota."
+        data-testid="admin-gestion-flota"
+      >
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <form onSubmit={registrarChoferAdmin} className="space-y-3 rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/60 p-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-200">
+                Registrar perfil de chofer
+              </h3>
+              <CampoTexto
+                id="admin-chofer-usuario-id"
+                etiqueta="ID de usuario (UUID)"
+                placeholder="ej. 33333333-3333-4333-8333-333333333333"
+                value={nuevoChoferId}
+                onChange={(e) => setNuevoChoferId(e.target.value)}
+                required
+              />
+              <Boton type="submit" variante="secundario" tamano="sm" cargando={cargandoFlota} disabled={!nuevoChoferId.trim()}>
+                Registrar chofer
+              </Boton>
+            </form>
+
+            <form onSubmit={registrarVehiculoAdmin} className="space-y-3 rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/60 p-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-200">
+                Registrar vehículo
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <CampoTexto id="veh-patente" etiqueta="Patente" placeholder="AB123CD" value={patente} onChange={(e) => setPatente(e.target.value)} required />
+                <CampoTexto id="veh-tipo" etiqueta="Tipo" value={tipoVehiculo} onChange={(e) => setTipoVehiculo(e.target.value)} required />
+                <CampoTexto id="veh-marca" etiqueta="Marca" placeholder="Fiat" value={marca} onChange={(e) => setMarca(e.target.value)} required />
+                <CampoTexto id="veh-modelo" etiqueta="Modelo" placeholder="Cronos" value={modelo} onChange={(e) => setModelo(e.target.value)} required />
+                <CampoTexto id="veh-anio" etiqueta="Año" type="number" min="1990" max="2035" value={anioVehiculo} onChange={(e) => setAnioVehiculo(e.target.value)} required />
+                <CampoTexto id="veh-color" etiqueta="Color" placeholder="Gris" value={colorVehiculo} onChange={(e) => setColorVehiculo(e.target.value)} required />
+                <CampoTexto id="veh-capacidad" etiqueta="Capacidad" type="number" min="1" max="20" value={capacidadVehiculo} onChange={(e) => setCapacidadVehiculo(e.target.value)} required />
+              </div>
+              <Boton type="submit" variante="secundario" tamano="sm" cargando={cargandoFlota}>
+                Registrar vehículo
+              </Boton>
+            </form>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-200">
+                Choferes registrados ({choferesFlota.length})
+              </h3>
+              <Boton type="button" variante="secundario" tamano="sm" onClick={() => void cargarFlota()} cargando={cargandoFlota}>
+                Actualizar flota
+              </Boton>
+            </div>
+            {choferesFlota.length === 0 ? (
+              <p className="text-xs text-[#5E5B54] dark:text-slate-400">
+                Sin choferes cargados o esperando respuesta de <code className="font-mono">ms-flota</code>.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {choferesFlota.map((c) => (
+                  <div
+                    key={c.usuario_id}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800/70 p-3 text-xs"
+                  >
+                    <div className="space-y-1">
+                      <p className="font-mono font-semibold text-slate-900 dark:text-slate-100">{c.usuario_id}</p>
+                      <p className="text-[#5E5B54] dark:text-slate-300">
+                        Estado: <strong>{c.habilitado ? "Habilitado" : "Pendiente/Inhabilitado"}</strong> · Carnet:{" "}
+                        <strong>{c.carnet_conducir_validado ? "Validado" : "Sin validar"}</strong> · Vehículo:{" "}
+                        <strong>
+                          {c.vehiculo_activo ? `${c.vehiculo_activo.marca} ${c.vehiculo_activo.modelo} (${c.vehiculo_activo.patente})` : "Sin asignar"}
+                        </strong>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {vehiculosFlota.length > 0 && (
+                        <>
+                          <select
+                            aria-label={`Vehículo para ${c.usuario_id}`}
+                            value={vehiculoSeleccionadoPorChofer[c.usuario_id] ?? vehiculosFlota[0]?.id ?? ""}
+                            onChange={(e) =>
+                              setVehiculoSeleccionadoPorChofer((prev) => ({ ...prev, [c.usuario_id]: e.target.value }))
+                            }
+                            className="rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                          >
+                            {vehiculosFlota.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.patente} — {v.marca} {v.modelo}
+                              </option>
+                            ))}
+                          </select>
+                          <Boton type="button" variante="secundario" tamano="sm" onClick={() => void asignarVehiculo(c.usuario_id)}>
+                            Asignar vehículo
+                          </Boton>
+                        </>
+                      )}
+                      <Boton type="button" variante={c.habilitado ? "peligro" : "primario"} tamano="sm" onClick={() => void alternarHabilitacionChofer(c)}>
+                        {c.habilitado ? "Inhabilitar" : "Habilitar chofer"}
+                      </Boton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </Tarjeta>
 
       <Toast

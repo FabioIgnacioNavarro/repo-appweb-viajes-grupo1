@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { ErrorDependenciaHttp } from "../../src/compartido/cliente-servicios";
-import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, MarcarViajeSinChoferesDisponibles, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria, RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente } from "../../src/ms-viajes/dominio";
+import { ConfirmarViaje, CrearOfertasParaCandidatos, GeneradorIdMemoria, MarcarViajeSinChoferesDisponibles, ProcesarVencimientoOfertas, RepositorioIdempotenciaMemoria, RepositorioOfertasMemoria, RepositorioViajesMemoria, type ActorAutenticado, type EstimacionVigente } from "../../src/ms-viajes/dominio";
 import { ConfirmarViajeYBuscarChoferes } from "../../src/ms-viajes/integracion";
 
 const actor: ActorAutenticado = { idUsuario: "pasajero-1", rol: "PASAJERO" };
@@ -59,4 +59,61 @@ test("si no hay candidatos, el viaje pasa a terminal y un reintento devuelve el 
   assert.equal(reintento.id, primero.id);
   assert.equal(busquedas, 1);
   assert.equal((await ofertas.listarPorViaje(primero.id)).length, 0);
+});
+
+test("vencimiento automático en servidor vence la oferta aunque el chofer no consulte y ofrece al siguiente chofer", async () => {
+  const viajes = new RepositorioViajesMemoria();
+  const ofertas = new RepositorioOfertasMemoria();
+  const ids = new GeneradorIdMemoria();
+  const sinChoferes = new MarcarViajeSinChoferesDisponibles(viajes);
+  const crearOfertas = new CrearOfertasParaCandidatos(ofertas, ids);
+  const eventos: Array<{ usuario: string; evento: string; datos: Record<string, unknown> }> = [];
+  const publicador = { publicarAUsuario(usuario: string, evento: string, datos: Record<string, unknown>) { eventos.push({ usuario, evento, datos }); } };
+
+  const confirmarConOfertas = new ConfirmarViajeYBuscarChoferes(
+    new ConfirmarViaje(viajes, new RepositorioIdempotenciaMemoria(), ids),
+    { async buscar() { return ["chofer-1", "chofer-2"]; } },
+    crearOfertas,
+    sinChoferes,
+    publicador,
+    { maxOfertasPorRonda: 1, vigenciaMs: 1000 }
+  );
+
+  const viaje = await confirmarConOfertas.ejecutar(actor, estimacion, "clave-auto-vence", "jwt-pasajero");
+  const ofertasRonda1 = await ofertas.listarPorViaje(viaje.id);
+  assert.equal(ofertasRonda1.length, 1);
+  assert.equal(ofertasRonda1[0]!.choferId, "chofer-1");
+
+  const procesador = new ProcesarVencimientoOfertas(
+    ofertas,
+    viajes,
+    crearOfertas,
+    sinChoferes,
+    async () => ["chofer-1", "chofer-2"],
+    publicador,
+    { maxOfertasPorRonda: 1, vigenciaMs: 1000 }
+  );
+
+  const antesDeVencer = await procesador.ejecutar(new Date(ofertasRonda1[0]!.expiraEm.getTime() - 10));
+  assert.equal(antesDeVencer.ofertasVencidas, 0);
+
+  const trasPrimerVencimiento = await procesador.ejecutar(new Date(ofertasRonda1[0]!.expiraEm.getTime() + 10));
+  assert.equal(trasPrimerVencimiento.ofertasVencidas, 1);
+  assert.equal(trasPrimerVencimiento.ofertasReenviadas, 1);
+  assert.equal(trasPrimerVencimiento.viajesSinChoferes, 0);
+
+  const ofertasRonda2 = await ofertas.listarPorViaje(viaje.id);
+  assert.equal(ofertasRonda2.length, 2);
+  assert.equal(ofertasRonda2.find((o) => o.choferId === "chofer-1")?.estado, "VENCIDA");
+  const ofertaChofer2 = ofertasRonda2.find((o) => o.choferId === "chofer-2");
+  assert.equal(ofertaChofer2?.estado, "PENDIENTE");
+  assert.ok(eventos.some((e) => e.usuario === "chofer-1" && e.evento === "OFERTA_VENCIDA"));
+  assert.ok(eventos.some((e) => e.usuario === "chofer-2" && e.evento === "OFERTA_NUEVA"));
+
+  const trasSegundoVencimiento = await procesador.ejecutar(new Date(ofertaChofer2!.expiraEm.getTime() + 10));
+  assert.equal(trasSegundoVencimiento.ofertasVencidas, 1);
+  assert.equal(trasSegundoVencimiento.ofertasReenviadas, 0);
+  assert.equal(trasSegundoVencimiento.viajesSinChoferes, 1);
+  assert.equal((await viajes.obtener(viaje.id))?.estado, "SIN_CHOFERES_DISPONIBLES");
+  assert.ok(eventos.some((e) => e.usuario === "pasajero-1" && e.evento === "ESTADO_VIAJE_ACTUALIZADO" && e.datos.estado === "sin_choferes_disponibles"));
 });

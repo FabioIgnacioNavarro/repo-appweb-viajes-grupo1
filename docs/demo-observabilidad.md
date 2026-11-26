@@ -139,10 +139,10 @@ sum by (service_name, http_route, http_response_status_code) (rate(viajes_http_s
 ```
 
 ```promql
-histogram_quantile(0.95, sum by (le, service_name, http_route) (rate(viajes_http_duracion_seconds_bucket[5m])))
+1000 * histogram_quantile(0.95, sum by (le, service_name, http_route) (rate(viajes_http_duracion_seconds_bucket[5m])))
 ```
 
-Las métricas usan la ruta declarada por Express (por ejemplo, `/viajes/:id`) y no incluyen IDs, query strings ni identificadores de usuario.
+La consulta anterior expresa el p95 en milisegundos; sin el factor `1000`, el resultado queda en segundos. El histograma tiene límites explícitos en segundos, desde `0.001` (1 ms) hasta `10` segundos, para conservar resolución en las latencias habituales de la API. `histogram_quantile` interpola dentro de cada intervalo, por lo que límites demasiado amplios pueden aparentar latencias de varios segundos aunque las solicitudes reales sean mucho más rápidas. Las métricas usan la ruta declarada por Express (por ejemplo, `/viajes/:id`) y no incluyen IDs, query strings ni identificadores de usuario. En rutas protegidas, la autenticación se ejecuta después de que Express reconoce la ruta; así, un `401` de un endpoint existente conserva su plantilla en `http.route`. Una URL desconocida puede seguir usando la etiqueta `ruta_no_encontrada`.
 
 ### 4. Generar y encontrar un log correlacionado de dependencia
 

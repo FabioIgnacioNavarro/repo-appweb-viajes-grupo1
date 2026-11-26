@@ -142,6 +142,8 @@ export interface RepositorioOfertas {
   obtener(id: string): Promise<Oferta | undefined>;
   listarPorChofer(choferId: string): Promise<Oferta[]>;
   listarPorViaje(viajeId: string): Promise<Oferta[]>;
+  listarPendientesVencidas?(ahora: Date): Promise<Oferta[]>;
+  marcarVencidaSiPendiente?(id: string, ahora: Date): Promise<Oferta | undefined>;
 }
 
 export interface RepositorioCobros {
@@ -322,6 +324,21 @@ export class RepositorioOfertasMemoria implements RepositorioOfertas {
 
   async listarPorViaje(viajeId: string): Promise<Oferta[]> {
     return [...this.datos.values()].filter((oferta) => oferta.viajeId === viajeId).map((oferta) => structuredClone(oferta));
+  }
+
+  async listarPendientesVencidas(ahora: Date): Promise<Oferta[]> {
+    return [...this.datos.values()]
+      .filter((oferta) => oferta.estado === "PENDIENTE" && oferta.expiraEm.getTime() <= ahora.getTime())
+      .sort((a, b) => a.expiraEm.getTime() - b.expiraEm.getTime())
+      .map((oferta) => structuredClone(oferta));
+  }
+
+  async marcarVencidaSiPendiente(id: string, ahora: Date): Promise<Oferta | undefined> {
+    const actual = this.datos.get(id);
+    if (!actual || actual.estado !== "PENDIENTE" || actual.expiraEm.getTime() > ahora.getTime()) return undefined;
+    const vencida: Oferta = { ...actual, estado: "VENCIDA", respondidaEm: new Date(ahora) };
+    this.datos.set(id, structuredClone(vencida));
+    return structuredClone(vencida);
   }
 }
 
@@ -746,6 +763,106 @@ function publicarEstadoOferta(eventos: PublicadorEventosTiempoReal | undefined, 
       actualizado_en: (oferta.respondidaEm ?? new Date()).toISOString()
     });
   } catch { /* El cambio de estado persistido prevalece sobre la notificación efímera. */ }
+}
+
+/** Publica en tiempo real un lote de ofertas recién creadas; tolera desconexión del canal. */
+export function publicarOfertasNuevas(eventos: PublicadorEventosTiempoReal | undefined, viaje: Viaje, ofertas: Oferta[]): void {
+  for (const oferta of ofertas) {
+    try {
+      eventos?.publicarAUsuario(oferta.choferId, "OFERTA_NUEVA", {
+        id_oferta: oferta.id, id_viaje: oferta.viajeId, estado: oferta.estado.toLowerCase(),
+        enviada_en: oferta.enviadaEm.toISOString(), expira_en: oferta.expiraEm.toISOString(),
+        origen: viaje.origen, destino: viaje.destino,
+        precio_estimado: viaje.precioEstimado, moneda: viaje.moneda
+      });
+    } catch { /* La oferta queda persistida y puede recuperarse por HTTP. */ }
+  }
+}
+
+export interface ResultadoVencimientoOfertas {
+  ofertasVencidas: number;
+  ofertasReenviadas: number;
+  viajesSinChoferes: number;
+}
+
+/**
+ * Proceso periódico de servidor: vence ofertas expiradas aunque el chofer haya cerrado la app,
+ * ofrece el viaje al siguiente chofer elegible y, si no queda ninguno, marca el viaje como
+ * SIN_CHOFERES_DISPONIBLES notificando al pasajero.
+ */
+export class ProcesarVencimientoOfertas {
+  constructor(
+    private readonly ofertas: RepositorioOfertas,
+    private readonly viajes: RepositorioViajes,
+    private readonly crearOfertas: CrearOfertasParaCandidatos,
+    private readonly sinChoferesDisponibles: MarcarViajeSinChoferesDisponibles,
+    private readonly buscarCandidatos?: (viaje: Viaje) => Promise<string[]>,
+    private readonly eventos?: PublicadorEventosTiempoReal,
+    private readonly opciones?: { maxOfertasPorRonda?: number; vigenciaMs?: number }
+  ) {}
+
+  async ejecutar(ahora = new Date()): Promise<ResultadoVencimientoOfertas> {
+    const pendientesVencidas = (await this.ofertas.listarPendientesVencidas?.(ahora)) ?? [];
+    const viajesAfectados = new Set<string>();
+    let ofertasVencidas = 0;
+
+    for (const oferta of pendientesVencidas) {
+      const expirada = await this.ofertas.marcarVencidaSiPendiente?.(oferta.id, ahora);
+      if (!expirada) continue;
+      ofertasVencidas += 1;
+      viajesAfectados.add(expirada.viajeId);
+      publicarEstadoOferta(this.eventos, expirada, "OFERTA_VENCIDA", "vigencia_vencida");
+    }
+
+    let ofertasReenviadas = 0;
+    let viajesSinChoferes = 0;
+    for (const viajeId of viajesAfectados) {
+      const seguimiento = await this.intentarSiguienteParaViaje(viajeId, ahora);
+      ofertasReenviadas += seguimiento.ofertasReenviadas;
+      if (seguimiento.sinChoferes) viajesSinChoferes += 1;
+    }
+
+    return { ofertasVencidas, ofertasReenviadas, viajesSinChoferes };
+  }
+
+  async intentarSiguienteParaViaje(viajeId: string, ahora = new Date()): Promise<{ ofertasReenviadas: number; sinChoferes: boolean }> {
+    const viaje = await this.viajes.obtener(viajeId);
+    if (!viaje || viaje.estado !== "SOLICITADO") return { ofertasReenviadas: 0, sinChoferes: false };
+
+    const ofertasViaje = await this.ofertas.listarPorViaje(viaje.id);
+    const sigueConPendientes = ofertasViaje.some((o) => o.estado === "PENDIENTE" && o.expiraEm.getTime() > ahora.getTime());
+    if (sigueConPendientes || !this.buscarCandidatos) return { ofertasReenviadas: 0, sinChoferes: false };
+
+    let candidatos: string[];
+    try {
+      candidatos = await this.buscarCandidatos(viaje);
+    } catch {
+      return { ofertasReenviadas: 0, sinChoferes: false };
+    }
+
+    const yaOfertados = new Set(ofertasViaje.map((o) => o.choferId));
+    const siguientes = candidatos.filter((id) => id && !yaOfertados.has(id));
+    const limite = this.opciones?.maxOfertasPorRonda;
+    const seleccion = limite !== undefined && limite > 0 ? siguientes.slice(0, limite) : siguientes;
+
+    if (seleccion.length > 0) {
+      try {
+        const nuevas = await this.crearOfertas.ejecutar(viaje, seleccion, ahora, this.opciones?.vigenciaMs ?? 30_000);
+        publicarOfertasNuevas(this.eventos, viaje, nuevas);
+        return { ofertasReenviadas: nuevas.length, sinChoferes: false };
+      } catch {
+        return { ofertasReenviadas: 0, sinChoferes: false };
+      }
+    }
+
+    try {
+      const terminal = await this.sinChoferesDisponibles.ejecutar(viaje.id);
+      if (this.eventos) new PublicarEstadoViaje(this.eventos).ejecutar(terminal);
+      return { ofertasReenviadas: 0, sinChoferes: true };
+    } catch {
+      return { ofertasReenviadas: 0, sinChoferes: false };
+    }
+  }
 }
 
 export class AvanzarViaje {
