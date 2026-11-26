@@ -47,6 +47,20 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
       });
     });
 
+    await page.route("**/choferes/yo/ubicacion", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "ubic-ws-1",
+          usuario_id: "11111111-1111-4111-8111-111111111111",
+          latitud: -27.4512,
+          longitud: -58.9866,
+          actualizado_at: new Date().toISOString(),
+        }),
+      });
+    });
+
     await page.route("**/choferes/yo/ofertas", async (route) => {
       await route.fulfill({
         status: 200,

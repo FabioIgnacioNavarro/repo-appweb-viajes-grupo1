@@ -460,9 +460,16 @@ test("ms-tarifas HTTP: POST /tarifas/autocompletar devuelve sugerencias para pas
     assert.equal(okBody.sugerencias.length, 1);
     assert.equal(okBody.sugerencias[0]?.etiqueta, "Av. Alberdi 250, Resistencia");
 
-    const forbiddenRes = await fetch(`${ctx.base}/tarifas/autocompletar`, {
+    const choferRes = await fetch(`${ctx.base}/tarifas/autocompletar`, {
       method: "POST",
       headers: { Authorization: "Bearer token-chofer-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ consulta: "avenida alberdi" })
+    });
+    assert.equal(choferRes.status, 200);
+
+    const forbiddenRes = await fetch(`${ctx.base}/tarifas/autocompletar`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-soporte-1", "Content-Type": "application/json" },
       body: JSON.stringify({ consulta: "avenida alberdi" })
     });
     assert.equal(forbiddenRes.status, 403);

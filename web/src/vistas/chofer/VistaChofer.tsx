@@ -113,15 +113,27 @@ export const VistaChofer: React.FC = () => {
     disponibleRef.current = disponible;
   }, [disponible]);
 
-  // Ubicación manual y envío automático cada 2s en ms-flota
+  // Ubicación por dirección (geocodificada automáticamente) y envío automático cada 2s en ms-flota
+  const [direccionInput, setDireccionInput] = useState<string>("");
+  const [sugerenciasDireccion, setSugerenciasDireccion] = useState<
+    Array<{ etiqueta: string; latitud: number; longitud: number }>
+  >([]);
+  const [buscandoDireccion, setBuscandoDireccion] = useState<boolean>(false);
   const [latitudInput, setLatitudInput] = useState<string>("-27.4512");
   const [longitudInput, setLongitudInput] = useState<string>("-58.9866");
   const latitudRef = useRef<string>(latitudInput);
   const longitudRef = useRef<string>(longitudInput);
+  const debounceDireccionRef = useRef<number | null>(null);
+  const secuenciaDireccionRef = useRef<number>(0);
   useEffect(() => {
     latitudRef.current = latitudInput;
     longitudRef.current = longitudInput;
   }, [latitudInput, longitudInput]);
+  useEffect(() => () => {
+    if (debounceDireccionRef.current !== null) {
+      window.clearTimeout(debounceDireccionRef.current);
+    }
+  }, []);
   const [ultimaUbicacion, setUltimaUbicacion] = useState<{
     latitud: number;
     longitud: number;
@@ -468,8 +480,89 @@ export const VistaChofer: React.FC = () => {
     [modoDev]
   );
 
+  const solicitarSugerenciasDireccion = useCallback((consulta: string) => {
+    if (debounceDireccionRef.current !== null) {
+      window.clearTimeout(debounceDireccionRef.current);
+      debounceDireccionRef.current = null;
+    }
+    const limpia = consulta.trim();
+    if (limpia.length < 3) {
+      secuenciaDireccionRef.current += 1;
+      setSugerenciasDireccion([]);
+      setBuscandoDireccion(false);
+      return;
+    }
+    const turno = secuenciaDireccionRef.current + 1;
+    secuenciaDireccionRef.current = turno;
+    setBuscandoDireccion(true);
+    debounceDireccionRef.current = window.setTimeout(() => {
+      void clienteApi
+        .post<{ sugerencias: Array<{ etiqueta: string; latitud: number; longitud: number }> }>(
+          "/tarifas/autocompletar",
+          { consulta: limpia, centro: { latitud: -27.4512, longitud: -58.9866 } }
+        )
+        .then((res) => {
+          if (secuenciaDireccionRef.current !== turno) return;
+          setSugerenciasDireccion(Array.isArray(res.sugerencias) ? res.sugerencias : []);
+        })
+        .catch(() => {
+          if (secuenciaDireccionRef.current !== turno) return;
+          setSugerenciasDireccion([]);
+        })
+        .finally(() => {
+          if (secuenciaDireccionRef.current === turno) setBuscandoDireccion(false);
+        });
+    }, 250);
+  }, []);
+
+  const seleccionarSugerenciaDireccion = async (sugerencia: {
+    etiqueta: string;
+    latitud: number;
+    longitud: number;
+  }) => {
+    setDireccionInput(sugerencia.etiqueta);
+    setSugerenciasDireccion([]);
+    setLatitudInput(String(sugerencia.latitud));
+    setLongitudInput(String(sugerencia.longitud));
+    await reportarUbicacion(sugerencia.latitud, sugerencia.longitud, sugerencia.etiqueta);
+  };
+
   const manejarEnvioUbicacionManual = async (e: React.FormEvent) => {
     e.preventDefault();
+    const consulta = direccionInput.trim();
+    if (consulta.length >= 3) {
+      setEnviandoUbicacion(true);
+      setAlertaError(null);
+      try {
+        const res = await clienteApi.post<{
+          sugerencias: Array<{ etiqueta: string; latitud: number; longitud: number }>;
+        }>("/tarifas/autocompletar", {
+          consulta,
+          centro: { latitud: -27.4512, longitud: -58.9866 },
+        });
+        const primera = res.sugerencias?.[0];
+        if (!primera) {
+          setAlertaError({
+            codigo: "DIRECCION_NO_ENCONTRADA",
+            mensaje: "No encontramos esa dirección. Probá agregando calle, altura o barrio en Resistencia.",
+          });
+          setEnviandoUbicacion(false);
+          return;
+        }
+        setDireccionInput(primera.etiqueta);
+        setSugerenciasDireccion([]);
+        await reportarUbicacion(primera.latitud, primera.longitud, primera.etiqueta);
+        return;
+      } catch (err) {
+        setEnviandoUbicacion(false);
+        if (err instanceof ErrorHttpApi) {
+          setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
+        } else {
+          setAlertaError({ codigo: "ERROR_UBICACION", mensaje: "No se pudo resolver la dirección ingresada." });
+        }
+        return;
+      }
+    }
     await reportarUbicacion(Number(latitudInput), Number(longitudInput), "Posición manual");
   };
 
@@ -478,6 +571,7 @@ export const VistaChofer: React.FC = () => {
     if (!disponible && !tieneViajeEnCurso) return;
 
     const enviarUbicacionPeriodica = async () => {
+      if (!latitudRef.current.trim() || !longitudRef.current.trim()) return;
       const lat = Number(latitudRef.current);
       const lon = Number(longitudRef.current);
       if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
@@ -1166,45 +1260,93 @@ export const VistaChofer: React.FC = () => {
               </div>
             </div>
 
-            {/* Formulario de envío manual de coordenadas */}
-            <form onSubmit={(e) => void manejarEnvioUbicacionManual(e)} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-              <div>
-                <label htmlFor="input-latitud-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
-                  Latitud (Resistencia)
-                </label>
-                <input
-                  id="input-latitud-chofer"
-                  data-testid="input-latitud-chofer"
-                  type="number"
-                  step="0.0001"
-                  value={latitudInput}
-                  onChange={(e) => setLatitudInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
-                />
+            {/* Formulario de ubicación por dirección (se resuelve automáticamente a coordenadas) */}
+            <form onSubmit={(e) => void manejarEnvioUbicacionManual(e)} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div className="sm:col-span-2 relative">
+                  <label htmlFor="input-direccion-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
+                    Dirección actual
+                  </label>
+                  <input
+                    id="input-direccion-chofer"
+                    data-testid="input-direccion-chofer"
+                    type="text"
+                    placeholder="Ej: Av. Alberdi 250, Resistencia"
+                    value={direccionInput}
+                    onChange={(e) => {
+                      const valor = e.target.value;
+                      setDireccionInput(valor);
+                      solicitarSugerenciasDireccion(valor);
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
+                  />
+                  {buscandoDireccion && (
+                    <span className="absolute right-3 top-7 text-[10px] text-[#5E5B54] dark:text-slate-400">
+                      Buscando…
+                    </span>
+                  )}
+                  {sugerenciasDireccion.length > 0 && (
+                    <ul
+                      data-testid="sugerencias-direccion-chofer"
+                      className="absolute z-30 mt-1 w-full rounded-xl border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 shadow-lg max-h-48 overflow-auto divide-y divide-[#E5E0D4] dark:divide-slate-800"
+                    >
+                      {sugerenciasDireccion.map((sug) => (
+                        <li key={`${sug.etiqueta}-${sug.latitud}-${sug.longitud}`}>
+                          <button
+                            type="button"
+                            onClick={() => void seleccionarSugerenciaDireccion(sug)}
+                            className="w-full text-left px-3 py-2 text-xs text-[#2C2B28] dark:text-slate-100 hover:bg-[#E6EFE8] dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            {sug.etiqueta}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <button
+                  id="boton-enviar-ubicacion"
+                  data-testid="boton-enviar-ubicacion"
+                  type="submit"
+                  disabled={enviandoUbicacion}
+                  className="w-full py-2 px-4 rounded-lg bg-[#4A7C59] hover:bg-[#3E6A4B] text-white text-xs font-bold transition cursor-pointer"
+                >
+                  {enviandoUbicacion ? "Enviando..." : "Enviar Ubicación"}
+                </button>
               </div>
-              <div>
-                <label htmlFor="input-longitud-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
-                  Longitud (Resistencia)
-                </label>
-                <input
-                  id="input-longitud-chofer"
-                  data-testid="input-longitud-chofer"
-                  type="number"
-                  step="0.0001"
-                  value={longitudInput}
-                  onChange={(e) => setLongitudInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
-                />
-              </div>
-              <button
-                id="boton-enviar-ubicacion"
-                data-testid="boton-enviar-ubicacion"
-                type="submit"
-                disabled={enviandoUbicacion}
-                className="w-full py-2 px-4 rounded-lg bg-[#4A7C59] hover:bg-[#3E6A4B] text-white text-xs font-bold transition cursor-pointer"
-              >
-                {enviandoUbicacion ? "Enviando..." : "Enviar Ubicación"}
-              </button>
+
+              {modoDev && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label htmlFor="input-latitud-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
+                      Latitud (solo modo dev)
+                    </label>
+                    <input
+                      id="input-latitud-chofer"
+                      data-testid="input-latitud-chofer"
+                      type="number"
+                      step="0.0001"
+                      value={latitudInput}
+                      onChange={(e) => setLatitudInput(e.target.value)}
+                      className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="input-longitud-chofer" className="block text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 mb-1">
+                      Longitud (solo modo dev)
+                    </label>
+                    <input
+                      id="input-longitud-chofer"
+                      data-testid="input-longitud-chofer"
+                      type="number"
+                      step="0.0001"
+                      value={longitudInput}
+                      onChange={(e) => setLongitudInput(e.target.value)}
+                      className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 text-[#2C2B28] dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#4A7C59]"
+                    />
+                  </div>
+                </div>
+              )}
             </form>
 
             {/* Última posición confirmada */}

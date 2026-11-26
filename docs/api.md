@@ -215,8 +215,8 @@ Convierte coordenadas seleccionadas manualmente en el mapa a una dirección legi
 - **Respuesta (`200 OK`):** `{"direccion": "Juan B. Justo 4, Resistencia", "coordenada": {"latitud": -27.45213, "longitud": -58.98738}}`.
 
 #### `POST /tarifas/autocompletar`
-Devuelve hasta 5 sugerencias de direcciones a medida que el pasajero escribe el origen o destino usando el geocodificador configurado.
-- **Autorización:** Requiere rol `PASAJERO` o `ADMINISTRADOR`.
+Devuelve hasta 5 sugerencias de direcciones a medida que el usuario escribe una dirección (origen/destino del pasajero o ubicación actual del chofer) usando el geocodificador configurado.
+- **Autorización:** Requiere rol `PASAJERO`, `CHOFER` o `ADMINISTRADOR`.
 - **Cuerpo recibido:** `{"consulta": "avenida alberdi", "centro": {"latitud": -27.45213, "longitud": -58.98738}}` (`centro` opcional).
 - **Respuesta (`200 OK`):** `{"sugerencias": [{"etiqueta": "Av. Alberdi 250, Resistencia", "latitud": -27.4538, "longitud": -58.9845}]}`.
 

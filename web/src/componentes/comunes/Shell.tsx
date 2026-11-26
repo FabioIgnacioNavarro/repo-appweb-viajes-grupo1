@@ -18,15 +18,17 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     const desuscribirSesion = suscribirSesion(setSesion);
     const desuscribirWs = clienteTiempoReal.alCambiarEstado(setEstadoWs);
 
-    if (obtenerSesion()) {
-      clienteTiempoReal.conectar();
-    }
-
     return () => {
       desuscribirSesion();
       desuscribirWs();
     };
   }, []);
+
+  useEffect(() => {
+    if (sesion) {
+      clienteTiempoReal.conectar();
+    }
+  }, [sesion]);
 
   const badgeColorRol = (rol: string) => {
     switch (rol) {

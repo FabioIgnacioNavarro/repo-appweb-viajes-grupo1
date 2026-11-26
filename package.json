@@ -24,6 +24,8 @@
     "test:e2e": "npm run build && npm run build:tests && node --test dist-tests/tests/e2e/e2e.test.js",
     "test:pw": "playwright test",
     "test:pw:ui": "playwright test --ui",
+    "test:pw:real": "node -e \"const { spawnSync } = require('node:child_process'); const r = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['playwright', 'test', 'tests/playwright/flujo-completo-real.spec.ts', '--reporter=list'], { stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, PLAYWRIGHT_FLUJO_REAL: '1', PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080' } }); process.exit(r.status ?? 1);\"",
+    "test:pw:demo": "node -e \"const { spawnSync } = require('node:child_process'); const r = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['playwright', 'test', 'tests/playwright/flujo-completo-real.spec.ts', '--headed', '--reporter=list'], { stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, PLAYWRIGHT_FLUJO_REAL: '1', PLAYWRIGHT_MAXIMIZED: '1', SLOWMO: process.env.SLOWMO || '550', DEMO_PAUSA_MS: process.env.DEMO_PAUSA_MS || '3500', PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080' } }); process.exit(r.status ?? 1);\"",
     "lint": "npm run lint:eslint && npm run lint:arquitectura && npm run lint:tipos",
     "lint:eslint": "eslint .",
     "lint:arquitectura": "node scripts/verificar-arquitectura.mjs",

@@ -152,8 +152,9 @@ export class ClienteWebSocket {
   }
 
   private despacharEvento(evento: EventoWebSocket): void {
-    // 1. Oyentes específicos del tipo de evento
-    const oyentesTipo = this.oyentesEventos.get(evento.tipo);
+    // 1. Oyentes específicos del tipo de evento (admite `tipo` y `evento` del contrato WS real)
+    const claveEvento = evento.tipo || (evento as unknown as { evento?: string }).evento;
+    const oyentesTipo = claveEvento ? this.oyentesEventos.get(claveEvento) : undefined;
     if (oyentesTipo) {
       for (const oyente of oyentesTipo) {
         try {
