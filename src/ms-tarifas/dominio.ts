@@ -100,9 +100,15 @@ export interface NivelBusquedaGeografica {
   restringirCuadro: boolean;
   codigoPais: string;
 }
+export interface SugerenciaDireccion {
+  etiqueta: string;
+  latitud: number;
+  longitud: number;
+}
 export interface Geocodificador {
   geocodificar(direccion: string, opciones?: OpcionesGeocodificacion): Promise<Coordenada>;
   geocodificarInversa?(coordenada: Coordenada): Promise<string>;
+  autocompletar?(consulta: string, opciones?: OpcionesGeocodificacion): Promise<SugerenciaDireccion[]>;
 }
 export type PuntoUbicacion = Coordenada | { direccion: string };
 export interface FuenteClima { consultar(zona: ZonaTarifaria): Promise<ObservacionClima>; }

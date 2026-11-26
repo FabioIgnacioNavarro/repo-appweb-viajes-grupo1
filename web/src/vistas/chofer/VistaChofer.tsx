@@ -113,9 +113,15 @@ export const VistaChofer: React.FC = () => {
     disponibleRef.current = disponible;
   }, [disponible]);
 
-  // Ubicación manual en ms-flota
+  // Ubicación manual y envío automático cada 2s en ms-flota
   const [latitudInput, setLatitudInput] = useState<string>("-27.4512");
   const [longitudInput, setLongitudInput] = useState<string>("-58.9866");
+  const latitudRef = useRef<string>(latitudInput);
+  const longitudRef = useRef<string>(longitudInput);
+  useEffect(() => {
+    latitudRef.current = latitudInput;
+    longitudRef.current = longitudInput;
+  }, [latitudInput, longitudInput]);
   const [ultimaUbicacion, setUltimaUbicacion] = useState<{
     latitud: number;
     longitud: number;
@@ -466,6 +472,46 @@ export const VistaChofer: React.FC = () => {
     e.preventDefault();
     await reportarUbicacion(Number(latitudInput), Number(longitudInput), "Posición manual");
   };
+
+  // Envío automático de ubicación cada 2 segundos mientras el chofer está conectado o en viaje
+  useEffect(() => {
+    if (!disponible && !tieneViajeEnCurso) return;
+
+    const enviarUbicacionPeriodica = async () => {
+      const lat = Number(latitudRef.current);
+      const lon = Number(longitudRef.current);
+      if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+        return;
+      }
+      const ahoraIso = new Date().toISOString();
+      try {
+        const resp = await clienteApi.post<{
+          latitud: number;
+          longitud: number;
+          actualizado_at: string;
+        }>("/choferes/yo/ubicacion", {
+          latitud: lat,
+          longitud: lon,
+          actualizado_at: ahoraIso,
+          precision_metros: 8,
+        });
+        setUltimaUbicacion({
+          latitud: resp.latitud,
+          longitud: resp.longitud,
+          actualizado_at: resp.actualizado_at,
+          etiqueta: "Actualización automática (2s)",
+        });
+      } catch {
+        // Silencioso en pings periódicos para no interrumpir la UI
+      }
+    };
+
+    void enviarUbicacionPeriodica();
+    const timer = setInterval(() => {
+      void enviarUbicacionPeriodica();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [disponible, tieneViajeEnCurso]);
 
   useEffect(() => {
     if (modoDev) return;

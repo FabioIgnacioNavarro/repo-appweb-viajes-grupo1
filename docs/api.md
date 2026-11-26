@@ -213,6 +213,12 @@ Convierte coordenadas seleccionadas manualmente en el mapa a una dirección legi
 - **Cuerpo recibido:** `{"latitud": -27.45213, "longitud": -58.98738}`.
 - **Respuesta (`200 OK`):** `{"direccion": "Juan B. Justo 4, Resistencia", "coordenada": {"latitud": -27.45213, "longitud": -58.98738}}`.
 
+#### `POST /tarifas/autocompletar`
+Devuelve hasta 5 sugerencias de direcciones a medida que el pasajero escribe el origen o destino usando el geocodificador configurado.
+- **Autorización:** Requiere rol `PASAJERO` o `ADMINISTRADOR`.
+- **Cuerpo recibido:** `{"consulta": "avenida alberdi", "centro": {"latitud": -27.45213, "longitud": -58.98738}}` (`centro` opcional).
+- **Respuesta (`200 OK`):** `{"sugerencias": [{"etiqueta": "Av. Alberdi 250, Resistencia", "latitud": -27.4538, "longitud": -58.9845}]}`.
+
 ---
 
 ### 3.2 Servicio `ms-viajes` (Ciclo de Vida del Viaje y Ofertas)

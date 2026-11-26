@@ -428,3 +428,35 @@ test("GeocodificadorNominatim elige el resultado más cercano al usuario dentro 
   assert.equal(coord.longitud, -58.9882967);
   assert.match(urlCapturada, /limit=10/);
 });
+
+test("GeocodificadorFalso y Nominatim devuelven sugerencias al autocompletar direcciones", async () => {
+  const falso = new GeocodificadorFalso();
+  const sugerenciasFalso = await falso.autocompletar("avenida alberdi");
+  assert.ok(sugerenciasFalso.length >= 2);
+  assert.ok(sugerenciasFalso.some((s) => s.etiqueta === "Av. Alberdi 250, Resistencia"));
+
+  const vacio = await falso.autocompletar("a");
+  assert.deepEqual(vacio, []);
+
+  const obtenerMock = async () =>
+    new Response(
+      JSON.stringify([
+        {
+          lat: "-27.4538",
+          lon: "-58.9845",
+          address: { road: "Avenida Alberdi", house_number: "250", city: "Resistencia" }
+        },
+        {
+          lat: "-27.4572",
+          lon: "-58.9818",
+          address: { road: "Avenida Alberdi", house_number: "600", city: "Resistencia" }
+        }
+      ]),
+      { status: 200 }
+    );
+  const nominatim = new GeocodificadorNominatim("test-agent/1.0", 1500, obtenerMock as typeof fetch);
+  const sugerenciasNom = await nominatim.autocompletar("avenida alberdi");
+  assert.equal(sugerenciasNom.length, 2);
+  assert.equal(sugerenciasNom[0]?.etiqueta, "Avenida Alberdi 250, Resistencia");
+  assert.equal(sugerenciasNom[1]?.etiqueta, "Avenida Alberdi 600, Resistencia");
+});

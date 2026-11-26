@@ -79,6 +79,10 @@ async function iniciarServidorTarifas(opciones: {
     reglas: gestionarRegla,
     modoDesarrollador: opciones.modoDesarrollador ?? false,
     geocodificarInversa: async (c) => `Juan B. Justo 4, Resistencia (${c.latitud.toFixed(3)})`,
+    autocompletar: async (consulta) =>
+      consulta.toLowerCase().includes("alberdi")
+        ? [{ etiqueta: "Av. Alberdi 250, Resistencia", latitud: -27.4538, longitud: -58.9845 }]
+        : [],
     validador: {
       async validar(token: string) {
         const actor = actores[token];
@@ -440,5 +444,36 @@ test("DEV-001: POST /viajes/estimacion bloquea simulación fuera de modo desarro
     assert.ok(Array.isArray(body201.recomendaciones) && body201.recomendaciones.length > 0);
   } finally {
     await cerrar(ctxActivo.servidor);
+  }
+});
+
+test("ms-tarifas HTTP: POST /tarifas/autocompletar devuelve sugerencias para pasajero y aplica RBAC", async () => {
+  const ctx = await iniciarServidorTarifas();
+  try {
+    const okRes = await fetch(`${ctx.base}/tarifas/autocompletar`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-pasajero-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ consulta: "avenida alberdi", centro: { latitud: -27.45, longitud: -58.98 } })
+    });
+    assert.equal(okRes.status, 200);
+    const okBody = await okRes.json() as { sugerencias: Array<{ etiqueta: string; latitud: number; longitud: number }> };
+    assert.equal(okBody.sugerencias.length, 1);
+    assert.equal(okBody.sugerencias[0]?.etiqueta, "Av. Alberdi 250, Resistencia");
+
+    const forbiddenRes = await fetch(`${ctx.base}/tarifas/autocompletar`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-chofer-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ consulta: "avenida alberdi" })
+    });
+    assert.equal(forbiddenRes.status, 403);
+
+    const badRes = await fetch(`${ctx.base}/tarifas/autocompletar`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-pasajero-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ consulta: "avenida alberdi", centro: { latitud: 999, longitud: -58.98 } })
+    });
+    assert.equal(badRes.status, 400);
+  } finally {
+    await cerrar(ctx.servidor);
   }
 });
