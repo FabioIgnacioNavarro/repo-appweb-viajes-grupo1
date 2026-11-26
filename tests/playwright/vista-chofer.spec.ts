@@ -230,22 +230,23 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
-    // 2. Activar disponibilidad en ms-flota
-    const botonDisponibilidad = page.getByTestId("boton-toggle-disponibilidad");
-    await expect(botonDisponibilidad).toHaveText("No disponible");
-    await botonDisponibilidad.click();
-    await expect(botonDisponibilidad).toHaveText("Disponible (Activo)");
-
-    // 3. Verificar que la oferta aparece con cuenta regresiva de 60s
-    await expect(page.getByTestId("tarjeta-oferta-oferta-101")).toBeVisible();
-    await expect(page.getByTestId("cuenta-regresiva-oferta-101")).toContainText(/s$/);
-
-    // 4. Enviar ubicación manual y un paso simulado GPS
+    // 2. Enviar ubicación y avanzar un paso GPS antes de recibir una oferta emergente.
     await page.getByTestId("boton-enviar-ubicacion").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Posición manual");
     // El acceso al perfil demo deja activadas las herramientas de desarrollo.
     await page.getByTestId("boton-paso-simulacion-gps").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Av. Alberdi 300");
+
+    // 3. Activar disponibilidad en ms-flota
+    const botonDisponibilidad = page.getByTestId("boton-toggle-disponibilidad");
+    await expect(botonDisponibilidad).toHaveText("No disponible");
+    await botonDisponibilidad.click();
+    await expect(botonDisponibilidad).toHaveText("Disponible (Activo)");
+
+    // 4. Verificar que la oferta aparece en su ventana emergente con cuenta regresiva de 60s
+    await expect(page.getByTestId("tarjeta-oferta-oferta-101")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Nueva oferta de viaje" })).toBeVisible();
+    await expect(page.getByTestId("cuenta-regresiva-oferta-101")).toContainText(/s$/);
 
     // 5. Aceptar la oferta y verificar que solo la transición 1 (Chofer en Camino) está habilitada
     const btnEnCamino = page.getByTestId("boton-chofer-en-camino");
