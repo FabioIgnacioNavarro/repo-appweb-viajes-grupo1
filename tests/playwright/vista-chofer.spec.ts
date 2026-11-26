@@ -243,6 +243,7 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     // 4. Enviar ubicación manual y un paso simulado GPS
     await page.getByTestId("boton-enviar-ubicacion").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Posición manual");
+    await page.getByTestId("boton-modo-dev").click();
     await page.getByTestId("boton-paso-simulacion-gps").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Av. Alberdi 300");
 

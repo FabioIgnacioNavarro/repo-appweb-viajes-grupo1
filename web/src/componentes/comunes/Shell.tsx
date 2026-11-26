@@ -48,7 +48,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       return (
         <span
           className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-          title="Canal WebSocket en tiempo real activo"
+          title="Conexión en tiempo real activa"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
           En vivo
@@ -59,7 +59,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       return (
         <span
           className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-          title="Reconectando WebSocket..."
+          title="Reconectando conexión en tiempo real…"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden="true"></span>
           Conectando...
@@ -69,10 +69,10 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return (
       <span
         className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
-        title="Canal WebSocket desconectado"
+        title="Sin conexión en tiempo real"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-slate-400" aria-hidden="true"></span>
-        Desconectado
+        Sin conexión
       </span>
     );
   };
@@ -106,7 +106,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               <IconoAuto size={20} />
             </div>
             <div className="min-w-0 truncate">
-              <span className="font-bold text-[#2C2B28] dark:text-slate-100 text-sm sm:text-lg tracking-tight">Che Viaje</span>
+              <span className="font-bold text-[#2C2B28] dark:text-slate-100 text-sm sm:text-lg tracking-tight">Viapp</span>
             </div>
           </button>
 
@@ -201,7 +201,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       {/* Pie de Página */}
       <footer className="bg-[#EFECE4] dark:bg-slate-900 border-t border-[#DDD8CC] dark:border-slate-800 py-4 text-center text-xs text-[#5E5B54] dark:text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-center">
-          <span>Che Viaje</span>
+          <span>Viapp</span>
         </div>
       </footer>
     </div>

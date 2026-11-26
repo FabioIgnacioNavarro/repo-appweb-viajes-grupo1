@@ -90,21 +90,24 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     await expect(contenedor).toBeVisible();
 
     const badge = page.getByTestId("badge-estado-ws");
-    await expect(badge).toContainText(/WebSocket Activo/i, { timeout: 10000 });
+    await expect(badge).toContainText(/Conectado/i, { timeout: 10000 });
 
-    // Controles de simulación de corte y reconexión
+    // Los controles de prueba aparecen únicamente al activar el modo desarrollador.
     const btnCorte = page.getByTestId("boton-simular-corte-red");
+    await expect(btnCorte).toHaveCount(0);
+    await page.getByTestId("boton-modo-dev").click();
+    await expect(btnCorte).toBeVisible();
     await expect(btnCorte).toBeEnabled();
 
     // Simular corte voluntario
     await btnCorte.click();
-    await expect(badge).toContainText(/Desconectado/i);
+    await expect(badge).toContainText(/Sin conexión/i);
 
     // Reconectar
     const btnReconectar = page.getByTestId("boton-reconectar-ws");
     await expect(btnReconectar).toBeEnabled();
     await btnReconectar.click();
-    await expect(badge).toContainText(/WebSocket Activo/i, { timeout: 10000 });
+    await expect(badge).toContainText(/Conectado/i, { timeout: 10000 });
   });
 
   test("notificación en tiempo real sin polling: recepción de oferta y actualización de viaje vía WebSocket", async ({
@@ -136,7 +139,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     }
 
     // Esperar a que el canal WebSocket esté activo
-    await expect(page.getByTestId("badge-estado-ws")).toContainText(/WebSocket Activo/i, { timeout: 10000 });
+    await expect(page.getByTestId("badge-estado-ws")).toContainText(/Conectado/i, { timeout: 10000 });
 
     // Enviar evento de oferta entrante sin realizar polling HTTP
     expect(wsConexion).toBeDefined();
@@ -308,7 +311,7 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     }
 
     // Esperar a que el canal WebSocket esté activo
-    await expect(page.getByTestId("badge-estado-ws")).toContainText(/WebSocket Activo/i, { timeout: 10000 });
+    await expect(page.getByTestId("badge-estado-ws")).toContainText(/Conectado/i, { timeout: 10000 });
 
     // Inyectar oferta por WebSocket
     expect(wsConexion).toBeDefined();
@@ -335,9 +338,10 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     await expect(page.getByTestId("panel-seguimiento-tiempo-real")).toBeVisible();
     await expect(page.getByTestId("etapa-asignado")).toHaveClass(/ring-2|font-extrabold/);
 
-    // 1. Simular corte de red
+    // 1. Activar las herramientas de prueba y simular corte de red.
+    await page.getByTestId("boton-modo-dev").click();
     await page.getByTestId("boton-simular-corte-red").click();
-    await expect(page.getByTestId("badge-estado-ws")).toContainText(/Desconectado/i);
+    await expect(page.getByTestId("badge-estado-ws")).toContainText(/Sin conexión/i);
 
     // 2. Mientras la red estaba caída, el backend avanzó a 'en_curso'
     estadoBackend = "en_curso";

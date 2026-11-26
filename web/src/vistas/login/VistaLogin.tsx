@@ -202,7 +202,7 @@ export const VistaLogin: React.FC = () => {
     <div className="max-w-3xl mx-auto py-8 sm:py-12 space-y-8" data-testid="vista-login">
       <div className="space-y-2 text-center">
         <h1 className="text-2xl sm:text-3xl font-bold text-[#2C2B28] dark:text-slate-100 tracking-tight">
-          Bienvenido a Che Viaje
+          Bienvenido a Viapp
         </h1>
         <p className="text-sm text-[#5E5B54] dark:text-slate-400 max-w-md mx-auto leading-relaxed">
           Iniciá sesión con tu cuenta para pedir viajes o gestionar tu jornada.

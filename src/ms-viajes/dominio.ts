@@ -55,6 +55,7 @@ export class PublicarUbicacionChoferEnViaje {
 export interface Coordenada {
   latitud: number;
   longitud: number;
+  direccion?: string;
 }
 
 export interface EstimacionVigente {

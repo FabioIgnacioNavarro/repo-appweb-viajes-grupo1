@@ -10,6 +10,7 @@ import { useModoDesarrollador } from "../../nucleo/modoDesarrollador";
 interface Coordenada {
   latitud: number;
   longitud: number;
+  direccion?: string;
 }
 
 interface EstimacionDto {
@@ -458,35 +459,38 @@ export const VistaPasajero: React.FC = () => {
       secuenciaGeoInversaRef.current[tipo] += 1;
       const turno = secuenciaGeoInversaRef.current[tipo];
 
+      const completarPunto = (direccion: string) => {
+        const puntoActualizado: Coordenada = { ...coordenada, direccion };
+        if (tipo === "origen") {
+          setOrigen(direccion);
+          setPinManualOrigen(puntoActualizado);
+        } else {
+          setDestino(direccion);
+          setPinManualDestino(puntoActualizado);
+        }
+
+        const puntoOrigenAuto: PuntoSolicitud | null = tipo === "origen"
+          ? puntoActualizado
+          : origenPrevioPin ?? (origen.trim() && origen !== "Buscando dirección..." ? { direccion: origen.trim() } : null);
+        const puntoDestinoAuto: PuntoSolicitud | null = tipo === "destino"
+          ? puntoActualizado
+          : destinoPrevioPin ?? (destino.trim() && destino !== "Buscando dirección..." ? { direccion: destino.trim() } : null);
+
+        if (puntoOrigenAuto && puntoDestinoAuto) {
+          void ejecutarEstimacion(puntoOrigenAuto, puntoDestinoAuto);
+        }
+      };
+
       void clienteApi
         .post<{ direccion: string }>("/tarifas/geocodificacion-inversa", coordenada)
         .then((res) => {
           if (secuenciaGeoInversaRef.current[tipo] !== turno) return;
-          const texto = res.direccion?.trim() || `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
-          if (tipo === "origen") setOrigen(texto);
-          else setDestino(texto);
+          completarPunto(res.direccion?.trim() || `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`);
         })
         .catch(() => {
           if (secuenciaGeoInversaRef.current[tipo] !== turno) return;
-          const fallback = `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
-          if (tipo === "origen") setOrigen(fallback);
-          else setDestino(fallback);
+          completarPunto(`${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`);
         });
-
-      const puntoOrigenAuto: PuntoSolicitud | null =
-        tipo === "origen"
-          ? coordenada
-          : origenPrevioPin ??
-            (origen.trim() && origen !== "Buscando dirección..." ? { direccion: origen.trim() } : null);
-      const puntoDestinoAuto: PuntoSolicitud | null =
-        tipo === "destino"
-          ? coordenada
-          : destinoPrevioPin ??
-            (destino.trim() && destino !== "Buscando dirección..." ? { direccion: destino.trim() } : null);
-
-      if (puntoOrigenAuto && puntoDestinoAuto) {
-        void ejecutarEstimacion(puntoOrigenAuto, puntoDestinoAuto);
-      }
     },
     [puedeCancelar, invalidarEstimacion, pinManualOrigen, pinManualDestino, estimacion, origen, destino, ejecutarEstimacion]
   );

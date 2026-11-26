@@ -265,7 +265,7 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
 
   test("en modo normal oculta accesos demo y credenciales de prueba hasta activar Modo dev", async ({ page }) => {
     await page.goto("/#/login");
-    await expect(page.getByRole("heading", { name: /Bienvenido a Che Viaje/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Bienvenido a Viapp/i })).toBeVisible();
     await expect(page.getByTestId("login-usuario")).toHaveAttribute("placeholder", "Usuario o correo electrónico");
     await expect(page.getByTestId("login-contrasena")).toHaveAttribute("type", "password");
     await page.getByTestId("login-contrasena-alternar-visibilidad").click();

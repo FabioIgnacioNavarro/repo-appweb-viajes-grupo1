@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS viajes.viaje (
   origen_longitud NUMERIC(9,6) NOT NULL CHECK (origen_longitud BETWEEN -180 AND 180),
   destino_latitud NUMERIC(9,6) NOT NULL CHECK (destino_latitud BETWEEN -90 AND 90),
   destino_longitud NUMERIC(9,6) NOT NULL CHECK (destino_longitud BETWEEN -180 AND 180),
+  origen_direccion TEXT,
+  destino_direccion TEXT,
   -- Importes en pesos enteros sin centavos (ADR 0007). Nunca se convierten a number en JavaScript.
   moneda TEXT NOT NULL DEFAULT 'ARS' CHECK (moneda = 'ARS'),
   precio_estimado BIGINT NOT NULL CHECK (precio_estimado >= 0),
@@ -48,6 +50,8 @@ CREATE TABLE IF NOT EXISTS viajes.viaje (
     = (cancelado_en IS NOT NULL)
   )
 );
+ALTER TABLE viajes.viaje ADD COLUMN IF NOT EXISTS origen_direccion TEXT;
+ALTER TABLE viajes.viaje ADD COLUMN IF NOT EXISTS destino_direccion TEXT;
 
 -- Invariante central (ADR 0033): un chofer no puede tener dos viajes activos.
 -- Es un índice único PARCIAL: solo cuenta las filas cuyo estado ocupa al chofer. Si dos

@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS tarifa.estimacion (
   origen_longitud NUMERIC(9,6) NOT NULL CHECK (origen_longitud BETWEEN -180 AND 180),
   destino_latitud NUMERIC(9,6) NOT NULL CHECK (destino_latitud BETWEEN -90 AND 90),
   destino_longitud NUMERIC(9,6) NOT NULL CHECK (destino_longitud BETWEEN -180 AND 180),
+  origen_direccion TEXT,
+  destino_direccion TEXT,
   zona_id TEXT NOT NULL REFERENCES tarifa.zona_tarifaria(id),
   precio_estimado BIGINT NOT NULL CHECK (precio_estimado >= 0),
   distancia_metros INTEGER NOT NULL CHECK (distancia_metros >= 0),
@@ -58,4 +60,6 @@ CREATE TABLE IF NOT EXISTS tarifa.estimacion (
   creada_en TIMESTAMPTZ NOT NULL,
   vigente_hasta TIMESTAMPTZ NOT NULL CHECK (vigente_hasta > creada_en)
 );
+ALTER TABLE tarifa.estimacion ADD COLUMN IF NOT EXISTS origen_direccion TEXT;
+ALTER TABLE tarifa.estimacion ADD COLUMN IF NOT EXISTS destino_direccion TEXT;
 CREATE INDEX IF NOT EXISTS ix_estimacion_pasajero_vigencia ON tarifa.estimacion (pasajero_id, vigente_hasta);

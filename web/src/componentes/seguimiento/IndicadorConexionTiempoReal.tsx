@@ -9,7 +9,7 @@ interface Props {
 
 export const IndicadorConexionTiempoReal: React.FC<Props> = ({
   className = "",
-  mostrarControlesSimulacion = true,
+  mostrarControlesSimulacion = false,
 }) => {
   const [estado, setEstado] = useState<EstadoConexionWs>(clienteTiempoReal.obtenerEstado());
   const [ultimoEvento, setUltimoEvento] = useState<{ nombre: string; fecha: string } | null>(null);
@@ -73,31 +73,31 @@ export const IndicadorConexionTiempoReal: React.FC<Props> = ({
               }`}
             />
             {estado === "CONECTADO"
-              ? "WebSocket Activo"
+              ? "Conectado"
               : estado === "CONECTANDO"
-              ? "Reconectando con backoff..."
-              : "Desconectado (HTTP Polling)"}
+              ? "Reconectando…"
+              : "Sin conexión en tiempo real"}
           </span>
           <span className="text-[#5E5B54] dark:text-slate-400 text-[11px] hidden sm:inline">
-            Canal bidireccional (Tema 20)
+            Estado de conexión
           </span>
         </div>
 
-        {/* Métricas rápidas de eventos */}
-        <div className="flex items-center gap-2 text-[11px] text-[#5E5B54] dark:text-slate-400">
-          <span>Eventos recibidos: <strong data-testid="conteo-eventos-ws" className="text-[#2C2B28] dark:text-slate-100 font-mono">{totalEventos}</strong></span>
-          {ultimoEvento && (
-            <span className="hidden md:inline bg-[#F7F5F0] dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] font-mono text-[#2C2B28] dark:text-slate-200 border border-[#DDD8CC] dark:border-slate-700">
-              Último: {ultimoEvento.nombre} ({ultimoEvento.fecha})
-            </span>
-          )}
-        </div>
+        {mostrarControlesSimulacion && (
+          <div className="flex items-center gap-2 text-[11px] text-[#5E5B54] dark:text-slate-400">
+            <span>Eventos recibidos: <strong data-testid="conteo-eventos-ws" className="text-[#2C2B28] dark:text-slate-100 font-mono">{totalEventos}</strong></span>
+            {ultimoEvento && (
+              <span className="hidden md:inline bg-[#F7F5F0] dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] font-mono text-[#2C2B28] dark:text-slate-200 border border-[#DDD8CC] dark:border-slate-700">
+                Último evento: {ultimoEvento.nombre} ({ultimoEvento.fecha})
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Controles para probar resiliencia y reconexión en defensas o E2E */}
       {mostrarControlesSimulacion && (
         <div className="pt-2 border-t border-[#DDD8CC] dark:border-slate-800 flex items-center justify-between text-[11px] text-[#5E5B54] dark:text-slate-300">
-          <span>Prueba de resiliencia de red:</span>
+          <span>Herramientas de prueba:</span>
           <div className="flex items-center gap-2">
             <button
               type="button"

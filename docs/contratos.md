@@ -78,10 +78,16 @@ Los contratos de servicio se mantienen asi:
 - La confirmacion de viaje conserva `id_estimacion`, `precio_estimado`, `multiplicador_demanda`,
   `factores_precio` y `vigente_hasta` como fotografia auditable.
 
+Los puntos de una estimación y de un viaje pueden incluir `direccion` como etiqueta legible opcional,
+además de `latitud` y `longitud`. La etiqueta que ingresó el pasajero se conserva en las bases de
+datos propias de Tarifas y Viajes y se reenvía en la oferta HTTP/WebSocket al chofer. Es un dato de
+presentación: las rutas, distancias y precios se calculan con coordenadas. Si no se informó una
+dirección, la propiedad se omite y la interfaz puede mostrar las coordenadas como alternativa.
+
 ## Integración inicial de tarifas
 
-`POST /viajes/estimacion` valida JWT y recibe `{ origen: { latitud, longitud }, destino: { latitud,
-longitud } }`. `ms-tarifas` resuelve zona, ruta, regla, clima actual, choferes cercanos y solicitudes
+`POST /viajes/estimacion` valida JWT y recibe puntos con `{ latitud, longitud, direccion? }` o una
+dirección textual `{ direccion }`. `ms-tarifas` resuelve zona, ruta, regla, clima actual, choferes cercanos y solicitudes
 activas mediante puertos. La salida incluye importe ARS en string, distancia en metros, duración en
 segundos, multiplicador, zona, desglose auditable, versión y vigencia.
 

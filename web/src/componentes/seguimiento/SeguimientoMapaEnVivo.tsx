@@ -109,7 +109,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
         const nuevo = payload.datos.estado.toLowerCase();
         setViaje((prev) => (prev ? { ...prev, estado: nuevo } : prev));
         onCambioEstado?.(nuevo);
-        setUltimoAviso(`Estado actualizado en vivo por WebSocket: ${nuevo.toUpperCase()}`);
+        setUltimoAviso(`Estado del viaje actualizado: ${nuevo.toUpperCase()}`);
       }
     };
     const desuscribirEstadoViaje1 = clienteTiempoReal.on("ESTADO_VIAJE_ACTUALIZADO", procesarEstadoViaje);
@@ -137,7 +137,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
-            Seguimiento en Vivo (Tema 20)
+            Seguimiento del viaje
           </span>
           <h3 className="text-base font-extrabold text-slate-900 mt-0.5">
             Viaje #{idViaje.slice(0, 8)}
@@ -161,7 +161,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
                 estadoWs === "CONECTADO" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
               }`}
             />
-            {estadoWs === "CONECTADO" ? "Tiempo Real Activo" : "Reconectando..."}
+            {estadoWs === "CONECTADO" ? "En línea" : estadoWs === "CONECTANDO" ? "Reconectando…" : "Sin conexión"}
           </span>
 
           <button
@@ -170,7 +170,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
             onClick={sincronizarEstadoCanonico}
             disabled={recuperandoEstado}
             className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold cursor-pointer transition disabled:opacity-50"
-            title="Consulta canónica HTTP (GET /viajes/:id) para asegurar consistencia"
+            title="Actualiza el estado del viaje"
           >
             {recuperandoEstado ? "..." : "Sincronizar"}
           </button>
@@ -212,7 +212,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
       >
         <div className="flex items-center justify-between">
           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-            <IconoPin size={15} aria-hidden="true" /> Posición del Chofer (difusión por WebSocket)
+            <IconoPin size={15} aria-hidden="true" /> Ubicación del chofer
           </span>
           {ubicacionChofer && (
             <span className="text-[10px] text-slate-500 font-mono">

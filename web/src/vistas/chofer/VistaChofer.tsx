@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { clienteApi, ErrorHttpApi } from "../../nucleo/api";
 import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
+import { useModoDesarrollador } from "../../nucleo/modoDesarrollador";
 import { IndicadorConexionTiempoReal, SeguimientoMapaEnVivo } from "../../componentes/seguimiento";
 import { IconoAlerta, IconoAuto, IconoCheck, IconoPin, IconoRayo } from "../../componentes/comunes";
 
@@ -120,6 +121,7 @@ export function etiquetaEstadoViaje(estado?: string): string {
  */
 export const VistaChofer: React.FC = () => {
   const sesion = obtenerSesion();
+  const { modoDev } = useModoDesarrollador();
   const idChoferActual = sesion?.idUsuario ?? "11111111-1111-4111-8111-111111111111";
 
   // Disponibilidad en ms-flota
@@ -330,7 +332,7 @@ export const VistaChofer: React.FC = () => {
       setDisponible(Boolean(respuesta.disponibilidad));
       setMensajeExito(
         respuesta.disponibilidad
-          ? "Disponibilidad activada en ms-flota. Ya podés recibir ofertas."
+          ? "Ya estás disponible para recibir solicitudes."
           : "Disponibilidad desactivada."
       );
       if (respuesta.disponibilidad) {
@@ -338,7 +340,7 @@ export const VistaChofer: React.FC = () => {
       }
     } catch (err) {
       if (err instanceof ErrorHttpApi) {
-        if (err.status === 0) {
+        if (err.status === 0 && modoDev) {
           // Modo demo sin backend levantado: reflejar cambio local
           setDisponible(nuevoEstado);
           setMensajeExito(
@@ -393,7 +395,7 @@ export const VistaChofer: React.FC = () => {
         setLatitudInput(String(resp.latitud));
         setLongitudInput(String(resp.longitud));
       } catch (err) {
-        if (err instanceof ErrorHttpApi && err.status === 0) {
+        if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
           setUltimaUbicacion({
             latitud: lat,
             longitud: lon,
@@ -411,7 +413,7 @@ export const VistaChofer: React.FC = () => {
         setEnviandoUbicacion(false);
       }
     },
-    []
+    [modoDev]
   );
 
   const manejarEnvioUbicacionManual = async (e: React.FormEvent) => {
@@ -434,6 +436,14 @@ export const VistaChofer: React.FC = () => {
     }, 2000);
     return () => clearInterval(timer);
   }, [simulandoGps, avanzarPasoRutaSimulada]);
+
+  useEffect(() => {
+    if (modoDev) return;
+    setSimulandoGps(false);
+    setOfertas((prev) => prev.filter((oferta) => !oferta.id_oferta.startsWith("oferta-demo-")));
+    setViajeActivo((prev) => prev?.id_viaje.startsWith("viaje-demo-") ? null : prev);
+    setUltimoCobro((prev) => prev?.id_cobro.startsWith("cobro-demo-") ? null : prev);
+  }, [modoDev]);
 
   // Simular recepción de oferta de 60s para demostración / pruebas de UI
   const simularOfertaEntrante = () => {
@@ -490,7 +500,7 @@ export const VistaChofer: React.FC = () => {
       setMensajeExito(`Oferta ${oferta.id_oferta} aceptada. Viaje asignado correctamente.`);
     } catch (err) {
       if (err instanceof ErrorHttpApi) {
-        if (err.status === 0) {
+        if (err.status === 0 && modoDev) {
           // Fallback local para demostración sin servidor
           const simulado: ViajeChoferDto = {
             id_viaje: oferta.id_viaje,
@@ -530,8 +540,8 @@ export const VistaChofer: React.FC = () => {
             codigo: err.codigo || "ASIGNACION_EN_CONFLICTO",
             mensaje:
               err.codigo === "OFERTA_VENCIDA"
-                ? "La oferta venció antes de poder confirmarse (409)."
-                : "La oferta ya fue tomada por otro chofer o no está disponible (409 Conflict).",
+                ? "La oferta venció antes de que pudieras responder."
+                : "Otro chofer aceptó esta oferta o ya no está disponible.",
             esConflicto409: true,
           });
         } else {
@@ -560,7 +570,7 @@ export const VistaChofer: React.FC = () => {
         )
       );
     } catch (err) {
-      if (err instanceof ErrorHttpApi && err.status === 0) {
+      if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
         setOfertas((prev) =>
           prev.map((item) => (item.id_oferta === oferta.id_oferta ? { ...item, estado: "rechazada" } : item))
         );
@@ -586,7 +596,7 @@ export const VistaChofer: React.FC = () => {
       setViajeActivo(actualizado);
       setMensajeExito("Estado actualizado: Chofer en camino al punto de encuentro.");
     } catch (err) {
-      if (err instanceof ErrorHttpApi && err.status === 0) {
+      if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
         setViajeActivo({ ...viajeActivo, estado: "chofer_en_camino" });
       } else if (err instanceof ErrorHttpApi) {
         setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
@@ -609,7 +619,7 @@ export const VistaChofer: React.FC = () => {
       setViajeActivo(actualizado);
       setMensajeExito("Viaje en curso con el pasajero a bordo.");
     } catch (err) {
-      if (err instanceof ErrorHttpApi && err.status === 0) {
+      if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
         setViajeActivo({ ...viajeActivo, estado: "en_curso", iniciado_en: new Date().toISOString() });
       } else if (err instanceof ErrorHttpApi) {
         setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
@@ -635,7 +645,7 @@ export const VistaChofer: React.FC = () => {
         ? `Viaje finalizado. Cobro ${resultado.cobro.id_cobro} confirmado.`
         : `Viaje finalizado. El cobro ${resultado.cobro.id_cobro} quedó ${resultado.cobro.estado}.`);
     } catch (err) {
-      if (err instanceof ErrorHttpApi && err.status === 0) {
+      if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
         const finalizado: ViajeChoferDto = {
           ...viajeActivo,
           estado: "finalizado",
@@ -672,7 +682,7 @@ export const VistaChofer: React.FC = () => {
             Hola, {sesion?.nombre || "Chofer"}
           </h1>
           <p className="text-xs sm:text-sm text-[#5E5B54] dark:text-slate-400 mt-1">
-            Gestioná tu estado de disponibilidad en ms-flota, reportá tu posición GPS y recibí ofertas con vigencia de 60s.
+            Activá tu disponibilidad para recibir solicitudes y respondé antes de que venza cada oferta.
           </p>
         </div>
 
@@ -725,10 +735,12 @@ export const VistaChofer: React.FC = () => {
           <div className="space-y-0.5">
             <div className="font-bold flex items-center gap-1.5">
               <IconoAlerta size={16} aria-hidden="true" />
-              <span>{alertaError.esConflicto409 ? "Conflicto de concurrencia (409)" : "Error en la operación"}</span>
-              <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900/80 border border-current/20">
-                {alertaError.codigo}
-              </span>
+              <span>{alertaError.esConflicto409 ? "La oferta ya no está disponible" : "No se pudo completar la acción"}</span>
+              {modoDev && (
+                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900/80 border border-current/20">
+                  {alertaError.codigo}
+                </span>
+              )}
             </div>
             <p>{alertaError.mensaje}</p>
           </div>
@@ -762,8 +774,7 @@ export const VistaChofer: React.FC = () => {
         </div>
       )}
 
-      {/* Monitor modular de WebSocket y resiliencia de red (WEB-007 / Tema 20) */}
-      <IndicadorConexionTiempoReal />
+      <IndicadorConexionTiempoReal mostrarControlesSimulacion={modoDev} />
 
       {/* Grid Principal Responsive (360px 1 col -> 768px 2 cols -> 1024px+ 3 cols) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -784,11 +795,10 @@ export const VistaChofer: React.FC = () => {
                       : "bg-[#F7F5F0] dark:bg-slate-800 text-[#5E5B54] dark:text-slate-300 border-[#DDD8CC] dark:border-slate-700"
                 }`}
               >
-                {estadoWs === "CONECTADO" ? "WebSocket Activo" : estadoWs === "CONECTANDO" ? "Reconectando..." : "HTTP / Offline"}
+                {estadoWs === "CONECTADO" ? "En línea" : estadoWs === "CONECTANDO" ? "Reconectando…" : "Sin conexión"}
               </span>
             </div>
 
-            {/* Acciones de bandeja: Refrescar o Simular para Demo */}
             <div className="flex items-center justify-between gap-2 pt-1">
               <button
                 id="boton-actualizar-ofertas"
@@ -796,9 +806,9 @@ export const VistaChofer: React.FC = () => {
                 onClick={() => void sincronizarEstadoServidor()}
                 className="px-2.5 py-1 rounded-lg border border-[#D4CFC2] dark:border-slate-700 hover:bg-[#E5E0D4] dark:hover:bg-slate-800 text-[11px] font-semibold text-[#5E5B54] dark:text-slate-300 transition cursor-pointer"
               >
-                ↻ Sincronizar GET
+                ↻ Actualizar ofertas
               </button>
-              <button
+              {modoDev && <button
                 id="boton-simular-oferta"
                 data-testid="boton-simular-oferta"
                 type="button"
@@ -806,7 +816,7 @@ export const VistaChofer: React.FC = () => {
                 className="px-2.5 py-1 rounded-lg bg-[#4A7C59]/15 hover:bg-[#4A7C59]/25 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-[11px] font-semibold text-[#3B694A] dark:text-emerald-300 border border-[#4A7C59]/30 dark:border-emerald-800 transition cursor-pointer"
               >
                 + Simular oferta (60s)
-              </button>
+              </button>}
             </div>
 
             {!disponible && ofertas.length === 0 ? (
@@ -916,7 +926,7 @@ export const VistaChofer: React.FC = () => {
                           </div>
                           {bloqueadaPorViajeActivo && (
                             <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                              Invariante: ya tenés un viaje activo en curso.
+                              Ya tenés otro viaje activo y no podés aceptar esta oferta.
                             </p>
                           )}
                         </div>
@@ -1084,18 +1094,18 @@ export const VistaChofer: React.FC = () => {
             </div>
           </div>
 
-          {/* Tarjeta de Envío de Ubicación Manual y Simulación GPS en Resistencia */}
+          {/* Reporte de ubicación y controles de simulación */}
           <div className="bg-[#EFECE4] dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-bold text-[#2C2B28] dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
-                  <IconoPin size={16} aria-hidden="true" /> Reporte de Ubicación y Simulador GPS
+                  <IconoPin size={16} aria-hidden="true" /> Mi ubicación
                 </h2>
                 <p className="text-xs text-[#5E5B54] dark:text-slate-400 mt-0.5">
-                  Envía coordenadas a <code className="font-mono text-[11px]">POST /choferes/yo/ubicacion</code> (ms-flota).
+                  Mantené tu posición actualizada para recibir solicitudes cercanas.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              {modoDev && <div className="flex items-center gap-2">
                 <button
                   id="boton-paso-simulacion-gps"
                   data-testid="boton-paso-simulacion-gps"
@@ -1119,7 +1129,7 @@ export const VistaChofer: React.FC = () => {
                 >
                   {simulandoGps ? "Detener ruta (2s)" : "Simular ruta cada 2s"}
                 </button>
-              </div>
+              </div>}
             </div>
 
             {/* Formulario de envío manual de coordenadas */}

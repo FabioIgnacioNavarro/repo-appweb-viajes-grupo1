@@ -121,11 +121,11 @@ Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, d
 - **Cuerpo recibido:**
   ```json
   {
-    "origen": { "latitud": -27.451, "longitud": -58.986 },
-    "destino": { "latitud": -27.462, "longitud": -58.993 }
+    "origen": { "latitud": -27.451, "longitud": -58.986, "direccion": "Pasaje Julio Acosta 3161, Resistencia" },
+    "destino": { "latitud": -27.462, "longitud": -58.993, "direccion": "Shopping Sarmiento" }
   }
   ```
-  *Nota: Admite también resolución por texto:* `{"direccion": "Av. Alberdi 250, Resistencia"}`.
+  También admite puntos enviados solo como `{"direccion": "Av. Alberdi 250, Resistencia"}`. Cuando se envían coordenadas y dirección, el servicio conserva el texto junto a las coordenadas; la dirección no cambia el cálculo de ruta ni la tarifa.
   *Modo desarrollador (`DEV-001`):* Cuando `MODO_DESARROLLADOR=true` y `NODE_ENV !== "production"`, admite un objeto opcional `"simulacion": { "hora": 21, "llueve": true, "choferes_disponibles": 2, "solicitudes_activas": 8 }` para simular escenarios sin alterar la regla activa. Si se envía fuera de modo desarrollador o en producción, responde `403 MODO_DESARROLLADOR_DESHABILITADO`.
 - **Respuesta exitosa (`201 Created`):**
   ```json
@@ -156,8 +156,8 @@ Calcula la tarifa estimada con multiplicador dinámico por demanda, distancia, d
     "version_regla": 1,
     "creada_en": "2026-11-02T13:00:00.000Z",
     "vigente_hasta": "2026-11-02T13:03:00.000Z",
-    "origen": { "latitud": -27.451, "longitud": -58.986 },
-    "destino": { "latitud": -27.462, "longitud": -58.993 },
+    "origen": { "latitud": -27.451, "longitud": -58.986, "direccion": "Pasaje Julio Acosta 3161, Resistencia" },
+    "destino": { "latitud": -27.462, "longitud": -58.993, "direccion": "Shopping Sarmiento" },
     "polilinea": "encoded_polyline_o_null"
   }
   ```
@@ -286,7 +286,7 @@ Reintenta un cobro fallido del viaje finalizado.
 #### `GET /choferes/yo/ofertas`
 Lista las ofertas vigentes enviadas al chofer autenticado.
 - **Autorización:** Exclusivo del rol `CHOFER` o `ADMINISTRADOR`.
-- **Respuesta (`200 OK`):** `{"ofertas": [{"id_oferta": "...", "id_viaje": "...", "id_chofer": "...", "estado": "pendiente", "enviada_en": "...", "expira_en": "...", "origen": {"latitud": -27.451, "longitud": -58.986}, "destino": {"latitud": -27.462, "longitud": -58.993}, "precio_estimado": "3700", "moneda": "ARS"}]}`. `origen`, `destino` y `precio_estimado` se leen del viaje confirmado asociado a esa oferta; el importe es el snapshot exacto que aceptó el pasajero, representado como cadena decimal.
+- **Respuesta (`200 OK`):** `{"ofertas": [{"id_oferta": "...", "id_viaje": "...", "id_chofer": "...", "estado": "pendiente", "enviada_en": "...", "expira_en": "...", "origen": {"latitud": -27.451, "longitud": -58.986, "direccion": "Pasaje Julio Acosta 3161, Resistencia"}, "destino": {"latitud": -27.462, "longitud": -58.993, "direccion": "Shopping Sarmiento"}, "precio_estimado": "3700", "moneda": "ARS"}]}`. `origen`, `destino` y `precio_estimado` se leen del viaje confirmado asociado a esa oferta; incluyen las direcciones que envió el pasajero cuando las informó, y el precio es el snapshot exacto representado como cadena decimal.
 - **Alcance:** Solo incluye ofertas dirigidas al chofer autenticado. El chofer candidato no consulta directamente `GET /viajes/:idViaje` antes de aceptar.
 
 #### `POST /choferes/yo/ofertas/:idOferta/aceptacion`
