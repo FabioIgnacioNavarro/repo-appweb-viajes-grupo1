@@ -100,6 +100,7 @@ services:
       OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       TIMEOUT_PROVEEDOR_MS: ${TIMEOUT_PROVEEDOR_MS:-1800}
+      MODO_DESARROLLADOR: ${MODO_DESARROLLADOR:-true}
       PUERTO_MS_TARIFAS: 3001
     depends_on:
       postgres:

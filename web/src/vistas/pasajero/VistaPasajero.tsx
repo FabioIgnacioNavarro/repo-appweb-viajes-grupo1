@@ -187,6 +187,7 @@ export const VistaPasajero: React.FC = () => {
   const [panelDevActivo, setPanelDevActivo] = useState(false);
   const [parametrosSimulacion, setParametrosSimulacion] = useState<ParametrosSimulacion>({});
   const parametrosSimulacionRef = useRef<ParametrosSimulacion>({});
+  const modoDevRef = useRef(modoDev);
   const claveConfirmacion = useRef<string | null>(null);
   const claveReintentoCobro = useRef<{ viajeId: string; valor: string } | null>(null);
   const bloqueoEnvio = useRef(false);
@@ -194,6 +195,15 @@ export const VistaPasajero: React.FC = () => {
   const secuenciaGeoInversaRef = useRef<{ origen: number; destino: number }>({ origen: 0, destino: 0 });
   const secuenciaEstimacionRef = useRef(0);
   const debounceEstimacionRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    modoDevRef.current = modoDev;
+    if (!modoDev) {
+      setPanelDevActivo(false);
+      parametrosSimulacionRef.current = {};
+      setParametrosSimulacion({});
+    }
+  }, [modoDev]);
 
   useEffect(() => {
     viajeActualRef.current = viaje;
@@ -329,7 +339,7 @@ export const VistaPasajero: React.FC = () => {
         origen: puntoOrigen,
         destino: puntoDestino
       };
-      if (haySimulacion) {
+      if (modoDevRef.current && haySimulacion) {
         cuerpo.simulacion = {
           ...(sim.hora !== undefined ? { hora: sim.hora } : {}),
           ...(sim.llueve !== undefined ? { llueve: sim.llueve } : {}),
