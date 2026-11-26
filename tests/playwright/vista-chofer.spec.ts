@@ -230,18 +230,16 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     await iniciarConPerfilDemo(page, /Carlos Maidana/i);
     await expect(page.getByTestId("vista-chofer")).toBeVisible();
 
-    // 2. Enviar ubicación y avanzar un paso GPS antes de recibir una oferta emergente.
+    // 2. Enviar ubicación manual antes de conectarse
     await page.getByTestId("boton-enviar-ubicacion").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Posición manual");
-    // El acceso al perfil demo deja activadas las herramientas de desarrollo.
-    await page.getByTestId("boton-paso-simulacion-gps").click();
-    await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Av. Alberdi 300");
 
-    // 3. Activar disponibilidad en ms-flota
+    // 3. Activar disponibilidad en ms-flota (sin conectarse no recibe ofertas)
     const botonDisponibilidad = page.getByTestId("boton-toggle-disponibilidad");
-    await expect(botonDisponibilidad).toHaveText("No disponible");
+    await expect(botonDisponibilidad).toHaveText("Iniciar y conectarse");
+    await expect(page.getByTestId("tarjeta-oferta-oferta-101")).toHaveCount(0);
     await botonDisponibilidad.click();
-    await expect(botonDisponibilidad).toHaveText("Disponible (Activo)");
+    await expect(botonDisponibilidad).toHaveText("Conectado (Desconectarse)");
 
     // 4. Verificar que la oferta aparece en su ventana emergente con cuenta regresiva de 60s
     await expect(page.getByTestId("tarjeta-oferta-oferta-101")).toBeVisible();

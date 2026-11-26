@@ -38,12 +38,12 @@ async function prepararViajeFinalizado() {
   return { viajes, cobros, idempotencia, ids, pasarela, finalizar, viaje: resultado.viaje, cobro: resultado.cobro };
 }
 
-test("WEB-005: finalizar repetidamente conserva un solo cobro y el precio congelado", async () => {
+test("WEB-005: finalizar repetidamente conserva un solo cobro confirmado a la primera y el precio congelado", async () => {
   const ctx = await prepararViajeFinalizado();
   const repetido = await ctx.finalizar.ejecutar(chofer, ctx.viaje.id);
   const guardado = await ctx.cobros.obtenerPorViaje(ctx.viaje.id);
 
-  assert.equal(ctx.cobro.estado, "FALLIDO");
+  assert.equal(ctx.cobro.estado, "CONFIRMADO");
   assert.equal(ctx.cobro.intentos, 1);
   assert.equal(ctx.cobro.importe, "8086");
   assert.equal(repetido.cobro.id, ctx.cobro.id);
@@ -51,7 +51,7 @@ test("WEB-005: finalizar repetidamente conserva un solo cobro y el precio congel
   assert.equal(repetido.viaje.precioFinal, "8086");
 });
 
-test("WEB-005: reintentar un cobro fallido confirma el mismo cobro y la clave reproduce el resultado", async () => {
+test("WEB-005: reintentar un cobro ya confirmado devuelve el mismo cobro sin duplicar y rechaza chofer", async () => {
   const ctx = await prepararViajeFinalizado();
   const reintentar = new ReintentarCobro(ctx.viajes, ctx.cobros, ctx.idempotencia, ctx.pasarela);
   const primero = await reintentar.ejecutar(pasajero, ctx.viaje.id, "reintento-1");
@@ -59,7 +59,7 @@ test("WEB-005: reintentar un cobro fallido confirma el mismo cobro y la clave re
   const nuevoIntentoTrasConfirmar = await reintentar.ejecutar(pasajero, ctx.viaje.id, "reintento-2");
 
   assert.equal(primero.estado, "CONFIRMADO");
-  assert.equal(primero.intentos, 2);
+  assert.equal(primero.intentos, 1);
   assert.equal(primero.id, ctx.cobro.id);
   assert.equal(primero.importe, "8086");
   assert.deepEqual(repetido, primero);

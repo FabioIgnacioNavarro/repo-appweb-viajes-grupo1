@@ -194,6 +194,7 @@ test.describe("SEG-003 / SEG-005 - Hardening del front y CSP", () => {
     await page.reload();
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.locator(".leaflet-container")).toBeVisible();
+    await page.locator(".leaflet-container").click();
     await expect(page.locator(".custom-leaflet-pin").first()).toBeVisible();
     await expect.poll(() => solicitudesTiles).toBeGreaterThan(0);
     await expect

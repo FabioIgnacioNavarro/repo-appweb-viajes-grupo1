@@ -45,7 +45,7 @@ test("E2E flujo feliz: estimar, confirmar, ofertar, asignar y cobrar", { skip: !
   const finalizado = await pedir(`/viajes/${oferta.id_viaje}/finalizacion`, chofer, { method: "POST", body: "{}" });
   assert.equal(finalizado.status, 200);
   assert.equal(finalizado.cuerpo.viaje.estado, "finalizado");
-  assert.equal(finalizado.cuerpo.cobro.estado, "fallido");
+  assert.equal(finalizado.cuerpo.cobro.estado, "confirmado");
   assert.equal(finalizado.cuerpo.cobro.importe, finalizado.cuerpo.viaje.precio_final);
 
   const reciboPasajero = await pedir(`/viajes/${oferta.id_viaje}/cobro`, pasajero);

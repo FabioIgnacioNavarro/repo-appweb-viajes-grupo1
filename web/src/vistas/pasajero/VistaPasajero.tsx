@@ -165,15 +165,10 @@ const camposFactor = [
 
 type PuntoSolicitud = { direccion: string } | Coordenada;
 
-const ORIGEN_INICIAL_COORDENADA: Coordenada = {
-  latitud: -27.4521295,
-  longitud: -58.9873752
-};
-
 export const VistaPasajero: React.FC = () => {
   const sesion = obtenerSesion();
   const { modoDev } = useModoDesarrollador();
-  const [origen, setOrigen] = useState("Juan B. Justo 4, Resistencia");
+  const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [pinManualOrigen, setPinManualOrigen] = useState<Coordenada | null>(null);
   const [pinManualDestino, setPinManualDestino] = useState<Coordenada | null>(null);
@@ -191,7 +186,6 @@ export const VistaPasajero: React.FC = () => {
   const parametrosSimulacionRef = useRef<ParametrosSimulacion>({});
   const modoDevRef = useRef(modoDev);
   const claveConfirmacion = useRef<string | null>(null);
-  const claveReintentoCobro = useRef<{ viajeId: string; valor: string } | null>(null);
   const bloqueoEnvio = useRef(false);
   const viajeActualRef = useRef<ViajeDto | null>(null);
   const secuenciaGeoInversaRef = useRef<{ origen: number; destino: number }>({ origen: 0, destino: 0 });
@@ -228,6 +222,7 @@ export const VistaPasajero: React.FC = () => {
         try {
           const recibo = await clienteApi.get<CobroDto>(`/viajes/${encodeURIComponent(viajeMostrable.id_viaje)}/cobro`);
           setCobro(recibo);
+          setAviso(`Viaje finalizado. Total a pagar: ${importePesos(recibo.importe)} (Pago ${recibo.estado}).`);
         } catch {
           setCobro(null);
         }
@@ -273,7 +268,7 @@ export const VistaPasajero: React.FC = () => {
   const origenMapa =
     estimacion?.origen ??
     pinManualOrigen ??
-    (hayViajeEnCurso && viaje ? viaje.origen : ORIGEN_INICIAL_COORDENADA);
+    (hayViajeEnCurso && viaje ? viaje.origen : undefined);
   const destinoMapa = estimacion?.destino ?? pinManualDestino ?? (hayViajeEnCurso && viaje ? viaje.destino : undefined);
   const puedeCancelar = Boolean(viaje && ESTADOS_CANCELABLES_PASAJERO.has(estadoViaje));
 
@@ -356,7 +351,6 @@ export const VistaPasajero: React.FC = () => {
       if (secuenciaEstimacionRef.current !== turno) return;
       setEstimacion(respuesta);
       claveConfirmacion.current = null;
-      claveReintentoCobro.current = null;
       setCobro(null);
       setViaje(null);
       setAviso("Precio calculado. Se mantiene vigente durante tres minutos.");
@@ -561,34 +555,6 @@ export const VistaPasajero: React.FC = () => {
     }
   };
 
-  const reintentarCobro = async () => {
-    if (!viaje || !cobro || cobro.estado !== "fallido" || bloqueoEnvio.current) return;
-    bloqueoEnvio.current = true;
-    setProcesando(true);
-    setError(null);
-    setAviso(null);
-    const previo = claveReintentoCobro.current;
-    const clave = previo?.viajeId === viaje.id_viaje ? previo.valor : generarClaveIdempotencia();
-    claveReintentoCobro.current = { viajeId: viaje.id_viaje, valor: clave };
-    try {
-      const actualizado = await clienteApi.post<CobroDto>(
-        `/viajes/${encodeURIComponent(viaje.id_viaje)}/cobro/reintento`,
-        {},
-        { claveIdempotencia: clave }
-      );
-      setCobro(actualizado);
-      claveReintentoCobro.current = null;
-      setAviso(actualizado.estado === "confirmado"
-        ? "El pago se confirmó. El recibo conserva el precio final del viaje."
-        : "El intento volvió a fallar. Podés volver a intentarlo; no se generará otro cobro.");
-    } catch (causa) {
-      setError(errorVisible(causa, "COBRO_NO_DISPONIBLE", "No se pudo consultar el resultado del pago. Reintentá con seguridad."));
-    } finally {
-      bloqueoEnvio.current = false;
-      setProcesando(false);
-    }
-  };
-
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6" aria-labelledby="titulo-pasajero">
       <div className="flex flex-col justify-between gap-3 rounded-2xl border border-[#DDD8CC] dark:border-slate-800 bg-[#EFECE4] dark:bg-slate-900 p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
@@ -640,7 +606,7 @@ export const VistaPasajero: React.FC = () => {
                 }}
                 disabled={puedeCancelar}
                 className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
-                placeholder="Juan B. Justo 4, Resistencia"
+                placeholder="Ej: Av. Alberdi 250, Resistencia"
                 required
               />
             </label>
@@ -748,30 +714,26 @@ export const VistaPasajero: React.FC = () => {
           )}
 
           {cobro && viaje && cobro.id_viaje === viaje.id_viaje && (
-            <section className={`space-y-3 rounded-2xl border p-5 shadow-sm ${cobro.estado === "confirmado" ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20" : cobro.estado === "fallido" ? "border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20" : "border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20"}`} aria-labelledby="titulo-recibo-cobro">
+            <section className="space-y-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 p-5 shadow-sm" aria-labelledby="titulo-recibo-cobro" data-testid="recibo-cobro-pasajero">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 id="titulo-recibo-cobro" className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">Recibo del viaje</h2>
                   <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">Cobro #{cobro.id_cobro}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${cobro.estado === "confirmado" ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200" : cobro.estado === "fallido" ? "bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200" : "bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200"}`}>
-                  {cobro.estado === "confirmado" ? "Pago confirmado" : cobro.estado === "fallido" ? "Pago fallido" : "Pago pendiente"}
+                <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-3 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                  {cobro.estado === "confirmado" ? "Pago confirmado" : "Pago pendiente"}
                 </span>
               </div>
+              <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                Total a pagar por el viaje:
+              </p>
               <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">{importePesos(cobro.importe)}</p>
-              <dl className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-800/80 p-3"><dt className="text-slate-500 dark:text-slate-400">Intentos</dt><dd className="mt-1 font-semibold text-slate-800 dark:text-slate-200">{cobro.intentos}</dd></div>
+              <dl className="grid grid-cols-1 gap-2 text-xs">
                 <div className="rounded-lg border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-800/80 p-3"><dt className="text-slate-500 dark:text-slate-400">Fecha</dt><dd className="mt-1 font-semibold text-slate-800 dark:text-slate-200">{new Date(cobro.creado_en).toLocaleString("es-AR")}</dd></div>
               </dl>
-              {cobro.estado === "fallido" && (
-                <>
-                  <p className="text-xs text-rose-800 dark:text-rose-300">El viaje se completó, pero el pago no se confirmó. Podés reintentar; el importe y el cobro se mantienen únicos.</p>
-                  <button type="button" onClick={() => void reintentarCobro()} disabled={procesando} className="w-full rounded-xl bg-rose-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50">
-                    {procesando ? "Reintentando pago…" : "Reintentar pago"}
-                  </button>
-                </>
-              )}
-              {cobro.estado === "confirmado" && <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">El cobro quedó confirmado por el importe final congelado al cerrar el viaje.</p>}
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                El cobro quedó confirmado por el importe final congelado al cerrar el viaje.
+              </p>
             </section>
           )}
         </section>

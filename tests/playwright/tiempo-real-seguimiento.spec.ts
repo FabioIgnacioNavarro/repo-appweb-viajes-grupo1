@@ -134,9 +134,9 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     // Asegurar disponibilidad activa
     const btnDisp = page.getByTestId("boton-toggle-disponibilidad");
     await expect(btnDisp).toBeVisible();
-    if (await btnDisp.innerText().then((txt) => txt.includes("No disponible"))) {
+    if (await btnDisp.innerText().then((txt) => txt.includes("Iniciar"))) {
       await btnDisp.click();
-      await expect(btnDisp).toHaveText("Disponible (Activo)");
+      await expect(btnDisp).toHaveText("Conectado (Desconectarse)");
     }
 
     // Esperar a que el canal WebSocket esté activo
@@ -306,9 +306,9 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     // Asegurar disponibilidad activa
     const btnDisp = page.getByTestId("boton-toggle-disponibilidad");
     await expect(btnDisp).toBeVisible();
-    if (await btnDisp.innerText().then((txt) => txt.includes("No disponible"))) {
+    if (await btnDisp.innerText().then((txt) => txt.includes("Iniciar"))) {
       await btnDisp.click();
-      await expect(btnDisp).toHaveText("Disponible (Activo)");
+      await expect(btnDisp).toHaveText("Conectado (Desconectarse)");
     }
 
     // Esperar a que el canal WebSocket esté activo
