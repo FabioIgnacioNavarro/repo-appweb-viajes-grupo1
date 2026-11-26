@@ -95,6 +95,22 @@ async function prepararMocksBase(page: Page): Promise<{
     });
   });
 
+  await page.route("**/tarifas/autocompletar", async (route) => {
+    const body = route.request().postDataJSON() as { consulta?: string };
+    const consulta = (body.consulta ?? "").toLowerCase();
+    const sugerencias = consulta.includes("alberdi")
+      ? [
+          { etiqueta: "Av. Alberdi 250, Resistencia", latitud: -27.4538, longitud: -58.9845 },
+          { etiqueta: "Av. Alberdi 600, Resistencia", latitud: -27.4572, longitud: -58.9818 },
+        ]
+      : [];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ sugerencias }),
+    });
+  });
+
   await page.route("**/viajes/estimacion", async (route) => {
     const body = route.request().postDataJSON() as {
       origen: { latitud?: number; longitud?: number; direccion?: string };
@@ -383,5 +399,25 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: origen/destino vacíos, c
 
     await expect(page.getByTestId("bloque-recomendaciones")).toContainText("recargo por lluvia activa");
     await expect(page.getByTestId("panel-desarrollador")).toContainText("×1.56");
+  });
+
+  test("autocompletado muestra sugerencias al escribir y fija pin al seleccionar una dirección", async ({ page }) => {
+    await prepararMocksBase(page);
+    await page.goto("/#/login");
+    await iniciarConPerfilDemo(page, /Ana Gómez/i);
+    await expect(page).toHaveURL(/#\/pasajero/);
+
+    const inputOrigen = page.locator("#origen-viaje");
+    await inputOrigen.fill("avenida alberdi");
+
+    const listaSugerencias = page.getByTestId("sugerencias-origen");
+    await expect(listaSugerencias).toBeVisible({ timeout: 5000 });
+    await expect(listaSugerencias).toContainText("Av. Alberdi 250, Resistencia");
+    await expect(listaSugerencias).toContainText("Av. Alberdi 600, Resistencia");
+
+    await listaSugerencias.getByRole("option", { name: /Av\. Alberdi 250/i }).dispatchEvent("mousedown");
+    await expect(inputOrigen).toHaveValue("Av. Alberdi 250, Resistencia");
+    await expect(listaSugerencias).toHaveCount(0);
+    await expect(page.locator(".leaflet-marker-icon")).toHaveCount(1);
   });
 });

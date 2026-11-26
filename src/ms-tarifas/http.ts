@@ -12,6 +12,7 @@ import {
   type ReglaTarifa,
   type RepositorioEstimaciones,
   type SimulacionTarifaInput,
+  type SugerenciaDireccion,
 } from "./dominio";
 import type { ActorJWT, ValidadorJwtJwks } from "../compartido/jwt";
 import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
@@ -27,6 +28,7 @@ export interface DependenciasTarifas {
   estimaciones: RepositorioEstimaciones;
   reglas?: GestionarReglaDemanda;
   geocodificarInversa?: (coordenada: Coordenada) => Promise<string>;
+  autocompletar?: (consulta: string, centro?: Coordenada) => Promise<SugerenciaDireccion[]>;
   validador: Pick<ValidadorJwtJwks, "validar">;
   comprobarBase: () => Promise<void>;
   modoDesarrollador?: boolean;
@@ -346,6 +348,34 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
         ? await deps.geocodificarInversa(coordenada)
         : `Ubicación (${coordenada.latitud.toFixed(5)}, ${coordenada.longitud.toFixed(5)})`;
       res.json({ direccion, coordenada });
+    } catch (causa) { error(res, causa); }
+  });
+  router.post("/tarifas/autocompletar", async (req, res) => {
+    if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
+      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros o administración pueden buscar sugerencias de direcciones.", detalles: {} } });
+      return;
+    }
+    if (!objeto(req.body) || Object.keys(req.body).some((k) => k !== "consulta" && k !== "centro") || typeof req.body.consulta !== "string") {
+      res.status(400).json({ error: { codigo: "ENTRADA_INVALIDA", mensaje: "Indicá una consulta de dirección válida.", detalles: {} } });
+      return;
+    }
+    const consulta = req.body.consulta.trim();
+    if (consulta.length < 2 || consulta.length > 150) {
+      res.json({ sugerencias: [] });
+      return;
+    }
+    let centro: Coordenada | undefined;
+    if (req.body.centro !== undefined) {
+      if (!objeto(req.body.centro) || typeof req.body.centro.latitud !== "number" || typeof req.body.centro.longitud !== "number") {
+        res.status(400).json({ error: { codigo: "COORDENADAS_INVALIDAS", mensaje: "El centro de búsqueda debe incluir latitud y longitud numéricas válidas.", detalles: {} } });
+        return;
+      }
+      centro = { latitud: req.body.centro.latitud, longitud: req.body.centro.longitud };
+      try { validarCoordenada(centro); } catch (causa) { error(res, causa); return; }
+    }
+    try {
+      const sugerencias = deps.autocompletar ? await deps.autocompletar(consulta, centro) : [];
+      res.json({ sugerencias });
     } catch (causa) { error(res, causa); }
   });
   router.use(manejarErrorCuerpoHttp);

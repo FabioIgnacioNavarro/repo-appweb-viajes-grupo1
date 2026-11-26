@@ -165,6 +165,12 @@ const camposFactor = [
 
 type PuntoSolicitud = { direccion: string } | Coordenada;
 
+interface SugerenciaDireccionDto {
+  etiqueta: string;
+  latitud: number;
+  longitud: number;
+}
+
 export const VistaPasajero: React.FC = () => {
   const sesion = obtenerSesion();
   const { modoDev } = useModoDesarrollador();
@@ -181,6 +187,10 @@ export const VistaPasajero: React.FC = () => {
   const [calculandoEstimacion, setCalculandoEstimacion] = useState(false);
   const [error, setError] = useState<ErrorVisible | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [sugerenciasOrigen, setSugerenciasOrigen] = useState<SugerenciaDireccionDto[]>([]);
+  const [sugerenciasDestino, setSugerenciasDestino] = useState<SugerenciaDireccionDto[]>([]);
+  const [campoSugerenciasActivo, setCampoSugerenciasActivo] = useState<"origen" | "destino" | null>(null);
+  const [buscandoSugerencias, setBuscandoSugerencias] = useState<"origen" | "destino" | null>(null);
   const [panelDevActivo, setPanelDevActivo] = useState(false);
   const [parametrosSimulacion, setParametrosSimulacion] = useState<ParametrosSimulacion>({});
   const parametrosSimulacionRef = useRef<ParametrosSimulacion>({});
@@ -191,6 +201,8 @@ export const VistaPasajero: React.FC = () => {
   const secuenciaGeoInversaRef = useRef<{ origen: number; destino: number }>({ origen: 0, destino: 0 });
   const secuenciaEstimacionRef = useRef(0);
   const debounceEstimacionRef = useRef<number | null>(null);
+  const secuenciaSugerenciasRef = useRef<{ origen: number; destino: number }>({ origen: 0, destino: 0 });
+  const debounceSugerenciasRef = useRef<{ origen: number | null; destino: number | null }>({ origen: null, destino: null });
 
   useEffect(() => {
     modoDevRef.current = modoDev;
@@ -281,7 +293,11 @@ export const VistaPasajero: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => () => cancelarDebounceEstimacion(), [cancelarDebounceEstimacion]);
+  useEffect(() => () => {
+    cancelarDebounceEstimacion();
+    if (debounceSugerenciasRef.current.origen !== null) window.clearTimeout(debounceSugerenciasRef.current.origen);
+    if (debounceSugerenciasRef.current.destino !== null) window.clearTimeout(debounceSugerenciasRef.current.destino);
+  }, [cancelarDebounceEstimacion]);
 
   const rutaMapa = useMemo<[number, number][] | undefined>(() => {
     if (estimacion) {
@@ -384,6 +400,98 @@ export const VistaPasajero: React.FC = () => {
       }, 750);
     },
     [invalidarEstimacion, puedeCancelar, ejecutarEstimacion]
+  );
+
+  const buscarSugerenciasDireccion = useCallback(
+    (tipo: "origen" | "destino", consulta: string) => {
+      if (debounceSugerenciasRef.current[tipo] !== null) {
+        window.clearTimeout(debounceSugerenciasRef.current[tipo]!);
+        debounceSugerenciasRef.current[tipo] = null;
+      }
+      const limpiar = () => {
+        if (tipo === "origen") setSugerenciasOrigen([]);
+        else setSugerenciasDestino([]);
+        setBuscandoSugerencias((actual) => (actual === tipo ? null : actual));
+      };
+
+      const texto = consulta.trim();
+      if (puedeCancelar || texto.length < 2 || texto === "Buscando dirección...") {
+        limpiar();
+        return;
+      }
+
+      secuenciaSugerenciasRef.current[tipo] += 1;
+      const turno = secuenciaSugerenciasRef.current[tipo];
+      setBuscandoSugerencias(tipo);
+
+      debounceSugerenciasRef.current[tipo] = window.setTimeout(() => {
+        debounceSugerenciasRef.current[tipo] = null;
+        const centroBusqueda = pinManualOrigen ?? estimacion?.origen ?? { latitud: -27.4521295, longitud: -58.9873752 };
+        void clienteApi
+          .post<{ sugerencias: SugerenciaDireccionDto[] }>("/tarifas/autocompletar", {
+            consulta: texto,
+            centro: { latitud: centroBusqueda.latitud, longitud: centroBusqueda.longitud },
+          })
+          .then((res) => {
+            if (secuenciaSugerenciasRef.current[tipo] !== turno) return;
+            const lista = Array.isArray(res.sugerencias) ? res.sugerencias : [];
+            if (tipo === "origen") setSugerenciasOrigen(lista);
+            else setSugerenciasDestino(lista);
+          })
+          .catch(() => {
+            if (secuenciaSugerenciasRef.current[tipo] !== turno) return;
+            limpiar();
+          })
+          .finally(() => {
+            if (secuenciaSugerenciasRef.current[tipo] === turno) {
+              setBuscandoSugerencias((actual) => (actual === tipo ? null : actual));
+            }
+          });
+      }, 280);
+    },
+    [puedeCancelar, pinManualOrigen, estimacion?.origen]
+  );
+
+  const seleccionarSugerencia = useCallback(
+    (tipo: "origen" | "destino", sugerencia: SugerenciaDireccionDto) => {
+      if (debounceSugerenciasRef.current[tipo] !== null) {
+        window.clearTimeout(debounceSugerenciasRef.current[tipo]!);
+        debounceSugerenciasRef.current[tipo] = null;
+      }
+      secuenciaSugerenciasRef.current[tipo] += 1;
+      setBuscandoSugerencias(null);
+      setCampoSugerenciasActivo(null);
+
+      const punto: Coordenada = {
+        latitud: sugerencia.latitud,
+        longitud: sugerencia.longitud,
+        direccion: sugerencia.etiqueta,
+      };
+
+      if (tipo === "origen") {
+        setOrigen(sugerencia.etiqueta);
+        setPinManualOrigen(punto);
+        setSugerenciasOrigen([]);
+      } else {
+        setDestino(sugerencia.etiqueta);
+        setPinManualDestino(punto);
+        setSugerenciasDestino([]);
+      }
+
+      const otroPunto: PuntoSolicitud | null =
+        tipo === "origen"
+          ? pinManualDestino ?? (destino.trim().length >= 3 && destino.trim() !== "Buscando dirección..." ? { direccion: destino.trim() } : null)
+          : pinManualOrigen ?? (origen.trim().length >= 3 && origen.trim() !== "Buscando dirección..." ? { direccion: origen.trim() } : null);
+
+      if (otroPunto && !puedeCancelar) {
+        cancelarDebounceEstimacion();
+        if (tipo === "origen") void ejecutarEstimacion(punto, otroPunto);
+        else void ejecutarEstimacion(otroPunto, punto);
+      } else {
+        invalidarEstimacion();
+      }
+    },
+    [pinManualDestino, pinManualOrigen, destino, origen, puedeCancelar, cancelarDebounceEstimacion, ejecutarEstimacion, invalidarEstimacion]
   );
 
   const reestimarConSimulacion = useCallback(
@@ -592,57 +700,133 @@ export const VistaPasajero: React.FC = () => {
               <h2 className="text-sm font-bold uppercase tracking-wide text-[#2C2B28] dark:text-slate-100">Tu recorrido</h2>
               <p className="mt-1 text-xs text-[#5E5B54] dark:text-slate-400">Ingresá un destino o tocá el mapa para cotizar al instante.</p>
             </div>
-            <label className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-300" htmlFor="origen-viaje">
-              Origen
-              <input
-                id="origen-viaje"
-                name="origen"
-                autoComplete="street-address"
-                value={origen}
-                onChange={(evento) => {
-                  const nuevoOrigen = evento.target.value;
-                  setOrigen(nuevoOrigen);
-                  setPinManualOrigen(null);
-                  programarEstimacionAutomatica(nuevoOrigen, destino, null, pinManualDestino);
-                }}
-                disabled={puedeCancelar}
-                className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
-                placeholder="Ej: Av. Alberdi 250, Resistencia"
-                required
-              />
-            </label>
-            <label className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-300" htmlFor="destino-viaje">
-              Destino
-              <input
-                id="destino-viaje"
-                name="destino"
-                autoComplete="street-address"
-                value={destino}
-                onChange={(evento) => {
-                  const nuevoDestino = evento.target.value;
-                  setDestino(nuevoDestino);
-                  setPinManualDestino(null);
-                  programarEstimacionAutomatica(origen, nuevoDestino, pinManualOrigen, null);
-                }}
-                onBlur={() => {
-                  if (debounceEstimacionRef.current === null || puedeCancelar) return;
-                  const oTexto = origen.trim();
-                  const dTexto = destino.trim();
-                  const origenValido = Boolean(pinManualOrigen) || (oTexto.length >= 3 && oTexto !== "Buscando dirección...");
-                  const destinoValido = Boolean(pinManualDestino) || (dTexto.length >= 3 && dTexto !== "Buscando dirección...");
-                  if (!origenValido || !destinoValido) return;
-                  cancelarDebounceEstimacion();
-                  void ejecutarEstimacion(
-                    pinManualOrigen ?? { direccion: oTexto },
-                    pinManualDestino ?? { direccion: dTexto }
-                  );
-                }}
-                disabled={puedeCancelar}
-                className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
-                placeholder="Ej.: Shopping Sarmiento, Resistencia"
-                required
-              />
-            </label>
+            <div className="relative">
+              <label className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-300" htmlFor="origen-viaje">
+                Origen
+                <input
+                  id="origen-viaje"
+                  name="origen"
+                  autoComplete="off"
+                  value={origen}
+                  onFocus={() => setCampoSugerenciasActivo("origen")}
+                  onBlur={() => setCampoSugerenciasActivo((actual) => (actual === "origen" ? null : actual))}
+                  onKeyDown={(evento) => {
+                    if (evento.key === "Escape") setCampoSugerenciasActivo(null);
+                  }}
+                  onChange={(evento) => {
+                    const nuevoOrigen = evento.target.value;
+                    setOrigen(nuevoOrigen);
+                    setPinManualOrigen(null);
+                    setCampoSugerenciasActivo("origen");
+                    buscarSugerenciasDireccion("origen", nuevoOrigen);
+                    programarEstimacionAutomatica(nuevoOrigen, destino, null, pinManualDestino);
+                  }}
+                  disabled={puedeCancelar}
+                  className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
+                  placeholder="Ej: Av. Alberdi 250, Resistencia"
+                  required
+                />
+              </label>
+              {campoSugerenciasActivo === "origen" && !puedeCancelar && (buscandoSugerencias === "origen" || sugerenciasOrigen.length > 0) && (
+                <ul
+                  role="listbox"
+                  aria-label="Sugerencias de origen"
+                  data-testid="sugerencias-origen"
+                  className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#FCFBF8] dark:bg-slate-900 shadow-lg divide-y divide-[#EFECE4] dark:divide-slate-800"
+                >
+                  {buscandoSugerencias === "origen" && sugerenciasOrigen.length === 0 && (
+                    <li className="px-3 py-2 text-xs text-[#5E5B54] dark:text-slate-400">Buscando direcciones…</li>
+                  )}
+                  {sugerenciasOrigen.map((sug, idx) => (
+                    <li key={`${sug.etiqueta}-${idx}`}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        onMouseDown={(evento) => {
+                          evento.preventDefault();
+                          seleccionarSugerencia("origen", sug);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-xs text-[#2C2B28] dark:text-slate-100 hover:bg-[#EFECE4] dark:hover:bg-slate-800 cursor-pointer transition flex items-center gap-2"
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400" aria-hidden="true" />
+                        <span className="truncate">{sug.etiqueta}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="relative">
+              <label className="block text-xs font-semibold text-[#2C2B28] dark:text-slate-300" htmlFor="destino-viaje">
+                Destino
+                <input
+                  id="destino-viaje"
+                  name="destino"
+                  autoComplete="off"
+                  value={destino}
+                  onFocus={() => setCampoSugerenciasActivo("destino")}
+                  onKeyDown={(evento) => {
+                    if (evento.key === "Escape") setCampoSugerenciasActivo(null);
+                  }}
+                  onChange={(evento) => {
+                    const nuevoDestino = evento.target.value;
+                    setDestino(nuevoDestino);
+                    setPinManualDestino(null);
+                    setCampoSugerenciasActivo("destino");
+                    buscarSugerenciasDireccion("destino", nuevoDestino);
+                    programarEstimacionAutomatica(origen, nuevoDestino, pinManualOrigen, null);
+                  }}
+                  onBlur={() => {
+                    setCampoSugerenciasActivo((actual) => (actual === "destino" ? null : actual));
+                    if (debounceEstimacionRef.current === null || puedeCancelar) return;
+                    const oTexto = origen.trim();
+                    const dTexto = destino.trim();
+                    const origenValido = Boolean(pinManualOrigen) || (oTexto.length >= 3 && oTexto !== "Buscando dirección...");
+                    const destinoValido = Boolean(pinManualDestino) || (dTexto.length >= 3 && dTexto !== "Buscando dirección...");
+                    if (!origenValido || !destinoValido) return;
+                    cancelarDebounceEstimacion();
+                    void ejecutarEstimacion(
+                      pinManualOrigen ?? { direccion: oTexto },
+                      pinManualDestino ?? { direccion: dTexto }
+                    );
+                  }}
+                  disabled={puedeCancelar}
+                  className="mt-1.5 w-full rounded-lg border border-[#D4CFC2] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-900 text-[#2C2B28] dark:text-slate-100 placeholder:text-[#7A776F] px-3 py-2.5 text-sm font-normal outline-none transition focus:bg-[#FCFBF8] dark:focus:bg-slate-950 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 dark:focus:ring-emerald-950 disabled:bg-[#E5E0D4] dark:disabled:bg-slate-800"
+                  placeholder="Ej.: Shopping Sarmiento, Resistencia"
+                  required
+                />
+              </label>
+              {campoSugerenciasActivo === "destino" && !puedeCancelar && (buscandoSugerencias === "destino" || sugerenciasDestino.length > 0) && (
+                <ul
+                  role="listbox"
+                  aria-label="Sugerencias de destino"
+                  data-testid="sugerencias-destino"
+                  className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-[#DDD8CC] dark:border-slate-700 bg-[#FCFBF8] dark:bg-slate-900 shadow-lg divide-y divide-[#EFECE4] dark:divide-slate-800"
+                >
+                  {buscandoSugerencias === "destino" && sugerenciasDestino.length === 0 && (
+                    <li className="px-3 py-2 text-xs text-[#5E5B54] dark:text-slate-400">Buscando direcciones…</li>
+                  )}
+                  {sugerenciasDestino.map((sug, idx) => (
+                    <li key={`${sug.etiqueta}-${idx}`}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        onMouseDown={(evento) => {
+                          evento.preventDefault();
+                          seleccionarSugerencia("destino", sug);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-xs text-[#2C2B28] dark:text-slate-100 hover:bg-[#EFECE4] dark:hover:bg-slate-800 cursor-pointer transition flex items-center gap-2"
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-red-600 dark:bg-red-400" aria-hidden="true" />
+                        <span className="truncate">{sug.etiqueta}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             {calculandoEstimacion && (
               <p className="text-xs font-medium text-[#4A7C59] dark:text-emerald-400" role="status">
                 Calculando ruta y precio…

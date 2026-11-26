@@ -15,10 +15,11 @@ import {
   type ObservacionClima,
   type OpcionesGeocodificacion,
   type RutaCalculada,
+  type SugerenciaDireccion,
   type ZonaTarifaria
 } from "./dominio";
 
-export type { Geocodificador, OpcionesGeocodificacion, CuadroDelimitador };
+export type { Geocodificador, OpcionesGeocodificacion, CuadroDelimitador, SugerenciaDireccion };
 
 type Obtener = (url: string, opciones?: RequestInit) => Promise<Response>;
 function registrarFalla(servicio: string, operacion: string, resultado: string): void {
@@ -267,6 +268,87 @@ export class GeocodificadorGoogle implements Geocodificador {
     this.cacheInversa.set(clave, direccion);
     return direccion;
   }
+
+  async autocompletar(consulta: string, opciones?: OpcionesGeocodificacion): Promise<SugerenciaDireccion[]> {
+    const texto = consulta.trim();
+    if (texto.length < 2) return [];
+
+    const parametros = new URLSearchParams({
+      address: texto,
+      key: this.apiKey,
+      language: "es",
+      region: "ar",
+      components: "country:AR"
+    });
+    if (opciones?.centro) {
+      const nivel = construirNivelesCascada(
+        opciones.centro,
+        opciones.radioNivel1Km ?? this.radioNivel1Km,
+        opciones.radioNivel2Km ?? this.radioNivel2Km,
+        "ar"
+      )[0];
+      if (nivel?.cuadro) {
+        parametros.set("bounds", `${nivel.cuadro.sur},${nivel.cuadro.oeste}|${nivel.cuadro.norte},${nivel.cuadro.este}`);
+      }
+    }
+
+    const cuerpo = await this.consultarGoogle(parametros, "autocompletar");
+    if (cuerpo.status === "ZERO_RESULTS" || !cuerpo.results || cuerpo.results.length === 0) {
+      return [];
+    }
+    if (cuerpo.status && cuerpo.status !== "OK") {
+      registrarFalla("google_geocoding", "autocompletar", cuerpo.status);
+      return [];
+    }
+
+    const vistas = new Set<string>();
+    const sugerencias: SugerenciaDireccion[] = [];
+    for (const item of cuerpo.results) {
+      const etiqueta = item.formatted_address?.trim();
+      const loc = item.geometry?.location;
+      if (!etiqueta || typeof loc?.lat !== "number" || typeof loc?.lng !== "number" || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) {
+        continue;
+      }
+      if (vistas.has(etiqueta.toLowerCase())) continue;
+      vistas.add(etiqueta.toLowerCase());
+      sugerencias.push({ etiqueta, latitud: loc.lat, longitud: loc.lng });
+      if (sugerencias.length >= 5) break;
+    }
+    return sugerencias;
+  }
+}
+
+function normalizarTextoGeo(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bavenida\b/g, "av")
+    .replace(/\bav\./g, "av")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatearDireccionNominatim(dir?: RespuestaInversaNominatim["address"], displayName?: string): string | undefined {
+  if (dir) {
+    const lugar = dir.amenity || dir.tourism || dir.shop || dir.building;
+    const calleBase = dir.road || dir.pedestrian || dir.neighbourhood || dir.suburb;
+    const calleConAltura = calleBase ? [calleBase, dir.house_number].filter(Boolean).join(" ") : undefined;
+    const localidad = dir.city || dir.town || dir.village || dir.municipality || dir.state;
+    const partes = [lugar, calleConAltura, localidad].filter(Boolean);
+    if (partes.length > 0) return partes.join(", ");
+  }
+  if (displayName) {
+    const resumida = displayName
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(", ");
+    if (resumida) return resumida;
+  }
+  return undefined;
 }
 
 interface RespuestaInversaNominatim {
@@ -293,6 +375,7 @@ interface RespuestaInversaNominatim {
 export class GeocodificadorNominatim implements Geocodificador {
   private readonly cacheDirecta = new Map<string, Coordenada>();
   private readonly cacheInversa = new Map<string, string>();
+  private readonly cacheAutocompletar = new Map<string, SugerenciaDireccion[]>();
 
   constructor(
     private readonly userAgent = "viajes-grupo1-tp/1.0 (contacto@universidad.edu.ar)",
@@ -464,34 +547,76 @@ export class GeocodificadorNominatim implements Geocodificador {
       throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", "No se encontró una dirección para las coordenadas seleccionadas.");
     }
 
-    const dir = cuerpo.address;
-    if (dir) {
-      const lugar = dir.amenity || dir.tourism || dir.shop || dir.building;
-      const calleBase = dir.road || dir.pedestrian || dir.neighbourhood || dir.suburb;
-      const calleConAltura = calleBase ? [calleBase, dir.house_number].filter(Boolean).join(" ") : undefined;
-      const localidad = dir.city || dir.town || dir.village || dir.municipality || dir.state;
-      const partes = [lugar, calleConAltura, localidad].filter(Boolean);
-      if (partes.length > 0) {
-        const formateada = partes.join(", ");
-        this.cacheInversa.set(clave, formateada);
-        return formateada;
-      }
-    }
-
-    if (cuerpo.display_name) {
-      const resumida = cuerpo.display_name
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .slice(0, 3)
-        .join(", ");
-      if (resumida) {
-        this.cacheInversa.set(clave, resumida);
-        return resumida;
-      }
+    const formateada = formatearDireccionNominatim(cuerpo.address, cuerpo.display_name);
+    if (formateada) {
+      this.cacheInversa.set(clave, formateada);
+      return formateada;
     }
 
     throw new ErrorTarifas("DIRECCION_NO_ENCONTRADA", "No se encontró una dirección para las coordenadas seleccionadas.");
+  }
+
+  async autocompletar(consulta: string, opciones?: OpcionesGeocodificacion): Promise<SugerenciaDireccion[]> {
+    const texto = consulta.trim();
+    if (texto.length < 2) return [];
+
+    const claveCache = `${texto.toLowerCase()}|${opciones?.centro ? `${opciones.centro.latitud.toFixed(2)},${opciones.centro.longitud.toFixed(2)}` : "sin_centro"}`;
+    const cacheada = this.cacheAutocompletar.get(claveCache);
+    if (cacheada) return structuredClone(cacheada);
+
+    const centro = opciones?.centro ?? { latitud: -27.4521295, longitud: -58.9873752 };
+    const cuadroLocal = construirNivelesCascada(centro, this.radioNivel1Km, this.radioNivel2Km, "ar")[0]?.cuadro;
+    const parametros = new URLSearchParams({
+      q: texto,
+      format: "json",
+      limit: "6",
+      addressdetails: "1",
+      countrycodes: "ar",
+      ...(cuadroLocal ? { viewbox: `${cuadroLocal.oeste},${cuadroLocal.norte},${cuadroLocal.este},${cuadroLocal.sur}` } : {})
+    });
+
+    const url = `https://nominatim.openstreetmap.org/search?${parametros}`;
+    let respuesta: Response;
+    try {
+      respuesta = await this.obtener(url, {
+        headers: { "User-Agent": this.userAgent, "Accept-Language": "es-AR,es;q=0.9" },
+        signal: AbortSignal.timeout(this.timeoutMs)
+      });
+    } catch {
+      registrarFalla("nominatim_osm", "autocompletar", "timeout_o_red");
+      throw new ErrorTarifas("DEPENDENCIA_NO_DISPONIBLE", "El servicio de geocodificación de OpenStreetMap no respondió a tiempo.");
+    }
+
+    if (!respuesta.ok) {
+      registrarFalla("nominatim_osm", "autocompletar", `http_${respuesta.status}`);
+      return [];
+    }
+
+    let resultados: Array<RespuestaInversaNominatim & { lat?: string; lon?: string }>;
+    try {
+      resultados = await respuesta.json() as typeof resultados;
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(resultados)) return [];
+
+    const vistas = new Set<string>();
+    const sugerencias: SugerenciaDireccion[] = [];
+    for (const item of resultados) {
+      const latitud = Number(item?.lat);
+      const longitud = Number(item?.lon);
+      if (!Number.isFinite(latitud) || !Number.isFinite(longitud) || latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
+        continue;
+      }
+      const etiqueta = formatearDireccionNominatim(item.address, item.display_name);
+      if (!etiqueta || vistas.has(etiqueta.toLowerCase())) continue;
+      vistas.add(etiqueta.toLowerCase());
+      sugerencias.push({ etiqueta, latitud, longitud });
+      if (sugerencias.length >= 5) break;
+    }
+
+    this.cacheAutocompletar.set(claveCache, sugerencias);
+    return structuredClone(sugerencias);
   }
 }
 
@@ -566,6 +691,26 @@ export class GeocodificadorFalso implements Geocodificador {
       claves: ["av 9 de julio", "9 de julio", "av 9 de julio, resistencia"],
       nombreVisible: "Av. 9 de Julio, Resistencia",
       coordenada: { latitud: -27.452, longitud: -58.985 }
+    },
+    {
+      claves: ["av alberdi 250", "avenida alberdi 250", "av alberdi", "alberdi"],
+      nombreVisible: "Av. Alberdi 250, Resistencia",
+      coordenada: { latitud: -27.4538, longitud: -58.9845 }
+    },
+    {
+      claves: ["av alberdi 600", "avenida alberdi 600", "alberdi 600"],
+      nombreVisible: "Av. Alberdi 600, Resistencia",
+      coordenada: { latitud: -27.4572, longitud: -58.9818 }
+    },
+    {
+      claves: ["av 25 de mayo 450", "avenida 25 de mayo", "25 de mayo 450"],
+      nombreVisible: "Av. 25 de Mayo 450, Resistencia",
+      coordenada: { latitud: -27.4488, longitud: -58.9896 }
+    },
+    {
+      claves: ["av castelli y las heras", "avenida castelli", "castelli"],
+      nombreVisible: "Av. Castelli y Las Heras, Resistencia",
+      coordenada: { latitud: -27.4589, longitud: -58.9811 }
     },
     {
       claves: ["costanera corrientes", "corrientes", "plaza 25 de mayo, corrientes"],
@@ -696,6 +841,39 @@ export class GeocodificadorFalso implements Geocodificador {
       return `Región Chaco / Corrientes (${coordenada.latitud.toFixed(4)}, ${coordenada.longitud.toFixed(4)})`;
     }
     return `Argentina (${coordenada.latitud.toFixed(4)}, ${coordenada.longitud.toFixed(4)})`;
+  }
+
+  async autocompletar(consulta: string, opciones?: OpcionesGeocodificacion): Promise<SugerenciaDireccion[]> {
+    const textoNormalizado = normalizarTextoGeo(consulta);
+    if (textoNormalizado.length < 2) return [];
+    const tokens = textoNormalizado.split(" ").filter(Boolean);
+
+    const coincidencias = this.catalogo.filter((item) => {
+      const campos = [normalizarTextoGeo(item.nombreVisible), ...item.claves.map(normalizarTextoGeo)];
+      return tokens.every((token) => campos.some((campo) => campo.includes(token)));
+    });
+
+    if (opciones?.centro) {
+      const centro = opciones.centro;
+      coincidencias.sort(
+        (a, b) => distanceHaversineMetros(centro, a.coordenada) - distanceHaversineMetros(centro, b.coordenada)
+      );
+    }
+
+    const vistas = new Set<string>();
+    const sugerencias: SugerenciaDireccion[] = [];
+    for (const item of coincidencias) {
+      const clave = item.nombreVisible.toLowerCase();
+      if (vistas.has(clave)) continue;
+      vistas.add(clave);
+      sugerencias.push({
+        etiqueta: item.nombreVisible,
+        latitud: item.coordenada.latitud,
+        longitud: item.coordenada.longitud
+      });
+      if (sugerencias.length >= 5) break;
+    }
+    return sugerencias;
   }
 }
 

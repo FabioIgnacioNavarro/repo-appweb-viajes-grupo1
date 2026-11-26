@@ -56,6 +56,10 @@ app.use(crearRouterTarifas({
     geocodificador.geocodificarInversa
       ? geocodificador.geocodificarInversa(coord)
       : Promise.resolve(`Ubicación (${coord.latitud.toFixed(5)}, ${coord.longitud.toFixed(5)})`),
+  autocompletar: (consulta, centro) =>
+    geocodificador.autocompletar
+      ? geocodificador.autocompletar(consulta, centro ? { centro } : undefined)
+      : Promise.resolve([]),
   validador,
   comprobarBase: async () => { await pool.query("SELECT 1"); },
   modoDesarrollador: process.env.MODO_DESARROLLADOR === "true" && process.env.NODE_ENV !== "production"
