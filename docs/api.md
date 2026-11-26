@@ -51,7 +51,8 @@ Este documento consolida el contrato de la API HTTP de la plataforma para todos 
 | `GET` | `/ready/tarifas` | `ms-tarifas:3001/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/ready/flota` | `ms-flota:3002/ready` | `200` si la base PostgreSQL responde `SELECT 1`; `503` si no está disponible. |
 | `GET` | `/` (y rutas SPA) | Estáticos Nginx (`dist/web`) | Sirve `index.html`, `/assets/*` con MIME types correctos y fallback a `index.html` para rutas del front. |
-| `POST` | `/auth/login` | `auth-emulator:9099` | Valida `{ usuario, contrasena }` contra cuentas semilla locales y devuelve JWT RS256 + perfil. Solo disponible fuera de producción. |
+| `POST` | `/auth/login` | `auth-emulator:9099` | Valida `{ usuario, contrasena }` contra cuentas locales y devuelve JWT RS256 + perfil. Solo disponible fuera de producción. |
+| `POST` | `/auth/registro` | `auth-emulator:9099` | Registra una cuenta nueva (`pasajero` o `chofer`) en el emulador local y devuelve JWT RS256 + perfil (`201`). Solo disponible fuera de producción. |
 | `POST` | `/auth/token` | `auth-emulator:9099` | Emite un JWT RS256 de desarrollo/demo para `{ id_usuario, rol }` (también acepta `idUsuario`). Solo entorno con emulador. |
 | `GET` | `/auth/tokens-demo` | `auth-emulator:9099` | Devuelve catálogo de tokens RS256 sintéticos de demostración por rol. |
 
@@ -96,7 +97,7 @@ Los mensajes son JSON con la envoltura `{"evento":"...","datos":{...}}`:
 
 - `CANAL_LISTO`: confirma que el usuario autenticado quedó conectado.
 - `OFERTA_NUEVA`: se entrega únicamente al chofer destinatario. `datos` incluye `id_oferta`, `id_viaje`, `estado`, `enviada_en`, `expira_en`, `origen`, `destino`, `precio_estimado` y `moneda`. El origen, destino y precio corresponden al viaje confirmado y se envían como snapshot; no se recalculan al entregar la oferta.
-- `OFERTA_VENCIDA`: se entrega al chofer cuando el servidor observa el vencimiento (al consultar o aceptar); incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`. El cliente usa `expira_en` para marcar el vencimiento local en el instante indicado y consulta el GET al reconectar.
+- `OFERTA_VENCIDA`: se entrega al chofer cuando el servidor vence la oferta por vigencia expirada (tanto en el barrido periódico en segundo plano como al consultar o intentar aceptar); incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`. Al vencer o rechazarse la última oferta activa de un viaje `SOLICITADO`, `ms-viajes` ofrece automáticamente el viaje al siguiente chofer disponible sin ofertas previas para ese viaje o transiciona a `SIN_CHOFERES_DISPONIBLES`.
 - `OFERTA_CANCELADA`: se entrega a los choferes con ofertas pendientes cuando el viaje se asigna a otro chofer o se cancela. Incluye `id_oferta`, `id_viaje`, `estado`, `motivo` y `actualizado_en`.
 - `ESTADO_VIAJE_ACTUALIZADO`: se entrega al pasajero y al chofer asignado. `datos` incluye `id_viaje`, `estado`, `id_chofer` y `actualizado_en`.
 - `UBICACION_CHOFER_ACTUALIZADA`: se entrega al pasajero del viaje activo. Incluye `id_viaje`, `latitud`, `longitud` redondeadas a tres decimales y `actualizado_en`; no expone la posición precisa almacenada por Flota.
@@ -307,7 +308,33 @@ El chofer rechaza la oferta explícitamente.
 
 ---
 
-### 3.3 Servicio `ms-flota` (Choferes y Ubicaciones)
+### 3.3 Servicio `ms-flota` (Choferes, Vehículos y Ubicaciones)
+
+#### `GET /choferes`
+Lista los perfiles de choferes registrados junto con su vehículo activo actual.
+- **Autorización:** `ADMINISTRADOR` o `SOPORTE`.
+- **Respuesta (`200 OK`):** `{ "choferes": [ { ...chofer, "vehiculo_activo": { ... } | null } ] }`.
+
+#### `POST /choferes`
+Registra el perfil de chofer en `ms-flota` (`habilitado: false` por defecto cuando lo solicita un `CHOFER`, a la espera de validación administrativa).
+- **Autorización:** `CHOFER` (alta propia) o `ADMINISTRADOR` (puede especificar `usuario_id`, `habilitado`, `carnet_conducir_validado`).
+- **Respuesta (`201 Created`):** objeto chofer creado (`409 CHOFER_YA_EXISTE` si ya existe).
+
+#### `PATCH /choferes/:idChofer/habilitacion`
+Habilita o inhabilita administrativamente a un chofer y registra la validación de su carnet. Si se inhabilita, apaga automáticamente `disponibilidad`.
+- **Autorización:** Exclusivo de `ADMINISTRADOR`.
+- **Cuerpo:** `{"habilitado": true, "carnet_conducir_validado"?: true}`.
+- **Respuesta (`200 OK`):** datos actualizados del chofer.
+
+#### `GET /vehiculos` y `POST /vehiculos`
+Lista los vehículos de flota (`ADMINISTRADOR`, `SOPORTE`, `CHOFER`) o registra uno nuevo (`ADMINISTRADOR`, `CHOFER`) con `{ patente, tipo_vehiculo, marca, modelo, anio_fabricacion, color, capacidad_pasajeros }`.
+- **Respuesta (`201 Created` en `POST`):** objeto vehículo (`409 VEHICULO_YA_EXISTE` si la patente ya existe).
+
+#### `PUT /choferes/:idChofer/vehiculo` (alias `POST`)
+Asigna un vehículo activo a un chofer (desactivando cualquier asignación previa vigente). Un chofer no puede activar `disponibilidad: true` si no tiene un vehículo activo asignado.
+- **Autorización:** Exclusivo de `ADMINISTRADOR`.
+- **Cuerpo:** `{"id_vehiculo": "..."}`.
+- **Respuesta (`200 OK`):** `{ "chofer": { ... }, "vehiculo": { ... }, "asignacion": { ... } }`.
 
 #### `PATCH /choferes/yo/disponibilidad`
 Cambia el estado de disponibilidad del chofer autenticado.

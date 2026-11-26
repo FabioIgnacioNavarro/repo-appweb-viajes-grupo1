@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { scrypt, timingSafeEqual } from "node:crypto";
+import { randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import express from "express";
 import { manejarErrorCuerpoHttp } from "../compartido/seguridad-http";
 import {
@@ -45,6 +45,14 @@ export function crearAplicacionEmulador() {
   const claveDemo = process.env.AUTH_DEMO_PASSWORD || CONTRASENA_DEMO_PREDETERMINADA;
   const hashClaveDemo = derivarHash(claveDemo);
   const hashDesconocido = derivarHash(`${claveDemo}-usuario-inexistente`);
+  const cuentasRegistradas: Array<{
+    usuario: string;
+    email: string;
+    idUsuario: string;
+    rol: "pasajero" | "chofer" | "soporte" | "administrador";
+    nombre: string;
+    hashPersonal?: Promise<Buffer>;
+  }> = [...USUARIOS_SEMILLA];
 
   // Inicializa las claves RSA al arrancar
   const claves = obtenerOInicializarClaves();
@@ -111,10 +119,10 @@ export function crearAplicacionEmulador() {
       return;
     }
 
-    const cuenta = USUARIOS_SEMILLA.find((semilla) => semilla.usuario === usuarioRaw || semilla.email === usuarioRaw);
+    const cuenta = cuentasRegistradas.find((semilla) => semilla.usuario === usuarioRaw || semilla.email === usuarioRaw);
     const [hashPresentado, hashValido, hashInvalido] = await Promise.all([
       derivarHash(contrasena),
-      hashClaveDemo,
+      cuenta?.hashPersonal ?? hashClaveDemo,
       hashDesconocido
     ]);
     const claveCorrecta = mismoHash(hashPresentado, cuenta ? hashValido : hashInvalido);
@@ -142,6 +150,93 @@ export function crearAplicacionEmulador() {
         email: cuenta.email,
         nombre: cuenta.nombre,
         rol: cuenta.rol
+      },
+      expira_en_segundos: 3600
+    });
+  });
+
+  // 3b. Registro local de cuentas de pasajero o chofer (solo fuera de producción)
+  app.post("/auth/registro", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (process.env.NODE_ENV === "production") {
+      res.status(404).json({
+        error: {
+          codigo: "RUTA_NO_ENCONTRADA",
+          mensaje: "La ruta no existe o no está disponible en este entorno.",
+          detalles: {}
+        }
+      });
+      return;
+    }
+
+    const cuerpo = req.body as Record<string, unknown> | undefined;
+    const usuario = typeof cuerpo?.usuario === "string" ? cuerpo.usuario.trim().toLowerCase() : "";
+    const email = typeof cuerpo?.email === "string" && cuerpo.email.trim()
+      ? cuerpo.email.trim().toLowerCase()
+      : `${usuario}@viajes.local`;
+    const nombre = typeof cuerpo?.nombre === "string" && cuerpo.nombre.trim()
+      ? cuerpo.nombre.trim()
+      : usuario;
+    const contrasena = typeof cuerpo?.contrasena === "string" ? cuerpo.contrasena : "";
+    const rolRaw = typeof cuerpo?.rol === "string" ? cuerpo.rol.trim().toLowerCase() : "pasajero";
+
+    if (rolRaw === "administrador" || rolRaw === "soporte" || rolRaw === "admin") {
+      res.status(403).json({
+        error: {
+          codigo: "ROL_NO_AUTORIZADO",
+          mensaje: "El registro público solo permite cuentas de pasajero o chofer.",
+          detalles: {}
+        }
+      });
+      return;
+    }
+    if (!usuario || usuario.length < 2 || usuario.length > 60 || !/^[a-z0-9._@-]+$/.test(usuario) || !contrasena || contrasena.length < 6 || contrasena.length > 256 || (rolRaw !== "pasajero" && rolRaw !== "chofer")) {
+      res.status(400).json({
+        error: {
+          codigo: "ENTRADA_INVALIDA",
+          mensaje: "Ingresá usuario (mínimo 2 caracteres), contraseña (mínimo 6 caracteres) y rol pasajero o chofer.",
+          detalles: {}
+        }
+      });
+      return;
+    }
+
+    const duplicado = cuentasRegistradas.find((c) => c.usuario === usuario || c.email === email);
+    if (duplicado) {
+      res.status(409).json({
+        error: {
+          codigo: "USUARIO_YA_EXISTE",
+          mensaje: "El usuario o correo ya está registrado.",
+          detalles: {}
+        }
+      });
+      return;
+    }
+
+    const nuevaCuenta = {
+      usuario,
+      email,
+      idUsuario: randomUUID(),
+      rol: rolRaw as "pasajero" | "chofer",
+      nombre,
+      hashPersonal: derivarHash(contrasena)
+    };
+    await nuevaCuenta.hashPersonal;
+    cuentasRegistradas.push(nuevaCuenta);
+
+    const token = emitirTokenJwt(nuevaCuenta.idUsuario, nuevaCuenta.rol, {
+      emisor,
+      audiencia,
+      customClaims: { name: nuevaCuenta.nombre, email: nuevaCuenta.email }
+    });
+    res.status(201).json({
+      token,
+      perfil: {
+        id_usuario: nuevaCuenta.idUsuario,
+        usuario: nuevaCuenta.usuario,
+        email: nuevaCuenta.email,
+        nombre: nuevaCuenta.nombre,
+        rol: nuevaCuenta.rol
       },
       expira_en_segundos: 3600
     });

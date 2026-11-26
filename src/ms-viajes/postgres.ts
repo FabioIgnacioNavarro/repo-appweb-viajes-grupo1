@@ -364,6 +364,25 @@ export class RepositorioOfertasPostgres implements RepositorioOfertas {
     );
     return resultado.rows.map(mapearOferta);
   }
+
+  async listarPendientesVencidas(ahora: Date): Promise<Oferta[]> {
+    const resultado = await this.ejecutor.query<FilaOferta>(
+      "SELECT * FROM viajes.oferta WHERE estado = 'PENDIENTE' AND expira_en <= $1 ORDER BY expira_en ASC LIMIT 100",
+      [ahora]
+    );
+    return resultado.rows.map(mapearOferta);
+  }
+
+  async marcarVencidaSiPendiente(id: string, ahora: Date): Promise<Oferta | undefined> {
+    const resultado = await this.ejecutor.query<FilaOferta>(
+      `UPDATE viajes.oferta
+       SET estado = 'VENCIDA', respondida_en = $2, fecha_actualizacion = CURRENT_TIMESTAMP
+       WHERE id = $1 AND estado = 'PENDIENTE' AND expira_en <= $2
+       RETURNING *`,
+      [id, ahora]
+    );
+    return resultado.rows[0] ? mapearOferta(resultado.rows[0]) : undefined;
+  }
 }
 
 export class RepositorioCobrosPostgres implements RepositorioCobros {
