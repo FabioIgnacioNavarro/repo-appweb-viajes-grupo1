@@ -243,7 +243,7 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     // 4. Enviar ubicación manual y un paso simulado GPS
     await page.getByTestId("boton-enviar-ubicacion").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Posición manual");
-    await page.getByTestId("boton-modo-dev").click();
+    // El acceso al perfil demo deja activadas las herramientas de desarrollo.
     await page.getByTestId("boton-paso-simulacion-gps").click();
     await expect(page.getByTestId("ultima-ubicacion-chofer")).toContainText("Av. Alberdi 300");
 
@@ -352,10 +352,10 @@ test.describe("WEB-006 - Vista del Chofer: disponibilidad, ofertas, 409 y avance
     await expect(page.getByTestId("tarjeta-oferta-oferta-409")).toBeVisible();
     await page.getByTestId("boton-aceptar-oferta-409").click();
 
-    // Debe mostrarse el banner de conflicto 409 y el motivo en la tarjeta sin romper la pantalla
+    // Se muestra un mensaje claro para el chofer; el código técnico solo aparece en modo desarrollo.
     const alerta409 = page.getByTestId("alerta-error-chofer");
     await expect(alerta409).toBeVisible();
-    await expect(alerta409).toContainText("409");
+    await expect(alerta409).toContainText("La oferta ya no está disponible");
     await expect(alerta409).toContainText("ASIGNACION_EN_CONFLICTO");
     await expect(page.getByTestId("motivo-oferta-oferta-409")).toContainText("Ya tomada por otro chofer");
 

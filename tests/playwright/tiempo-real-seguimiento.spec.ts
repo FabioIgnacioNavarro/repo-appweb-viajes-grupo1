@@ -92,8 +92,9 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     const badge = page.getByTestId("badge-estado-ws");
     await expect(badge).toContainText(/Conectado/i, { timeout: 10000 });
 
-    // Los controles de prueba aparecen únicamente al activar el modo desarrollador.
+    // El acceso al perfil demo activa modo desarrollador. En modo normal los controles deben ocultarse.
     const btnCorte = page.getByTestId("boton-simular-corte-red");
+    await page.getByTestId("boton-modo-dev").click();
     await expect(btnCorte).toHaveCount(0);
     await page.getByTestId("boton-modo-dev").click();
     await expect(btnCorte).toBeVisible();
@@ -338,8 +339,8 @@ test.describe("WEB-007 - Seguimiento en vivo con WebSocket, reconexión y resili
     await expect(page.getByTestId("panel-seguimiento-tiempo-real")).toBeVisible();
     await expect(page.getByTestId("etapa-asignado")).toHaveClass(/ring-2|font-extrabold/);
 
-    // 1. Activar las herramientas de prueba y simular corte de red.
-    await page.getByTestId("boton-modo-dev").click();
+    // El acceso al perfil demo ya dejó activadas las herramientas de prueba.
+    // Simular el corte de red y comprobar la recuperación del estado canónico.
     await page.getByTestId("boton-simular-corte-red").click();
     await expect(page.getByTestId("badge-estado-ws")).toContainText(/Sin conexión/i);
 
