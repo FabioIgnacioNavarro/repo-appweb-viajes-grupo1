@@ -142,6 +142,13 @@ export const VistaChofer: React.FC = () => {
   const [mostrarHistorialViajes, setMostrarHistorialViajes] = useState(false);
   const [ultimoCobro, setUltimoCobro] = useState<CobroChoferDto | null>(null);
   const [procesandoTransicion, setProcesandoTransicion] = useState<boolean>(false);
+  const [resultadoFinalizacion, setResultadoFinalizacion] = useState<{ tipo: "exito" | "error"; mensaje: string } | null>(null);
+  const [viajeConsultandoCobro, setViajeConsultandoCobro] = useState<string | null>(null);
+  const [resultadoCobroHistorial, setResultadoCobroHistorial] = useState<{
+    idViaje: string;
+    tipo: "exito" | "error";
+    mensaje: string;
+  } | null>(null);
 
   // Alertas y errores (ej. 409 Conflict)
   const [alertaError, setAlertaError] = useState<{ codigo: string; mensaje: string; esConflicto409?: boolean } | null>(null);
@@ -678,6 +685,7 @@ export const VistaChofer: React.FC = () => {
     setProcesandoTransicion(true);
     setAlertaError(null);
     setMensajeExito(null);
+    setResultadoFinalizacion(null);
 
     try {
       const resultado = await clienteApi.post<{ viaje: ViajeChoferDto; cobro: CobroChoferDto }>(
@@ -688,37 +696,52 @@ export const VistaChofer: React.FC = () => {
       setViajeCerradoReciente(resultado.viaje);
       setViajeActivo(null);
       setUltimoCobro(resultado.cobro);
-      setMensajeExito(resultado.cobro.estado === "confirmado"
-        ? `Viaje finalizado. Cobro ${resultado.cobro.id_cobro} confirmado.`
-        : `Viaje finalizado. El cobro ${resultado.cobro.id_cobro} quedó ${resultado.cobro.estado}.`);
+      setResultadoFinalizacion({
+        tipo: "exito",
+        mensaje: resultado.cobro.estado === "confirmado"
+          ? `Viaje finalizado. Cobro confirmado por ${formatearImporteArs(resultado.cobro.importe)}.`
+          : `Viaje finalizado. El cobro quedó ${resultado.cobro.estado} por ${formatearImporteArs(resultado.cobro.importe)}.`
+      });
     } catch (err) {
-      if (err instanceof ErrorHttpApi && err.status === 0 && modoDev) {
-        const finalizado: ViajeChoferDto = {
-          ...viajeActivo,
-          estado: "finalizado",
-          precio_final: viajeActivo.precio_estimado,
-          finalizado_en: new Date().toISOString(),
-        };
-        guardarViajeEnLista(finalizado);
-        setViajeCerradoReciente(finalizado);
-        setViajeActivo(null);
-        setUltimoCobro({
-          id_cobro: `cobro-demo-${Date.now()}`,
-          importe: viajeActivo.precio_estimado,
-          moneda: "ARS",
-          estado: "confirmado",
-        });
-        setMensajeExito("Viaje finalizado. El cobro de demostración quedó confirmado.");
-      } else if (err instanceof ErrorHttpApi) {
-        setAlertaError({ codigo: err.codigo, mensaje: err.mensaje, esConflicto409: err.status === 409 });
-      } else {
-        setAlertaError({
-          codigo: "ERROR_FINALIZACION",
-          mensaje: "No se pudo finalizar el viaje. El recorrido sigue activo; revisá la conexión e intentá otra vez.",
-        });
-      }
+      // El backend puede haber guardado FINALIZADO y fallar después al crear el recibo.
+      // Refrescar el estado canónico evita dejar el panel mostrando un viaje activo falso.
+      await sincronizarEstadoServidor();
+      const detalle = err instanceof ErrorHttpApi
+        ? err.mensaje
+        : "No se recibió una respuesta válida del servidor.";
+      setResultadoFinalizacion({
+        tipo: "error",
+        mensaje: `${detalle} Actualicé el estado del viaje; revisá el historial y usá “Ver o completar recibo” si ya figura como finalizado.`
+      });
     } finally {
       setProcesandoTransicion(false);
+    }
+  };
+
+  const consultarOCCompletarCobro = async (viaje: ViajeChoferDto) => {
+    setViajeConsultandoCobro(viaje.id_viaje);
+    setResultadoCobroHistorial(null);
+    try {
+      // La finalización es idempotente: devuelve el recibo existente o recupera uno
+      // que no se pudo crear después de que el viaje quedó FINALIZADO.
+      const resultado = await clienteApi.post<{ viaje: ViajeChoferDto; cobro: CobroChoferDto }>(
+        `/viajes/${encodeURIComponent(viaje.id_viaje)}/finalizacion`,
+        {}
+      );
+      guardarViajeEnLista(resultado.viaje);
+      setUltimoCobro(resultado.cobro);
+      setResultadoCobroHistorial({
+        idViaje: viaje.id_viaje,
+        tipo: "exito",
+        mensaje: `Recibo disponible por ${formatearImporteArs(resultado.cobro.importe)}. Estado del cobro: ${resultado.cobro.estado}.`
+      });
+    } catch (err) {
+      const detalle = err instanceof ErrorHttpApi
+        ? err.mensaje
+        : "No se pudo consultar o completar el recibo.";
+      setResultadoCobroHistorial({ idViaje: viaje.id_viaje, tipo: "error", mensaje: detalle });
+    } finally {
+      setViajeConsultandoCobro(null);
     }
   };
 
@@ -959,10 +982,6 @@ export const VistaChofer: React.FC = () => {
                   className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"
                 >
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400 font-semibold block">ID de Viaje</span>
-                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{viajeActivo.id_viaje}</span>
-                </div>
-                <div>
                   <span className="text-slate-500 dark:text-slate-400 font-semibold block">Precio Congelado</span>
                   <span className="font-extrabold text-emerald-700 dark:text-emerald-400 text-sm">
                     {formatearImporteArs(viajeActivo.precio_final ?? viajeActivo.precio_estimado)}
@@ -1075,6 +1094,19 @@ export const VistaChofer: React.FC = () => {
                 {procesandoTransicion ? "Finalizando..." : "3. Finalizar y Cobrar"}
               </button>
             </div>
+            {resultadoFinalizacion && (
+              <p
+                id="resultado-finalizacion-chofer"
+                data-testid="resultado-finalizacion-chofer"
+                role={resultadoFinalizacion.tipo === "error" ? "alert" : "status"}
+                aria-live={resultadoFinalizacion.tipo === "error" ? "assertive" : "polite"}
+                className={`rounded-lg border p-3 text-xs ${resultadoFinalizacion.tipo === "error"
+                  ? "border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200"
+                  : "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200"}`}
+              >
+                {resultadoFinalizacion.mensaje}
+              </p>
+            )}
             {viajeActivo && !procesandoTransicion && estadoNormalizado !== "en_curso" && (
               <p className="text-right text-[11px] text-[#5E5B54] dark:text-slate-400" role="note">
                 {estadoNormalizado === "asignado"
@@ -1235,7 +1267,6 @@ export const VistaChofer: React.FC = () => {
                     >
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="font-mono text-[11px] text-[#5E5B54] dark:text-slate-400">{viaje.id_viaje}</span>
                           <span className="rounded-md bg-[#E5E0D4] dark:bg-slate-700 px-2 py-0.5 text-[11px] font-bold text-[#2C2B28] dark:text-slate-200">
                             {etiquetaEstadoViaje(viaje.estado)}
                           </span>
@@ -1247,6 +1278,30 @@ export const VistaChofer: React.FC = () => {
                         <p><span className="font-semibold">Destino:</span> {viaje.destino.direccion ?? `${viaje.destino.latitud.toFixed(4)}, ${viaje.destino.longitud.toFixed(4)}`}</p>
                         <p className="pt-1 font-extrabold">Importe: {formatearImporteArs(viaje.precio_final ?? viaje.precio_estimado)}</p>
                       </div>
+                      {viaje.estado.toLowerCase() === "finalizado" && (
+                        <div className="sm:col-span-2 space-y-2">
+                          <button
+                            type="button"
+                            data-testid={`boton-recibo-${viaje.id_viaje}`}
+                            disabled={viajeConsultandoCobro === viaje.id_viaje}
+                            onClick={() => void consultarOCCompletarCobro(viaje)}
+                            className="rounded-lg border border-[#4A7C59]/40 dark:border-emerald-800 px-3 py-2 text-xs font-bold text-[#3B694A] dark:text-emerald-300 hover:bg-[#E6EFE8] dark:hover:bg-emerald-950/40 disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {viajeConsultandoCobro === viaje.id_viaje ? "Consultando recibo..." : "Ver o completar recibo"}
+                          </button>
+                          {resultadoCobroHistorial?.idViaje === viaje.id_viaje && (
+                            <p
+                              role={resultadoCobroHistorial.tipo === "error" ? "alert" : "status"}
+                              aria-live={resultadoCobroHistorial.tipo === "error" ? "assertive" : "polite"}
+                              className={`rounded-lg border p-3 text-xs ${resultadoCobroHistorial.tipo === "error"
+                                ? "border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200"
+                                : "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200"}`}
+                            >
+                              {resultadoCobroHistorial.mensaje}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -1301,7 +1356,7 @@ export const VistaChofer: React.FC = () => {
             className="space-y-4"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="truncate font-semibold">Viaje #{ofertaEmergente.id_viaje}</span>
+              <span className="truncate font-semibold">Nueva solicitud de viaje</span>
               <span
                 data-testid={`cuenta-regresiva-${ofertaEmergente.id_oferta}`}
                 className={`shrink-0 rounded-md border px-2 py-1 font-mono font-bold ${

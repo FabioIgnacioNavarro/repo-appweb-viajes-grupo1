@@ -140,7 +140,7 @@ export const SeguimientoMapaEnVivo: React.FC<Props> = ({
             Seguimiento del viaje
           </span>
           <h3 className="text-base font-extrabold text-slate-900 mt-0.5">
-            Viaje #{idViaje.slice(0, 8)}
+            Estado y recorrido
           </h3>
         </div>
 

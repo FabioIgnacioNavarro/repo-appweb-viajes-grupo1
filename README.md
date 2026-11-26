@@ -69,7 +69,11 @@ npm.cmd run dev:web
 
 Abrí `http://localhost:5173`; Vite reenvía las llamadas de API y WebSocket al gateway local. Para entrar con identidades compatibles con los datos sintéticos sembrados por Compose, usá la opción de token manual y los actores documentados en `requests/flujo-e2e.http`.
 
-El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL los ejecuta al crear un volumen vacío. Un volumen existente no vuelve a ejecutar scripts nuevos. En ese caso, aplicar las migraciones/esquemas correspondientes antes de repetir la demo.
+El Compose monta los esquemas de Flota, Tarifas y Viajes en `/docker-entrypoint-initdb.d`; PostgreSQL los ejecuta al crear un volumen vacío. Un volumen existente no vuelve a ejecutar scripts nuevos. En ese caso, aplicar las migraciones/esquemas correspondientes antes de repetir la demo. Por ejemplo, para actualizar una base anterior que aún no tenga el contador de intentos de cobro:
+
+```powershell
+docker compose exec postgres psql -U viajes -d viajes -c "ALTER TABLE viajes.cobro ADD COLUMN IF NOT EXISTS intentos INTEGER NOT NULL DEFAULT 1;"
+```
 
 La conexión desde el host usa el puerto `5434`; entre contenedores PostgreSQL escucha en `5432`.
 
