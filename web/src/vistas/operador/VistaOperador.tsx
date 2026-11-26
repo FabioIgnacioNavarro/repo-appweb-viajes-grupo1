@@ -198,10 +198,10 @@ export const VistaOperador: React.FC = () => {
       encabezado: "Viaje",
       renderizar: (v) => (
         <div className="space-y-0.5">
-          <span className="font-mono text-xs font-semibold text-slate-900" title={v.id_viaje}>
+          <span className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-100" title={v.id_viaje}>
             {v.id_viaje}
           </span>
-          <p className="text-[11px] text-slate-500">Pasajero: {v.pasajero_id}</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">Pasajero: {v.pasajero_id}</p>
         </div>
       ),
     },
@@ -215,7 +215,7 @@ export const VistaOperador: React.FC = () => {
       encabezado: "Chofer asignado",
       ocultarEnMovil: false,
       renderizar: (v) => (
-        <span className="text-xs text-slate-700 font-mono">{v.chofer_id ?? "Sin asignar"}</span>
+        <span className="text-xs text-slate-700 dark:text-slate-300 font-mono">{v.chofer_id ?? "Sin asignar"}</span>
       ),
     },
     {
@@ -223,7 +223,7 @@ export const VistaOperador: React.FC = () => {
       encabezado: "Multiplicador",
       alinearDerecha: true,
       renderizar: (v) => (
-        <span className="inline-flex rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 font-mono text-xs font-semibold text-amber-900">
+        <span className="inline-flex rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2 py-0.5 font-mono text-xs font-semibold text-amber-900 dark:text-amber-200">
           {Number(v.multiplicador_demanda).toFixed(2)}x
         </span>
       ),
@@ -234,9 +234,9 @@ export const VistaOperador: React.FC = () => {
       alinearDerecha: true,
       renderizar: (v) => (
         <div className="text-right">
-          <span className="font-semibold text-slate-900">{importePesos(v.precio_final ?? v.precio_estimado)}</span>
+          <span className="font-semibold text-slate-900 dark:text-slate-100">{importePesos(v.precio_final ?? v.precio_estimado)}</span>
           {v.precio_final && (
-            <p className="text-[10px] uppercase tracking-wide text-emerald-700 font-semibold">Final</p>
+            <p className="text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400 font-semibold">Final</p>
           )}
         </div>
       ),
@@ -269,15 +269,15 @@ export const VistaOperador: React.FC = () => {
     <section className="space-y-6" data-testid="vista-operador">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start gap-3">
-          <span className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
+          <span className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 shrink-0">
             <IconoSoporte className="w-5 h-5" />
           </span>
           <div>
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
               Supervisión de Viajes en Tiempo Real
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-              Panel operativo con filtros globales y auditoría inmutable de tarifa y demanda (API-002).
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+              Panel operativo con filtros globales y auditoría inmutable de tarifa y demanda.
             </p>
           </div>
         </div>
@@ -292,19 +292,19 @@ export const VistaOperador: React.FC = () => {
 
       {/* KPIs reales del listado */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total filtrado</p>
-          <p className="text-xl font-bold text-slate-900 mt-1" data-testid="operador-kpi-total">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total filtrado</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1" data-testid="operador-kpi-total">
             {cargando ? "—" : total}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">En página actual</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">{cargando ? "—" : viajes.length}</p>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">En página actual</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">{cargando ? "—" : viajes.length}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Activos visibles</p>
-          <p className="text-xl font-bold text-emerald-700 mt-1">{cargando ? "—" : activosEnPagina}</p>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Activos visibles</p>
+          <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{cargando ? "—" : activosEnPagina}</p>
         </div>
       </div>
 
@@ -407,31 +407,31 @@ export const VistaOperador: React.FC = () => {
         )}
         {auditoria && !cargandoAuditoria && (
           <div className="space-y-4" data-testid="modal-auditoria-contenido">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 p-3.5 space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-500">Precio confirmado congelado</span>
-                <span className="inline-flex rounded-full bg-emerald-100 text-emerald-900 px-2.5 py-0.5 text-[11px] font-semibold">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Precio confirmado congelado</span>
+                <span className="inline-flex rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold">
                   Regla v{auditoria.version_regla} · Inmutable
                 </span>
               </div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                 {importePesos(auditoria.precio_confirmado)}
               </p>
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
                 Multiplicador aplicado:{" "}
-                <strong className="font-mono text-slate-900">
+                <strong className="font-mono text-slate-900 dark:text-slate-100">
                   {Number(auditoria.multiplicador_demanda).toFixed(4)}x
                 </strong>{" "}
                 · Congelada: {formatearFecha(auditoria.congelada_en)}
               </p>
-              <p className="text-[11px] font-mono text-slate-500 break-all">
+              <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all">
                 Estimación origen: {auditoria.id_estimacion}
               </p>
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">
-                Desglose de factores (Variante A)
+              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                Desglose de factores de tarifa
               </h3>
               <dl className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-lg border border-slate-200 p-2.5">

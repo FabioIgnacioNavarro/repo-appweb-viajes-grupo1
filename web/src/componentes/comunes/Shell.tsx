@@ -4,13 +4,15 @@ import { cerrarSesion, obtenerSesion, suscribirSesion } from "../../nucleo/sesio
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
 import { UsuarioSesion } from "../../nucleo/tipos";
 import { useTema } from "../../nucleo/tema";
-import { IconoAuto } from "./Iconos";
+import { useModoDesarrollador } from "../../nucleo/modoDesarrollador";
+import { IconoAuto, IconoCodigo, IconoLuna, IconoSol } from "./Iconos";
 
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { rutaActual, navegarA } = useRouter();
   const [sesion, setSesion] = useState<UsuarioSesion | null>(obtenerSesion());
   const [estadoWs, setEstadoWs] = useState<EstadoConexionWs>(clienteTiempoReal.obtenerEstado());
   const { tema, alternarTema } = useTema();
+  const { modoDev, alternarModoDev } = useModoDesarrollador();
 
   useEffect(() => {
     const desuscribirSesion = suscribirSesion(setSesion);
@@ -29,15 +31,15 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const badgeColorRol = (rol: string) => {
     switch (rol) {
       case "PASAJERO":
-        return "bg-blue-50 text-blue-800 border-blue-200";
+        return "bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800";
       case "CHOFER":
-        return "bg-emerald-50 text-emerald-800 border-emerald-200";
+        return "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800";
       case "SOPORTE":
-        return "bg-purple-50 text-purple-800 border-purple-200";
+        return "bg-purple-50 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800";
       case "ADMINISTRADOR":
-        return "bg-amber-50 text-amber-900 border-amber-200";
+        return "bg-amber-50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-300 border-amber-200 dark:border-amber-800";
       default:
-        return "bg-slate-100 text-slate-800 border-slate-200";
+        return "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700";
     }
   };
 
@@ -45,7 +47,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     if (estadoWs === "CONECTADO") {
       return (
         <span
-          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200"
+          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
           title="Canal WebSocket en tiempo real activo"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
@@ -56,7 +58,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     if (estadoWs === "CONECTANDO") {
       return (
         <span
-          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-amber-50 text-amber-900 border border-amber-200"
+          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
           title="Reconectando WebSocket..."
         >
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden="true"></span>
@@ -66,7 +68,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
     return (
       <span
-        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700 border border-slate-200"
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
         title="Canal WebSocket desconectado"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-slate-400" aria-hidden="true"></span>
@@ -97,35 +99,20 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           {/* Logo y Nombre */}
           <button
             type="button"
-            className="flex items-center gap-2.5 cursor-pointer text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 min-w-0"
+            className="flex items-center gap-2.5 cursor-pointer text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-slate-100 min-w-0"
             onClick={() => navegarA(sesion ? "pasajero" : "login")}
           >
             <div className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shrink-0">
               <IconoAuto size={20} />
             </div>
             <div className="min-w-0 truncate">
-              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-lg tracking-tight">Viajes Compartidos</span>
-              <span className="hidden sm:inline-block ml-2 text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                Grupo 1
-              </span>
+              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-lg tracking-tight">Che Viaje</span>
             </div>
           </button>
 
           {/* Menú derecho */}
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 max-w-full">
-            {/* Selector Claro / Oscuro */}
-            <button
-              type="button"
-              onClick={alternarTema}
-              className="min-h-[36px] min-w-[36px] flex items-center justify-center px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
-              title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              data-testid="boton-tema"
-            >
-              {tema === "oscuro" ? "☀️" : "🌙"}
-            </button>
-
-            {sesion ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 max-w-full">
+            {sesion && (
               <>
                 <div className="hidden sm:block">{pillWs()}</div>
 
@@ -156,22 +143,51 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     ))}
                   </nav>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    clienteTiempoReal.desconectar();
-                    cerrarSesion();
-                    navegarA("login");
-                  }}
-                  className="min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
-                  title="Cerrar sesión"
-                >
-                  Salir
-                </button>
               </>
-            ) : (
-              <span className="text-xs text-slate-600 dark:text-slate-400 font-medium text-right">Modo Seguro · Autenticación Externa</span>
+            )}
+
+            {/* Selector Claro / Oscuro (icono monocromático) */}
+            <button
+              type="button"
+              onClick={alternarTema}
+              className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
+              title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              data-testid="boton-tema"
+            >
+              {tema === "oscuro" ? <IconoSol size={17} /> : <IconoLuna size={17} />}
+            </button>
+
+            {/* Toggle global de Modo Desarrollador en la esquina superior derecha */}
+            <button
+              type="button"
+              onClick={alternarModoDev}
+              aria-pressed={modoDev}
+              data-testid="boton-modo-dev"
+              className={`min-h-[36px] inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
+                modoDev
+                  ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:border-indigo-500 dark:hover:bg-indigo-600"
+                  : "text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
+              title={modoDev ? "Desactivar modo desarrollador" : "Activar modo desarrollador"}
+            >
+              <IconoCodigo size={15} />
+              <span>Modo dev</span>
+            </button>
+
+            {sesion && (
+              <button
+                type="button"
+                onClick={() => {
+                  clienteTiempoReal.desconectar();
+                  cerrarSesion();
+                  navegarA("login");
+                }}
+                className="min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition cursor-pointer"
+                title="Cerrar sesión"
+              >
+                Salir
+              </button>
             )}
           </div>
         </div>
@@ -185,8 +201,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       {/* Pie de Página */}
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-600 dark:text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Programación IV — Trabajo Práctico de Microservicios</span>
-          <span className="text-slate-500 dark:text-slate-400">Variante A (Precio Dinámico) · Arquitectura Hexagonal</span>
+          <span>Che Viaje</span>
+          <span className="text-slate-500 dark:text-slate-400">Microservicios · Arquitectura Hexagonal</span>
         </div>
       </footer>
     </div>

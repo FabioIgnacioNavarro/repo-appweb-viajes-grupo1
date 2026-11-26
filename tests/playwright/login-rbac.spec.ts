@@ -37,6 +37,34 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     await page.route("**/choferes/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ofertas: [] }) })
     );
+    await page.route("**/reglas/demanda**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          activa: {
+            version: 1,
+            autor: "sistema",
+            creada_en: "2026-01-01T00:00:00Z",
+            activa: true,
+            tarifa_base_pesos: "1200.00",
+            precio_por_kilometro_pesos: "450.00",
+            precio_por_minuto_pesos: "120.00",
+            multiplicador_minimo: 1,
+            multiplicador_maximo: 2.5,
+            lluvia_con_precipitacion: 1.2,
+            lluvia_sin_precipitacion: 1.0,
+            disponibilidad: [{ hasta: null, multiplicador: 1.0 }],
+            demanda_por_mil: [{ hasta: null, multiplicador: 1.0 }],
+            horario: { MADRUGADA: 1, MANANA: 1, SIESTA: 1, TARDE: 1, NOCHE: 1 },
+          },
+          historial: [],
+        }),
+      })
+    );
+    await page.route("**/ready/**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) })
+    );
 
     await page.goto("/#/login");
 
@@ -233,5 +261,17 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
 
     await expect(page).toHaveURL(/#\/login/);
     await expect(page.getByTestId("alerta-login")).toContainText("Usuario o contraseña incorrectos.");
+  });
+
+  test("en modo normal oculta accesos demo y credenciales de prueba hasta activar Modo dev", async ({ page }) => {
+    await page.goto("/#/login");
+    await expect(page.getByRole("heading", { name: /Bienvenido a Che Viaje/i })).toBeVisible();
+    await expect(page.getByText(/ViajesDemo2026!/i)).toHaveCount(0);
+    await expect(page.getByTestId("panel-demo-dev")).toHaveCount(0);
+    await expect(page.locator("header")).not.toContainText(/Grupo 1|Modo Seguro/i);
+
+    await page.getByTestId("boton-modo-dev").click();
+    await expect(page.getByTestId("panel-demo-dev")).toBeVisible();
+    await expect(page.getByText(/ViajesDemo2026!/i)).toBeVisible();
   });
 });

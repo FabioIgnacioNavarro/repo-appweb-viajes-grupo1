@@ -14,6 +14,7 @@ interface MapaLeafletProps {
   posicionChofer?: PuntoMapa;
   rutaGeoJson?: [number, number][]; // Coordenadas [lat, lng]
   altura?: string;
+  sinBorde?: boolean;
   onSeleccionarPunto?: (tipo: "origen" | "destino", coords: [number, number]) => void;
 }
 
@@ -53,6 +54,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   posicionChofer,
   rutaGeoJson,
   altura = "100%",
+  sinBorde = false,
   onSeleccionarPunto,
 }) => {
   const contenedorRef = useRef<HTMLDivElement>(null);
@@ -264,7 +266,9 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
 
   return (
     <div
-      className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs"
+      className={`relative w-full h-full overflow-hidden ${
+        sinBorde ? "" : "rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs"
+      }`}
       style={{ minHeight: "360px", height: altura }}
     >
       <div ref={contenedorRef} className="w-full h-full" style={{ minHeight: "360px" }} />

@@ -64,7 +64,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
       });
     });
 
-    await page.route("**/viajes/**", async (route) => {
+    await page.route("**/viajes**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -72,11 +72,37 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
       });
     });
 
-    await page.route("**/viajes", async (route) => {
+    await page.route("**/reglas/demanda**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ viajes: [] }),
+        body: JSON.stringify({
+          activa: {
+            version: 1,
+            autor: "sistema",
+            creada_en: "2026-01-01T00:00:00Z",
+            activa: true,
+            tarifa_base_pesos: "1200.00",
+            precio_por_kilometro_pesos: "450.00",
+            precio_por_minuto_pesos: "120.00",
+            multiplicador_minimo: 1,
+            multiplicador_maximo: 2.5,
+            lluvia_con_precipitacion: 1.2,
+            lluvia_sin_precipitacion: 1.0,
+            disponibilidad: [{ hasta: null, multiplicador: 1.0 }],
+            demanda_por_mil: [{ hasta: null, multiplicador: 1.0 }],
+            horario: { MADRUGADA: 1, MANANA: 1, SIESTA: 1, TARDE: 1, NOCHE: 1 },
+          },
+          historial: [],
+        }),
+      });
+    });
+
+    await page.route("**/ready/**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
       });
     });
   });
@@ -86,14 +112,14 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
   }) => {
     // 1.1 Iniciar en pantalla de Login
     await page.goto("/#/login");
-    await expect(page.locator("h1")).toContainText(/Bienvenido a la Plataforma de Viajes/i);
+    await expect(page.locator("h1")).toContainText(/Bienvenido a Che Viaje/i);
 
     // 1.2 PASAJERO: Ana Gómez
     await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
     await expect(page.locator("header")).toContainText("PASAJERO");
     await expect(page.locator("h1")).toContainText(/Hola, Ana Gómez/i);
-    await expect(page.getByText(/Variante A/i).first()).toBeVisible();
+    await expect(page.locator("#destino-viaje")).toBeVisible();
 
     // Salir
     await page.click("button:has-text('Salir')");
@@ -124,8 +150,8 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await iniciarConPerfilDemo(page, /Martín Administrador/i);
     await expect(page).toHaveURL(/#\/admin/);
     await expect(page.locator("header")).toContainText("ADMINISTRADOR");
-    await expect(page.locator("h1")).toContainText(/Configuración Global y Reglas de Demanda/i);
-    await expect(page.locator("text=Variante A (Regla de Precio Dinámico)")).toBeVisible();
+    await expect(page.locator("h1")).toContainText(/Configuración Global y Reglas de Tarifa/i);
+    await expect(page.locator("text=Regla de tarifa")).toBeVisible();
   });
 
   test("2. Guardas de ruta y RBAC en front-end: redirección de anónimos y usuarios no autorizados", async ({
@@ -184,7 +210,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     // Navegar a vista Pasajero
     await navAdmin.locator("button:has-text('Pasajero')").click();
     await expect(page).toHaveURL(/#\/pasajero/);
-    await expect(page.getByText(/Variante A/i).first()).toBeVisible();
+    await expect(page.locator("#destino-viaje")).toBeVisible();
 
     // Navegar a vista Chofer
     await navAdmin.locator("button:has-text('Chofer')").click();
@@ -199,7 +225,7 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     // Regresar a Admin
     await navAdmin.locator("button:has-text('Admin')").click();
     await expect(page).toHaveURL(/#\/admin/);
-    await expect(page.locator("h1")).toContainText(/Configuración Global y Reglas de Demanda/i);
+    await expect(page.locator("h1")).toContainText(/Configuración Global y Reglas de Tarifa/i);
   });
 
   test("4. Viewports responsive: verificación en 360px (móvil), 768px (tablet) y 1024px (desktop)", async ({
@@ -259,7 +285,8 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
     await expect(page).toHaveURL(/#\/login/);
 
     // Verificar que en login no queda ninguna sesión activa
-    await expect(page.locator("header")).toContainText(/Modo Seguro · Autenticación Externa/i);
+    await expect(page.locator("header")).toContainText("Che Viaje");
+    await expect(page.getByTestId("boton-modo-dev")).toBeVisible();
     await expect(page.locator("header button:has-text('Salir')")).toHaveCount(0);
   });
 });

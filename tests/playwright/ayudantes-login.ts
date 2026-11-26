@@ -1,8 +1,11 @@
 import type { Page } from "@playwright/test";
 
-/** Abre las herramientas secundarias si el test necesita usar el perfil rápido o el token manual. */
+/** Abre las herramientas secundarias (activando Modo dev si estaba apagado) para demo/desarrollo. */
 export async function abrirAccesosDemo(page: Page): Promise<void> {
   const panel = page.locator("details").filter({ hasText: "Opciones de acceso para demo y desarrollo" });
+  if ((await panel.count()) === 0 || !(await panel.isVisible())) {
+    await page.getByTestId("boton-modo-dev").click();
+  }
   await panel.waitFor({ state: "visible" });
   const estaAbierto = await panel.evaluate((element) => (element as HTMLDetailsElement).open);
   if (!estaAbierto) {

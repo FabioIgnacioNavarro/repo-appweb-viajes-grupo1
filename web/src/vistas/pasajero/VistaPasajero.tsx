@@ -5,6 +5,7 @@ import { clienteTiempoReal } from "../../nucleo/ws";
 import { InsigniaEstadoViaje } from "../../componentes/comunes";
 import { MapaLeaflet, type PuntoMapa } from "../../componentes/mapa/MapaLeaflet";
 import { PanelDesarrollador, type FactoresVisualizacion, type ParametrosSimulacion } from "../../componentes/dev/PanelDesarrollador";
+import { useModoDesarrollador } from "../../nucleo/modoDesarrollador";
 
 interface Coordenada {
   latitud: number;
@@ -169,6 +170,7 @@ const ORIGEN_INICIAL_COORDENADA: Coordenada = {
 
 export const VistaPasajero: React.FC = () => {
   const sesion = obtenerSesion();
+  const { modoDev } = useModoDesarrollador();
   const [origen, setOrigen] = useState("Juan B. Justo 4, Resistencia");
   const [destino, setDestino] = useState("");
   const [pinManualOrigen, setPinManualOrigen] = useState<Coordenada | null>(null);
@@ -571,33 +573,34 @@ export const VistaPasajero: React.FC = () => {
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6" aria-labelledby="titulo-pasajero">
-      <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
+      <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm sm:flex-row sm:items-center sm:p-6">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Panel de pasajero</p>
-          <h1 id="titulo-pasajero" className="mt-1 text-2xl font-extrabold text-slate-900">Hola, {sesion?.nombre || "Pasajero"}</h1>
-          <p className="mt-1 text-sm text-slate-500">Cotizá tu recorrido y confirmá el precio antes de pedir el viaje.</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Panel de pasajero</p>
+          <h1 id="titulo-pasajero" className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-slate-100">Hola, {sesion?.nombre || "Pasajero"}</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Cotizá tu recorrido y confirmá el precio antes de pedir el viaje.</p>
         </div>
-        <span className="w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Variante A · precio dinámico</span>
       </div>
 
       {error && (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div role="alert" className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
           <strong>{error.codigo}:</strong> {error.mensaje}
         </div>
       )}
-      {aviso && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{aviso}</p>}
+      {aviso && <p role="status" className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">{aviso}</p>}
 
-      <PanelDesarrollador
-        activo={panelDevActivo}
-        onAlternarActivo={() => setPanelDevActivo((prev) => !prev)}
-        parametros={parametrosSimulacion}
-        onCambiarParametros={reestimarConSimulacion}
-        onRestablecer={restablecerSimulacion}
-        factores={factoresDev}
-        recomendaciones={estimacion?.recomendaciones}
-      />
+      {modoDev && (
+        <PanelDesarrollador
+          activo={panelDevActivo}
+          onAlternarActivo={() => setPanelDevActivo((prev) => !prev)}
+          parametros={parametrosSimulacion}
+          onCambiarParametros={reestimarConSimulacion}
+          onRestablecer={restablecerSimulacion}
+          factores={factoresDev}
+          recomendaciones={estimacion?.recomendaciones}
+        />
+      )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-5">
           <form onSubmit={solicitarEstimacion} className="space-y-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm" aria-label="Calcular estimación del viaje">
             <div>
@@ -669,9 +672,15 @@ export const VistaPasajero: React.FC = () => {
                 <div>
                   <h2 id="titulo-precio" className="text-xs font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Precio estimado</h2>
                   <p className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{importePesos(estimacion.precio_estimado)}</p>
-                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{estimacion.zona} · regla v{estimacion.version_regla}</p>
+                  {modoDev && (
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-testid="estimacion-meta-dev">{estimacion.zona} · regla v{estimacion.version_regla}</p>
+                  )}
                 </div>
-                <span className="rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm font-extrabold text-amber-900 dark:text-amber-300">×{estimacion.multiplicador_demanda.toFixed(2)}</span>
+                {modoDev && (
+                  <span className="rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm font-extrabold text-amber-900 dark:text-amber-300" data-testid="estimacion-multiplicador-dev">
+                    ×{estimacion.multiplicador_demanda.toFixed(2)}
+                  </span>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -679,17 +688,19 @@ export const VistaPasajero: React.FC = () => {
                 <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-800 p-3"><span className="block text-slate-500 dark:text-slate-400">Duración aprox.</span><strong className="mt-1 block text-slate-900 dark:text-slate-100">{Math.max(1, Math.ceil(estimacion.duracion_segundos / 60))} min</strong></div>
               </div>
 
-              <div>
-                <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Factores del precio</h3>
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  {camposFactor.map((campo) => (
-                    <div key={campo.clave} className="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-white/80 dark:bg-slate-800/80 p-2.5">
-                      <dt className="text-slate-500 dark:text-slate-400">{campo.etiqueta}</dt>
-                      <dd className="mt-0.5 font-semibold capitalize text-slate-900 dark:text-slate-100">{campo.mostrar(estimacion.factores_precio[campo.clave])}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
+              {modoDev && (
+                <div data-testid="estimacion-factores-dev">
+                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-300">Factores del precio</h3>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                    {camposFactor.map((campo) => (
+                      <div key={campo.clave} className="rounded-lg border border-amber-100 dark:border-amber-900/40 bg-white/80 dark:bg-slate-800/80 p-2.5">
+                        <dt className="text-slate-500 dark:text-slate-400">{campo.etiqueta}</dt>
+                        <dd className="mt-0.5 font-semibold capitalize text-slate-900 dark:text-slate-100">{campo.mostrar(estimacion.factores_precio[campo.clave])}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
 
               <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${segundosVigencia > 0 ? "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300" : "bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300"}`} aria-live="polite">
                 {segundosVigencia > 0 ? `Este precio vence en ${formatearTiempo(segundosVigencia)}` : "La estimación venció. Volvé a elegir destino para recalcular."}
@@ -747,17 +758,18 @@ export const VistaPasajero: React.FC = () => {
           )}
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" aria-label="Recorrido estimado">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm lg:sticky lg:top-24" aria-label="Recorrido estimado">
           <div className="flex flex-col justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-5 py-4 sm:flex-row sm:items-center">
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Recorrido</h2>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">La línea sigue la geometría devuelta por el proveedor de rutas.</p>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Tocá el mapa o arrastrá los pines para ajustar tu viaje.</p>
             </div>
             {estimacion && <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{(estimacion.distancia_metros / 1000).toFixed(1)} km · {Math.ceil(estimacion.duracion_segundos / 60)} min</span>}
           </div>
-          <div className="relative min-h-[360px] bg-slate-100 dark:bg-slate-950 sm:min-h-[440px]">
+          <div className="relative h-[440px] bg-slate-100 dark:bg-slate-950">
             <MapaLeaflet
               altura="440px"
+              sinBorde
               origen={origenPinMapa}
               destino={destinoPinMapa}
               rutaGeoJson={rutaMapa}
@@ -769,9 +781,15 @@ export const VistaPasajero: React.FC = () => {
               </div>
             )}
             {estimacion && (
-              <div className="pointer-events-none absolute bottom-3 left-3 z-[400] flex gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-1.5 text-[11px] font-semibold shadow-xs">
-                <span className="text-blue-700 dark:text-blue-400">● Origen</span>
-                <span className="text-red-700 dark:text-red-400">● Destino</span>
+              <div className="pointer-events-none absolute bottom-3 left-3 z-[400] flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-1.5 text-[11px] font-semibold shadow-xs">
+                <span className="inline-flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400" aria-hidden="true" />
+                  Origen
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-red-700 dark:text-red-400">
+                  <span className="w-2 h-2 rounded-full bg-red-600 dark:bg-red-400" aria-hidden="true" />
+                  Destino
+                </span>
               </div>
             )}
           </div>

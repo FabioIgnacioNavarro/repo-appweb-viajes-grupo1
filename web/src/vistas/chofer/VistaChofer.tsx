@@ -3,6 +3,7 @@ import { clienteApi, ErrorHttpApi } from "../../nucleo/api";
 import { obtenerSesion } from "../../nucleo/sesion";
 import { clienteTiempoReal, EstadoConexionWs } from "../../nucleo/ws";
 import { IndicadorConexionTiempoReal, SeguimientoMapaEnVivo } from "../../componentes/seguimiento";
+import { IconoAlerta, IconoAuto, IconoCheck, IconoPin, IconoRayo } from "../../componentes/comunes";
 
 export interface CoordenadaChofer {
   latitud: number;
@@ -662,25 +663,25 @@ export const VistaChofer: React.FC = () => {
   return (
     <div className="space-y-6" data-testid="vista-chofer">
       {/* Encabezado y Toggle de Disponibilidad */}
-      <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Panel de Chofer</span>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-0.5">
-            Hola, {sesion?.nombre || "Chofer"} 🚕
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Panel de Chofer</span>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-0.5">
+            Hola, {sesion?.nombre || "Chofer"}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             Gestioná tu estado de disponibilidad en ms-flota, reportá tu posición GPS y recibí ofertas con vigencia de 60s.
           </p>
         </div>
 
         {/* Toggle de Disponibilidad */}
-        <div className="flex items-center justify-between sm:justify-end gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+        <div className="flex items-center justify-between sm:justify-end gap-3 bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-700">Disponibilidad:</span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Disponibilidad:</span>
             <span
               id="estado-disponibilidad-chofer"
               data-testid="estado-disponibilidad-chofer"
-              className="text-[11px] text-slate-500"
+              className="text-[11px] text-slate-500 dark:text-slate-400"
             >
               {disponible ? "Recibiendo ofertas" : "Fuera de servicio"}
             </span>
@@ -721,8 +722,9 @@ export const VistaChofer: React.FC = () => {
         >
           <div className="space-y-0.5">
             <div className="font-bold flex items-center gap-1.5">
-              <span>{alertaError.esConflicto409 ? "⚠️ Conflicto de concurrencia (409)" : "❌ Error en la operación"}</span>
-              <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white/80 border border-current/20">
+              <IconoAlerta size={16} aria-hidden="true" />
+              <span>{alertaError.esConflicto409 ? "Conflicto de concurrencia (409)" : "Error en la operación"}</span>
+              <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900/80 border border-current/20">
                 {alertaError.codigo}
               </span>
             </div>
@@ -744,9 +746,9 @@ export const VistaChofer: React.FC = () => {
           id="mensaje-exito-chofer"
           data-testid="mensaje-exito-chofer"
           role="status"
-          className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-center justify-between gap-3"
+          className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs sm:text-sm flex items-center justify-between gap-3"
         >
-          <span>✅ {mensajeExito}</span>
+          <span className="inline-flex items-center gap-2"><IconoCheck size={16} aria-hidden="true" /> {mensajeExito}</span>
           <button
             type="button"
             onClick={() => setMensajeExito(null)}
@@ -765,10 +767,10 @@ export const VistaChofer: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Columna 1: Bandeja de Ofertas en Tiempo Real */}
         <div className="md:col-span-1 space-y-4">
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                <span>🔔</span> Ofertas Recibidas
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+                <IconoRayo size={16} aria-hidden="true" /> Ofertas Recibidas
               </h2>
               <span
                 data-testid="indicador-ws-chofer"
@@ -866,20 +868,20 @@ export const VistaChofer: React.FC = () => {
 
                       <div className="text-xs space-y-1 text-slate-700">
                         <div>
-                          <span className="font-semibold text-slate-500">Viaje:</span>{" "}
+                          <span className="font-semibold text-slate-500 dark:text-slate-400">Viaje:</span>{" "}
                           <span className="font-mono text-[11px]">{oferta.id_viaje}</span>
                         </div>
                         <div>
-                          <span className="font-semibold text-slate-500">Origen:</span>{" "}
+                          <span className="font-semibold text-slate-500 dark:text-slate-400">Origen:</span>{" "}
                           {oferta.origen?.direccion ??
                             (oferta.origen ? `${oferta.origen.latitud}, ${oferta.origen.longitud}` : "Actualizando datos confirmados…")}
                         </div>
                         <div>
-                          <span className="font-semibold text-slate-500">Destino:</span>{" "}
+                          <span className="font-semibold text-slate-500 dark:text-slate-400">Destino:</span>{" "}
                           {oferta.destino?.direccion ??
                             (oferta.destino ? `${oferta.destino.latitud}, ${oferta.destino.longitud}` : "Actualizando datos confirmados…")}
                         </div>
-                        <div className="pt-1 text-sm font-extrabold text-slate-900">
+                        <div className="pt-1 text-sm font-extrabold text-slate-900 dark:text-slate-100">
                           Precio confirmado: {oferta.precio_estimado ? formatearImporteArs(oferta.precio_estimado) : "Actualizando…"}
                         </div>
                       </div>
@@ -894,7 +896,7 @@ export const VistaChofer: React.FC = () => {
                               onClick={() => void aceptarOferta(oferta)}
                               className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
                                 bloqueadaPorViajeActivo || !tieneDetallesConfirmados
-                                  ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                  ? "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                                   : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
                               }`}
                             >
@@ -905,13 +907,13 @@ export const VistaChofer: React.FC = () => {
                               data-testid={`boton-rechazar-${oferta.id_oferta}`}
                               disabled={procesandoOfertaId === oferta.id_oferta}
                               onClick={() => void rechazarOferta(oferta)}
-                              className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
                             >
                               Rechazar
                             </button>
                           </div>
                           {bloqueadaPorViajeActivo && (
-                            <p className="text-[11px] text-amber-700 font-medium">
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
                               Invariante: ya tenés un viaje activo en curso.
                             </p>
                           )}
@@ -919,9 +921,9 @@ export const VistaChofer: React.FC = () => {
                       ) : (
                         <div
                           data-testid={`motivo-oferta-${oferta.id_oferta}`}
-                          className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600"
+                          className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
                         >
-                          Motivo: <span className="font-bold text-slate-800">{describirMotivoOferta(oferta)}</span>
+                          Motivo: <span className="font-bold text-slate-800 dark:text-slate-200">{describirMotivoOferta(oferta)}</span>
                         </div>
                       )}
                     </div>
@@ -935,10 +937,10 @@ export const VistaChofer: React.FC = () => {
         {/* Columna 2 y 3: Viaje Asignado, Controles de Transición y Reporte de Ubicación */}
         <div className="md:col-span-1 lg:col-span-2 space-y-6">
           {/* Tarjeta de Viaje Asignado y Máquina de Estados */}
-          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                <span>🚕</span> Viaje Asignado
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+                <IconoAuto size={16} aria-hidden="true" /> Viaje Asignado
               </h2>
               <span
                 id="estado-viaje-chofer"
@@ -959,28 +961,28 @@ export const VistaChofer: React.FC = () => {
               <>
                 <div
                   data-testid="detalle-viaje-asignado"
-                  className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"
+                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"
                 >
                 <div>
-                  <span className="text-slate-500 font-semibold block">ID de Viaje</span>
-                  <span className="font-mono font-bold text-slate-900">{viajeActivo.id_viaje}</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold block">ID de Viaje</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{viajeActivo.id_viaje}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-semibold block">Precio Congelado</span>
-                  <span className="font-extrabold text-emerald-700 text-sm">
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold block">Precio Congelado</span>
+                  <span className="font-extrabold text-emerald-700 dark:text-emerald-400 text-sm">
                     {formatearImporteArs(viajeActivo.precio_final ?? viajeActivo.precio_estimado)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-semibold block">Origen</span>
-                  <span className="text-slate-800">
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold block">Origen</span>
+                  <span className="text-slate-800 dark:text-slate-200">
                     {viajeActivo.origen.direccion ??
                       `${viajeActivo.origen.latitud.toFixed(4)}, ${viajeActivo.origen.longitud.toFixed(4)}`}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-semibold block">Destino</span>
-                  <span className="text-slate-800">
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold block">Destino</span>
+                  <span className="text-slate-800 dark:text-slate-200">
                     {viajeActivo.destino.direccion ??
                       `${viajeActivo.destino.latitud.toFixed(4)}, ${viajeActivo.destino.longitud.toFixed(4)}`}
                   </span>
@@ -1084,8 +1086,8 @@ export const VistaChofer: React.FC = () => {
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                  <span>📍</span> Reporte de Ubicación y Simulador GPS
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+                  <IconoPin size={16} aria-hidden="true" /> Reporte de Ubicación y Simulador GPS
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Envía coordenadas a <code className="font-mono text-[11px]">POST /choferes/yo/ubicacion</code> (ms-flota).

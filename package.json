@@ -7,7 +7,7 @@
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsc -p tsconfig.json",
     "build:web": "vite build",
-    "dev:web": "vite web",
+    "dev:web": "vite",
     "demo": "npm run build && node dist/terminal.js",
     "demo:web": "npm run build && node dist/servidor-web.js",
     "build:tests": "tsc -p tsconfig.tests.json",

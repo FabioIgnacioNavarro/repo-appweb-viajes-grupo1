@@ -1,4 +1,5 @@
 import React from "react";
+import { IconoCodigo, IconoInfo } from "../comunes";
 
 export interface ParametrosSimulacion {
   hora?: number; // 0 a 23
@@ -62,8 +63,10 @@ export const PanelDesarrollador: React.FC<PanelDesarrolladorProps> = ({
       data-testid="panel-desarrollador"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg" aria-hidden="true">🛠️</span>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0">
+            <IconoCodigo size={17} />
+          </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Modo Desarrollador</h2>
@@ -72,7 +75,7 @@ export const PanelDesarrollador: React.FC<PanelDesarrolladorProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Modificá hora, lluvia y demanda para simular el recálculo dinámico de tarifa.
+              Modificá hora, lluvia y demanda para simular el recálculo de tarifa.
             </p>
           </div>
         </div>
@@ -209,7 +212,7 @@ export const PanelDesarrollador: React.FC<PanelDesarrolladorProps> = ({
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Desglose de Modificadores (Variante A)
+                  Desglose de factores de tarifa
                 </h3>
                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   Tope de regla: [0.75, 2.00]
@@ -266,7 +269,7 @@ export const PanelDesarrollador: React.FC<PanelDesarrolladorProps> = ({
           {recomendaciones.length > 0 && (
             <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/80 dark:bg-emerald-950/30 p-3 space-y-1.5 text-xs" data-testid="bloque-recomendaciones">
               <div className="flex items-center gap-1.5 font-bold text-emerald-900 dark:text-emerald-200">
-                <span aria-hidden="true">💡</span>
+                <IconoInfo size={16} aria-hidden="true" />
                 <span>Recomendaciones inteligentes de ahorro</span>
               </div>
               <ul className="space-y-1 pl-4 list-disc text-emerald-800 dark:text-emerald-300">

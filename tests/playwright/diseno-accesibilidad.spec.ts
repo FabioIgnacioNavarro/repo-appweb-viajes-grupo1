@@ -79,28 +79,33 @@ test.describe("WEB-003 - Sistema de diseño responsive, accesibilidad y mapa Lea
     }
   });
 
-  test("WEB-010: selector de modo oscuro alterna clase dark en html y persiste en localStorage", async ({ page }) => {
+  test("WEB-010: selector de modo claro/oscuro cambia clases .dark y colores reales aunque el SO esté en oscuro", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/#/login");
+    await page.evaluate(() => window.localStorage.setItem("tema_color", "claro"));
+    await page.reload();
+
+    const fondoCss = () => page.locator("#root > div").evaluate((el) => getComputedStyle(el).backgroundColor);
 
     const botonTema = page.getByTestId("boton-tema");
     await expect(botonTema).toBeVisible();
 
-    // Estado inicial en tema claro
-    const esOscuroInicial = await page.evaluate(() => document.documentElement.classList.contains("dark"));
-    expect(esOscuroInicial).toBe(false);
+    // En modo claro (aunque SO esté dark), NO tiene .dark y conserva fondo claro
+    expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(false);
+    const bgClaro = await fondoCss();
+    expect(bgClaro).not.toBe("rgb(2, 6, 23)"); // no bg-slate-950
 
-    // Click alterna a oscuro
+    // Click alterna a oscuro y cambia el fondo computado a dark
     await botonTema.click();
-    const esOscuroDespues = await page.evaluate(() => document.documentElement.classList.contains("dark"));
-    expect(esOscuroDespues).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(true);
+    expect(await page.evaluate(() => window.localStorage.getItem("tema_color"))).toBe("oscuro");
+    await expect.poll(fondoCss).toMatch(/okl(ab|ch)\(0\.129\b|rgb\(2,\s*6,\s*23\)/); // slate-950
+    expect(await fondoCss()).not.toBe(bgClaro);
 
-    const valorStorage = await page.evaluate(() => window.localStorage.getItem("tema_color"));
-    expect(valorStorage).toBe("oscuro");
-
-    // Click de nuevo vuelve a claro
+    // Click de nuevo vuelve a claro y restaura el fondo claro
     await botonTema.click();
-    const esOscuroFinal = await page.evaluate(() => document.documentElement.classList.contains("dark"));
-    expect(esOscuroFinal).toBe(false);
+    expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(false);
     expect(await page.evaluate(() => window.localStorage.getItem("tema_color"))).toBe("claro");
+    await expect.poll(fondoCss).toBe(bgClaro);
   });
 });
