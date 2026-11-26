@@ -5,6 +5,7 @@ import { WebSocket } from "ws";
 const base = process.env.E2E_BASE_URL;
 const pasajero = "falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwicm9sIjoiUEFTQUpFUk8ifQ";
 const chofer = "falso.eyJ0aXBvIjoiand0LWZhbHNvIiwiaWRVc3VhcmlvIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwicm9sIjoiQ0hPRkVSIn0";
+const admin = `falso.${Buffer.from(JSON.stringify({ tipo: "jwt-falso", idUsuario: "99999999-9999-4999-8999-999999999999", rol: "ADMINISTRADOR" }), "utf8").toString("base64url")}`;
 
 async function pedir(ruta: string, token: string, opciones: RequestInit = {}): Promise<{ status: number; cuerpo: any }> {
   const respuesta = await fetch(`${base}${ruta}`, { ...opciones, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(opciones.headers ?? {}) } });
@@ -142,4 +143,49 @@ test("E2E el gateway entrega la SPA con MIME y seguridad, reenvía WebSocket y b
       socket.once("error", (err) => { clearTimeout(timeout); rechazar(err); });
     });
   }
+});
+
+test("E2E registro de cuenta y administración de choferes/vehículos en Gateway", { skip: !base }, async () => {
+  const sufijo = String(Date.now());
+  const regResp = await fetch(`${base}/auth/registro`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usuario: `chofer.e2e.${sufijo}`, nombre: "Chofer E2E", contrasena: "ClaveSegura2026!", rol: "chofer" })
+  });
+  assert.equal(regResp.status, 201);
+  const regBody = (await regResp.json()) as { token?: string; perfil?: { id_usuario?: string; rol?: string } };
+  assert.ok(regBody.perfil?.id_usuario);
+  assert.equal(regBody.perfil?.rol, "chofer");
+
+  const nuevoChoferId = regBody.perfil!.id_usuario!;
+  const altaChofer = await pedir("/choferes", admin, {
+    method: "POST",
+    body: JSON.stringify({ usuario_id: nuevoChoferId, habilitado: false, carnet_conducir_validado: true })
+  });
+  assert.equal(altaChofer.status, 201);
+
+  const patente = `E2E${sufijo.slice(-5)}`;
+  const altaVehiculo = await pedir("/vehiculos", admin, {
+    method: "POST",
+    body: JSON.stringify({ patente, tipo_vehiculo: "AUTOMOVIL", marca: "Toyota", modelo: "Yaris", anio_fabricacion: 2024, color: "Gris", capacidad_pasajeros: 4 })
+  });
+  assert.equal(altaVehiculo.status, 201);
+
+  const habilitacion = await pedir(`/choferes/${encodeURIComponent(nuevoChoferId)}/habilitacion`, admin, {
+    method: "PATCH",
+    body: JSON.stringify({ habilitado: true, carnet_conducir_validado: true })
+  });
+  assert.equal(habilitacion.status, 200);
+  assert.equal(habilitacion.cuerpo.habilitado, true);
+
+  const asignacion = await pedir(`/choferes/${encodeURIComponent(nuevoChoferId)}/vehiculo`, admin, {
+    method: "PUT",
+    body: JSON.stringify({ id_vehiculo: altaVehiculo.cuerpo.id })
+  });
+  assert.equal(asignacion.status, 200);
+  assert.equal(asignacion.cuerpo.vehiculo.patente, patente);
+
+  const listado = await pedir("/choferes", admin);
+  assert.equal(listado.status, 200);
+  assert.ok(listado.cuerpo.choferes.some((c: { usuario_id: string; vehiculo_activo?: { patente: string } | null }) => c.usuario_id === nuevoChoferId && c.vehiculo_activo?.patente === patente));
 });

@@ -291,6 +291,12 @@ test.describe("WEB-008 - Panel de Operador (auditoría API-002) y Administrador 
     await page.route("**/ready/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ estado: "listo" }) })
     );
+    await page.route("**/choferes", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choferes: [] }) })
+    );
+    await page.route("**/vehiculos**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vehiculos: [] }) })
+    );
 
     await page.route("**/reglas/demanda", async (route) => {
       if (route.request().method() === "PUT") {

@@ -64,6 +64,22 @@ test.describe("TEST-001 - E2E Playwright: Navegación por Roles, Guardas y Viewp
       });
     });
 
+    await page.route("**/choferes", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ choferes: [] }),
+      });
+    });
+
+    await page.route("**/vehiculos**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ vehiculos: [] }),
+      });
+    });
+
     await page.route("**/viajes**", async (route) => {
       await route.fulfill({
         status: 200,

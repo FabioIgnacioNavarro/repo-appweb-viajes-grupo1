@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Pool } from "pg";
@@ -17,11 +18,7 @@ test("persistencia real de disponibilidad y ubicación en PostgreSQL", { skip: !
     await pool.query("DELETE FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
     await pool.query("INSERT INTO usuario_chofer (id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado) VALUES ($1, $2, TRUE, FALSE, TRUE)", [perfilId, usuarioId]);
     const choferes = new RepositorioChoferesPostgres(pool);
-    let seqUbicacion = 23;
-    const ubicaciones = new RepositorioUbicacionesPostgres(
-      pool,
-      () => `00000000-0000-0000-0000-0000000000${String(seqUbicacion++).padStart(2, "0")}`
-    );
+    const ubicaciones = new RepositorioUbicacionesPostgres(pool, randomUUID);
     const chofer = await choferes.obtenerPorUsuario(usuarioId);
     assert.equal(chofer?.disponibilidad, false);
     await choferes.guardar({ ...chofer!, disponibilidad: true, fechaActualizacion: new Date() });
