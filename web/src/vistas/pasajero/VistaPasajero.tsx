@@ -294,10 +294,13 @@ export const VistaPasajero: React.FC = () => {
     return undefined;
   }, [estimacion, polilineaViaje]);
 
-  const origenLatitud = origenMapa.latitud;
-  const origenLongitud = origenMapa.longitud;
+  const origenLatitud = origenMapa?.latitud;
+  const origenLongitud = origenMapa?.longitud;
   const origenPinMapa = useMemo<PuntoMapa | undefined>(
-    () => ({ latitud: origenLatitud, longitud: origenLongitud, titulo: origen, tipo: "origen" }),
+    () =>
+      origenLatitud !== undefined && origenLongitud !== undefined
+        ? { latitud: origenLatitud, longitud: origenLongitud, titulo: origen, tipo: "origen" }
+        : undefined,
     [origenLatitud, origenLongitud, origen]
   );
 
