@@ -773,19 +773,42 @@ export class FinalizarViaje {
     exigirRol(actor, "CHOFER", "ADMINISTRADOR");
     const viaje = exigirViaje(await this.viajes.obtener(viajeId));
     if (viaje.choferId !== actor.idUsuario) throw new ErrorDominio("VIAJE_NO_AUTORIZADO", "El viaje no pertenece al chofer.");
-    const cobroExistente = await this.cobros.obtenerPorViaje(viaje.id);
-    if (cobroExistente) return { viaje, cobro: cobroExistente };
-    exigirTransicionViaje(viaje.estado, "FINALIZADO");
-    const viajeFinalizado = await this.viajes.guardar({ ...viaje, estado: "FINALIZADO", precioFinal: viaje.precioEstimado, finalizadoEm: new Date(ahora) });
-    await this.asignador.liberar(viaje.id, actor.idUsuario);
-    const cobroPendiente = await this.cobros.guardar({
-      id: this.ids.generar("cobro"), viajeId: viaje.id, importe: viaje.precioEstimado,
-      moneda: "ARS", estado: "PENDIENTE", intentos: 0, creadoEn: new Date(ahora)
-    });
-    const estado = this.pasarela
-      ? await this.pasarela.procesar(cobroPendiente, `finalizacion:${cobroPendiente.id}`)
-      : "CONFIRMADO";
-    const cobro = await this.cobros.guardar({ ...cobroPendiente, estado, intentos: cobroPendiente.intentos + 1 });
+    let viajeFinalizado = viaje;
+    if (viaje.estado !== "FINALIZADO") {
+      exigirTransicionViaje(viaje.estado, "FINALIZADO");
+      viajeFinalizado = await this.viajes.guardar({
+        ...viaje,
+        estado: "FINALIZADO",
+        precioFinal: viaje.precioFinal ?? viaje.precioEstimado,
+        finalizadoEm: viaje.finalizadoEm ?? new Date(ahora)
+      });
+      await this.asignador.liberar(viaje.id, actor.idUsuario);
+    }
+
+    // La transición y la creación del recibo son dos escrituras. Si la segunda falla,
+    // un reintento debe completar el cobro de un viaje ya finalizado sin cambiar su precio.
+    let cobro = await this.cobros.obtenerPorViaje(viaje.id);
+    if (!cobro) {
+      cobro = await this.cobros.guardar({
+        id: this.ids.generar("cobro"),
+        viajeId: viaje.id,
+        importe: viajeFinalizado.precioFinal ?? viajeFinalizado.precioEstimado,
+        moneda: "ARS",
+        estado: "PENDIENTE",
+        intentos: 0,
+        creadoEn: new Date(ahora)
+      });
+    }
+
+    // Un cobro pendiente puede haber quedado así si la pasarela o su respuesta falló.
+    // La misma clave estable permite reintentar sin duplicar el efecto de pago.
+    if (cobro.estado === "PENDIENTE") {
+      const estado = this.pasarela
+        ? await this.pasarela.procesar(cobro, `finalizacion:${cobro.id}`)
+        : "CONFIRMADO";
+      cobro = await this.cobros.guardar({ ...cobro, estado, intentos: cobro.intentos + 1 });
+    }
+
     return { viaje: viajeFinalizado, cobro };
   }
 }

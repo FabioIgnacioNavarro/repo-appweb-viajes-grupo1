@@ -265,6 +265,7 @@ El chofer finaliza el viaje, fijando el precio final y generando el cobro único
 - **Autorización:** Exclusivo del `CHOFER` asignado (o `ADMINISTRADOR` asignado). Transiciona a `FINALIZADO`.
 - **Respuesta (`200 OK`):** `{ "viaje": { ... }, "cobro": { "id_cobro": "...", "id_viaje": "...", "importe": "8086", "moneda": "ARS", "estado": "fallido", "intentos": 1, "creado_en": "2026-11-18T12:00:00.000Z" } }`.
 - El adaptador falso devuelve un primer fallo reproducible (`fallido`) y permite demostrar luego un reintento exitoso. El viaje queda `finalizado` y el importe del cobro coincide con `precio_final`.
+- La operación es recuperable e idempotente: si el viaje ya quedó `finalizado` pero todavía no tiene cobro, repetir la petición crea el recibo usando el `precio_final` guardado. Si hay un cobro `pendiente`, reanuda el mismo cobro con su clave estable; si ya está `fallido` o `confirmado`, devuelve el recibo existente. Nunca crea un segundo cobro ni recalcula el precio.
 
 #### `GET /viajes/:idViaje/cobro`
 Consulta el recibo asociado al viaje sin volver a procesar el pago.

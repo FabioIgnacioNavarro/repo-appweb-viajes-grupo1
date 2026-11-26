@@ -39,7 +39,7 @@ Autenticar no equivale a autorizar. Cada caso de uso debe verificar actor, rol, 
 
 ## Idempotencia
 
-Las operaciones con efectos no repetibles deben aceptar `Clave-Idempotencia`. La clave pertenece a la intención del actor y de la operación; el resultado guardado debe poder devolverse en un reintento sin repetir el efecto. `POST /viajes/:idViaje/cobro/reintento` reutiliza la clave para devolver el mismo resultado del intento de pago y conserva un único cobro por viaje.
+Las operaciones con efectos no repetibles deben aceptar `Clave-Idempotencia`. La clave pertenece a la intención del actor y de la operación; el resultado guardado debe poder devolverse en un reintento sin repetir el efecto. `POST /viajes/:idViaje/cobro/reintento` reutiliza la clave para devolver el mismo resultado del intento de pago y conserva un único cobro por viaje. `POST /viajes/:idViaje/finalizacion` también conserva un único cobro por viaje: una repetición recupera un recibo que faltó tras una escritura parcial o devuelve el existente; los reintentos de un cobro pendiente usan la misma clave estable de pasarela.
 
 ## Precio dinámico
 
