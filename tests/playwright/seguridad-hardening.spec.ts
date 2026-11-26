@@ -149,8 +149,14 @@ test.describe("SEG-003 / SEG-005 - Hardening del front y CSP", () => {
     await page.route("**/ready/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ estado: "listo" }) })
     );
+    await page.route("**/choferes", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choferes: [] }) })
+    );
     await page.route("**/choferes/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ofertas: [] }) })
+    );
+    await page.route("**/vehiculos**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vehiculos: [] }) })
     );
     await page.route("**/tarifas/**", (route) =>
       route.fulfill({

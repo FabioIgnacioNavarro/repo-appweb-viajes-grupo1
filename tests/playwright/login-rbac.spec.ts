@@ -34,8 +34,14 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     await page.route("**/viajes**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ viajes: [] }) })
     );
+    await page.route("**/choferes", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choferes: [] }) })
+    );
     await page.route("**/choferes/**", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ofertas: [] }) })
+    );
+    await page.route("**/vehiculos**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vehiculos: [] }) })
     );
     await page.route("**/reglas/demanda**", (route) =>
       route.fulfill({
@@ -214,6 +220,15 @@ test.describe("WEB-002 - Login por rol con emulador de identidad, 401 y RBAC 403
     );
     await page.route("**/reglas/demanda", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ activa: null, historial: [] }) })
+    );
+    await page.route("**/choferes", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choferes: [] }) })
+    );
+    await page.route("**/vehiculos**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ vehiculos: [] }) })
+    );
+    await page.route("**/ready/**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ estado: "listo" }) })
     );
 
     await page.goto("/#/login");
