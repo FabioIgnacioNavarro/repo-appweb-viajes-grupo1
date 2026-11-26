@@ -54,14 +54,6 @@ export interface CobroChoferDto {
   estado: "pendiente" | "fallido" | "confirmado";
 }
 
-export const RUTA_SIMULADA_RESISTENCIA: Array<{ latitud: number; longitud: number; etiqueta: string }> = [
-  { latitud: -27.4512, longitud: -58.9866, etiqueta: "Plaza 25 de Mayo (Centro)" },
-  { latitud: -27.4528, longitud: -58.9841, etiqueta: "Av. Alberdi 300" },
-  { latitud: -27.4545, longitud: -58.9818, etiqueta: "Av. Las Heras y Franklin" },
-  { latitud: -27.4569, longitud: -58.9795, etiqueta: "Av. Castelli 800" },
-  { latitud: -27.4598, longitud: -58.9789, etiqueta: "UNNE Campus Resistencia" },
-];
-
 const ESTADOS_ACTIVOS_CHOFER = new Set(["asignado", "chofer_en_camino", "en_curso"]);
 const ESTADOS_HISTORIAL_CHOFER = new Set([
   "finalizado",
@@ -114,9 +106,14 @@ export const VistaChofer: React.FC = () => {
 
   // Disponibilidad en ms-flota
   const [disponible, setDisponible] = useState<boolean>(false);
+  const disponibleRef = useRef<boolean>(false);
   const [cargandoDisponibilidad, setCargandoDisponibilidad] = useState<boolean>(false);
 
-  // Ubicación manual y simulada en ms-flota
+  useEffect(() => {
+    disponibleRef.current = disponible;
+  }, [disponible]);
+
+  // Ubicación manual en ms-flota
   const [latitudInput, setLatitudInput] = useState<string>("-27.4512");
   const [longitudInput, setLongitudInput] = useState<string>("-58.9866");
   const [ultimaUbicacion, setUltimaUbicacion] = useState<{
@@ -126,8 +123,6 @@ export const VistaChofer: React.FC = () => {
     etiqueta?: string;
   } | null>(null);
   const [enviandoUbicacion, setEnviandoUbicacion] = useState<boolean>(false);
-  const [simulandoGps, setSimulandoGps] = useState<boolean>(false);
-  const indiceRutaRef = useRef<number>(0);
 
   // Ofertas y cuenta regresiva de 60s
   const [ofertas, setOfertas] = useState<OfertaDto[]>([]);
@@ -172,7 +167,9 @@ export const VistaChofer: React.FC = () => {
         .catch(() => null);
 
       if (respChofer?.chofer) {
-        setDisponible(Boolean(respChofer.chofer.disponibilidad));
+        const estaDisponible = Boolean(respChofer.chofer.disponibilidad);
+        disponibleRef.current = estaDisponible;
+        setDisponible(estaDisponible);
       }
       if (respChofer?.ubicacion) {
         setUltimaUbicacion({
@@ -233,8 +230,12 @@ export const VistaChofer: React.FC = () => {
     }
   }, [idChoferActual]);
 
-  // Cada oferta pendiente abre una ventana emergente. Si hay varias, se muestran en orden.
+  // Cada oferta pendiente abre una ventana emergente únicamente cuando el chofer está conectado/disponible.
   useEffect(() => {
+    if (!disponible) {
+      setIdOfertaEmergente(null);
+      return;
+    }
     const pendientes = ofertas.filter(
       (oferta) => oferta.estado === "pendiente" && calcularSegundosRestantes(oferta.expira_en) > 0
     );
@@ -243,7 +244,7 @@ export const VistaChofer: React.FC = () => {
         ? actual
         : pendientes[0]?.id_oferta ?? null
     );
-  }, [ofertas]);
+  }, [ofertas, disponible]);
 
   useEffect(() => {
     void sincronizarEstadoServidor();
@@ -287,6 +288,7 @@ export const VistaChofer: React.FC = () => {
       const datos = raw.datos ?? {};
 
       if (nombreEvento === "OFERTA_NUEVA") {
+        if (!disponibleRef.current) return;
         const idOferta = String(datos.id_oferta ?? datos.id ?? `of-${Date.now()}`);
         const idViaje = String(datos.id_viaje ?? datos.idViaje ?? "viaje-ws");
         const enviadaEn = String(datos.enviada_en ?? new Date().toISOString());
@@ -369,14 +371,18 @@ export const VistaChofer: React.FC = () => {
       const respuesta = await clienteApi.patch<{ disponibilidad: boolean }>("/choferes/yo/disponibilidad", {
         disponibilidad: nuevoEstado,
       });
-      setDisponible(Boolean(respuesta.disponibilidad));
+      const estaDisponible = Boolean(respuesta.disponibilidad);
+      disponibleRef.current = estaDisponible;
+      setDisponible(estaDisponible);
       setMensajeExito(
-        respuesta.disponibilidad
-          ? "Ya estás disponible para recibir solicitudes."
-          : "Disponibilidad desactivada."
+        estaDisponible
+          ? "Conectado. Ya estás disponible para recibir solicitudes."
+          : "Desconectado. No recibirás nuevas ofertas hasta volver a iniciar."
       );
-      if (respuesta.disponibilidad) {
+      if (estaDisponible) {
         void sincronizarEstadoServidor();
+      } else {
+        setIdOfertaEmergente(null);
       }
     } catch (err) {
       if (err instanceof ErrorHttpApi) {
@@ -461,25 +467,8 @@ export const VistaChofer: React.FC = () => {
     await reportarUbicacion(Number(latitudInput), Number(longitudInput), "Posición manual");
   };
 
-  const avanzarPasoRutaSimulada = useCallback(async () => {
-    const siguienteIndice = (indiceRutaRef.current + 1) % RUTA_SIMULADA_RESISTENCIA.length;
-    indiceRutaRef.current = siguienteIndice;
-    const punto = RUTA_SIMULADA_RESISTENCIA[siguienteIndice];
-    await reportarUbicacion(punto.latitud, punto.longitud, punto.etiqueta);
-  }, [reportarUbicacion]);
-
-  // Temporizador de simulación GPS cada 2 segundos
-  useEffect(() => {
-    if (!simulandoGps) return;
-    const timer = setInterval(() => {
-      void avanzarPasoRutaSimulada();
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [simulandoGps, avanzarPasoRutaSimulada]);
-
   useEffect(() => {
     if (modoDev) return;
-    setSimulandoGps(false);
     setOfertas((prev) => prev.filter((oferta) => !oferta.id_oferta.startsWith("oferta-demo-")));
     setViajeActivo((prev) => prev?.id_viaje.startsWith("viaje-demo-") ? null : prev);
     setViajesChofer((prev) => prev.filter((viaje) => !viaje.id_viaje.startsWith("viaje-demo-")));
@@ -749,9 +738,11 @@ export const VistaChofer: React.FC = () => {
   const puedeMarcarEnCamino = estadoNormalizado === "asignado" && !procesandoTransicion;
   const puedeIniciarViaje = estadoNormalizado === "chofer_en_camino" && !procesandoTransicion;
   const puedeFinalizarViaje = estadoNormalizado === "en_curso" && !procesandoTransicion;
-  const ofertasPendientes = ofertas.filter(
-    (oferta) => oferta.estado === "pendiente" && calcularSegundosRestantes(oferta.expira_en, ahoraMs) > 0
-  );
+  const ofertasPendientes = disponible
+    ? ofertas.filter(
+        (oferta) => oferta.estado === "pendiente" && calcularSegundosRestantes(oferta.expira_en, ahoraMs) > 0
+      )
+    : [];
   const ofertaEmergente = ofertas.find((oferta) => oferta.id_oferta === idOfertaEmergente && oferta.estado === "pendiente");
   const historialViajes = viajesChofer
     .filter((viaje) => viaje.chofer_id === idChoferActual && ESTADOS_HISTORIAL_CHOFER.has(viaje.estado.toLowerCase()))
@@ -790,7 +781,7 @@ export const VistaChofer: React.FC = () => {
               data-testid="estado-disponibilidad-chofer"
               className="text-[11px] text-[#5E5B54] dark:text-slate-400"
             >
-              {disponible ? "Recibiendo ofertas" : "Fuera de servicio"}
+              {disponible ? "En línea — Recibiendo ofertas" : "Desconectado — No recibís ofertas"}
             </span>
           </div>
           <button
@@ -809,8 +800,8 @@ export const VistaChofer: React.FC = () => {
             {cargandoDisponibilidad
               ? "Actualizando..."
               : disponible
-                ? "Disponible (Activo)"
-                : "No disponible"}
+                ? "Conectado (Desconectarse)"
+                : "Iniciar y conectarse"}
           </button>
         </div>
       </div>
@@ -1091,7 +1082,7 @@ export const VistaChofer: React.FC = () => {
                     : "bg-[#E5E0D4] dark:bg-slate-800 text-[#7A776F] dark:text-slate-500 border-[#D4CFC2] dark:border-slate-700 cursor-not-allowed"
                 }`}
               >
-                {procesandoTransicion ? "Finalizando..." : "3. Finalizar y Cobrar"}
+                {procesandoTransicion ? "Finalizando..." : "3. Finalizar y confirmar pago"}
               </button>
             </div>
             {resultadoFinalizacion && (
@@ -1127,31 +1118,6 @@ export const VistaChofer: React.FC = () => {
                   Mantené tu posición actualizada para recibir solicitudes cercanas.
                 </p>
               </div>
-              {modoDev && <div className="flex items-center gap-2">
-                <button
-                  id="boton-paso-simulacion-gps"
-                  data-testid="boton-paso-simulacion-gps"
-                  type="button"
-                  disabled={enviandoUbicacion}
-                  onClick={() => void avanzarPasoRutaSimulada()}
-                  className="px-3 py-1.5 rounded-lg border border-[#CEC8BA] dark:border-slate-700 bg-[#F7F5F0] dark:bg-slate-800 hover:bg-[#E5E0D4] dark:hover:bg-slate-700 text-[#2C2B28] dark:text-slate-200 text-xs font-bold transition cursor-pointer"
-                >
-                  Avanzar 1 paso GPS
-                </button>
-                <button
-                  id="boton-simulacion-gps"
-                  data-testid="boton-simulacion-gps"
-                  type="button"
-                  onClick={() => setSimulandoGps((prev) => !prev)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    simulandoGps
-                      ? "bg-amber-600 hover:bg-amber-700 text-white"
-                      : "bg-[#4A7C59]/15 dark:bg-emerald-950/50 hover:bg-[#4A7C59]/25 dark:hover:bg-emerald-900/60 text-[#3B694A] dark:text-emerald-300 border border-[#4A7C59]/30 dark:border-emerald-800"
-                  }`}
-                >
-                  {simulandoGps ? "Detener ruta (2s)" : "Simular ruta cada 2s"}
-                </button>
-              </div>}
             </div>
 
             {/* Formulario de envío manual de coordenadas */}

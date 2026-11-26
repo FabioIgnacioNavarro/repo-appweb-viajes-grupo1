@@ -202,18 +202,18 @@ test("WEB-005: la API expone recibo protegido y reintento idempotente sin duplic
       assert.equal(respuesta.status, 200);
       return (await respuesta.json() as { cobro: { id_cobro: string; importe: string; estado: string; intentos: number } }).cobro;
     }));
-    const cobroFallido = cobrosConcurrentes[0];
-    assert.equal(cobrosConcurrentes[1].id_cobro, cobroFallido.id_cobro);
-    assert.equal(cobroFallido.estado, "fallido");
-    assert.equal(cobroFallido.intentos, 1);
-    assert.equal(cobroFallido.importe, viaje.precio_estimado);
+    const cobroConfirmadoInicial = cobrosConcurrentes[0];
+    assert.equal(cobrosConcurrentes[1].id_cobro, cobroConfirmadoInicial.id_cobro);
+    assert.equal(cobroConfirmadoInicial.estado, "confirmado");
+    assert.equal(cobroConfirmadoInicial.intentos, 1);
+    assert.equal(cobroConfirmadoInicial.importe, viaje.precio_estimado);
 
     const pasajeroRecibo = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro`, "pasajero");
     const choferRecibo = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro`, "chofer");
     const pasajeroAjeno = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/cobro`, "pasajeroDos");
     assert.equal(pasajeroRecibo.status, 200);
     assert.equal(choferRecibo.status, 200);
-    assert.equal((await pasajeroRecibo.json() as { id_cobro: string }).id_cobro, cobroFallido.id_cobro);
+    assert.equal((await pasajeroRecibo.json() as { id_cobro: string }).id_cobro, cobroConfirmadoInicial.id_cobro);
     assert.equal(pasajeroAjeno.status, 403);
 
     const opciones = { method: "POST", body: "{}", headers: { "Clave-Idempotencia": "pago-web005-http" } };
@@ -223,12 +223,12 @@ test("WEB-005: la API expone recibo protegido y reintento idempotente sin duplic
     const cobroRepetido = await repetido.json() as { id_cobro: string; importe: string; estado: string; intentos: number };
     assert.equal(reintento.status, 200);
     assert.equal(cobroConfirmado.estado, "confirmado");
-    assert.equal(cobroConfirmado.id_cobro, cobroFallido.id_cobro);
+    assert.equal(cobroConfirmado.id_cobro, cobroConfirmadoInicial.id_cobro);
     assert.equal(cobroConfirmado.importe, viaje.precio_estimado);
     assert.deepEqual(cobroRepetido, cobroConfirmado);
 
     const finalizacionRepetida = await pedido(contexto.base, `/viajes/${viaje.id_viaje}/finalizacion`, "chofer", { method: "POST", body: "{}" });
-    assert.equal((await finalizacionRepetida.json() as { cobro: { id_cobro: string; estado: string } }).cobro.id_cobro, cobroFallido.id_cobro);
+    assert.equal((await finalizacionRepetida.json() as { cobro: { id_cobro: string; estado: string } }).cobro.id_cobro, cobroConfirmadoInicial.id_cobro);
   } finally { await cerrar(contexto.servidor); }
 });
 

@@ -206,8 +206,8 @@ async function prepararMocksBase(page: Page): Promise<{
   return { estimacionesRecibidas, geocodificacionesInversas, confirmacionesRecibidas };
 }
 
-test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo automático y mapa interactivo", () => {
-  test("destino arranca vacío con un pin A, calcula precio automáticamente al escribir y confirma/cancela viaje", async ({
+test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: origen/destino vacíos, cálculo automático y mapa interactivo", () => {
+  test("origen y destino arrancan vacíos sin pines, calculan precio automáticamente al escribir y confirman/cancelan viaje", async ({
     page,
   }) => {
     const registro = await prepararMocksBase(page);
@@ -219,14 +219,15 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     const inputOrigen = page.locator("#origen-viaje");
     const inputDestino = page.locator("#destino-viaje");
 
-    await expect(inputOrigen).toHaveValue("Juan B. Justo 4, Resistencia");
+    await expect(inputOrigen).toHaveValue("");
     await expect(inputDestino).toHaveValue("");
-    await expect(page.locator(".leaflet-marker-icon")).toHaveCount(1);
+    await expect(page.locator(".leaflet-marker-icon")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Calcular precio/i })).toHaveCount(0);
     const botonCentrar = page.getByRole("button", { name: /Centrar mapa/i });
     await expect(botonCentrar).toBeVisible();
     await botonCentrar.click();
 
+    await inputOrigen.fill("Av. Alberdi 250, Resistencia");
     await inputDestino.fill("Shopping Sarmiento, Resistencia");
 
     const botonConfirmar = page.getByRole("button", { name: /^Confirmar viaje$/i });
@@ -238,7 +239,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
 
     expect(registro.estimacionesRecibidas).toHaveLength(1);
     expect(registro.estimacionesRecibidas[0]).toEqual({
-      origen: { direccion: "Juan B. Justo 4, Resistencia" },
+      origen: { direccion: "Av. Alberdi 250, Resistencia" },
       destino: { direccion: "Shopping Sarmiento, Resistencia" },
     });
 
@@ -262,17 +263,21 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     await page.goto("/#/login");
     await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
-    await expect(page.locator(".leaflet-marker-icon")).toHaveCount(1);
+    await expect(page.locator(".leaflet-marker-icon")).toHaveCount(0);
 
     const mapa = page.locator(".leaflet-container");
     await mapa.scrollIntoViewIfNeeded();
     const mapaBox = await mapa.boundingBox();
     expect(mapaBox).not.toBeNull();
 
-    // Clic en el mapa -> fija destino B, resuelve dirección y cotiza automáticamente
+    // Primer clic en el mapa -> fija origen A; segundo clic -> fija destino B y cotiza automáticamente
+    await page.mouse.click(mapaBox!.x + mapaBox!.width * 0.35, mapaBox!.y + mapaBox!.height * 0.55);
+    await expect(page.locator("#origen-viaje")).toHaveValue("Pellegrini 373, Resistencia", {
+      timeout: 5000,
+    });
     await page.mouse.click(mapaBox!.x + mapaBox!.width * 0.68, mapaBox!.y + mapaBox!.height * 0.32);
 
-    await expect(page.locator("#destino-viaje")).toHaveValue("Pellegrini 373, Resistencia", {
+    await expect(page.locator("#destino-viaje")).toHaveValue("French 617, Resistencia", {
       timeout: 5000,
     });
     await expect(page.getByRole("button", { name: /^Confirmar viaje$/i })).toBeVisible({
@@ -280,7 +285,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     });
     await expect(page.locator(".leaflet-marker-icon")).toHaveCount(2);
     await expect(page.locator("svg path.leaflet-interactive")).toHaveCount(1);
-    expect(registro.geocodificacionesInversas).toHaveLength(1);
+    expect(registro.geocodificacionesInversas).toHaveLength(2);
 
     // Esperar a que termine la animación fitBounds sobre pin A antes de arrastrarlo
     const pinA = page.locator(".leaflet-marker-icon").first();
@@ -326,6 +331,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
     await iniciarConPerfilDemo(page, /Ana Gómez/i);
     await expect(page).toHaveURL(/#\/pasajero/);
 
+    await page.locator("#origen-viaje").fill("Av. Alberdi 250, Resistencia");
     await page.locator("#destino-viaje").fill("Shopping Sarmiento, Resistencia");
     await expect(page.getByRole("button", { name: /^Confirmar viaje$/i })).toBeVisible({
       timeout: 5000,
@@ -356,6 +362,7 @@ test.describe("WEB-009 / TEST-002 - Flujo de Pasajero: destino vacío, cálculo 
       await botonDev.click();
     }
 
+    await page.locator("#origen-viaje").fill("Av. Alberdi 250, Resistencia");
     await page.locator("#destino-viaje").fill("Shopping Sarmiento, Resistencia");
     await expect(page.getByRole("button", { name: /^Confirmar viaje$/i })).toBeVisible({ timeout: 5000 });
 

@@ -1,12 +1,11 @@
 import type { Cobro, PasarelaPagos } from "./dominio";
 
 /**
- * Adaptador de demo: el primer intento de cada cobro falla y el siguiente
- * confirma. Repetir la misma clave reproduce exactamente el mismo resultado.
+ * Adaptador de demo: confirma el cobro en el primer intento.
+ * Repetir la misma clave reproduce exactamente el mismo resultado.
  */
 export class PasarelaPagosFalsa implements PasarelaPagos {
   private readonly resultadosPorClave = new Map<string, "FALLIDO" | "CONFIRMADO">();
-  private readonly intentosPorCobro = new Map<string, number>();
   private readonly enProcesoPorCobro = new Map<string, Promise<"FALLIDO" | "CONFIRMADO">>();
 
   async procesar(cobro: Cobro, claveIdempotencia: string): Promise<"FALLIDO" | "CONFIRMADO"> {
@@ -21,9 +20,7 @@ export class PasarelaPagosFalsa implements PasarelaPagos {
       return resultado;
     }
 
-    const numeroIntento = this.intentosPorCobro.get(cobro.id) ?? 0;
-    this.intentosPorCobro.set(cobro.id, numeroIntento + 1);
-    const resultado: "FALLIDO" | "CONFIRMADO" = numeroIntento === 0 ? "FALLIDO" : "CONFIRMADO";
+    const resultado: "FALLIDO" | "CONFIRMADO" = "CONFIRMADO";
     const operacion = Promise.resolve(resultado);
     this.enProcesoPorCobro.set(cobro.id, operacion);
     try {
