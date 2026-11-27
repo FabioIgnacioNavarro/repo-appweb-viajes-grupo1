@@ -19,6 +19,7 @@
     "carga:k6:smoke": "docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml run --rm -e K6_MODO=smoke k6 run --summary-export=/resultados/k6-smoke.json /scripts/stress-combinado.js",
     "carga:k6": "docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml run --rm -e K6_MODO=stress k6 run --summary-export=/resultados/k6-resumen.json /scripts/stress-combinado.js",
     "carga:k6:100": "docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml --profile grafana up -d --wait && docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml run --rm -e K6_MODO=stress k6 run -o experimental-prometheus-rw --summary-export=/resultados/k6-100-usuarios.json /scripts/carga-100-usuarios.js",
+    "carga:k6:demo": "node scripts/demo-k6.mjs",
     "carga:grafana:up": "docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml --profile grafana up -d --wait",
     "carga:grafana:down": "docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml --profile grafana stop prometheus grafana && docker compose -f docker-compose.yml up -d --force-recreate nginx ms-tarifas",
     "test:e2e": "npm run build && npm run build:tests && node --test dist-tests/tests/e2e/e2e.test.js",
