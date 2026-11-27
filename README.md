@@ -2,8 +2,9 @@
 
 Plataforma backend de viajes en tiempo real construida bajo **Arquitectura Hexagonal**, microservicios en **Node.js 22 LTS / TypeScript**, base de datos relacional **PostgreSQL**, observabilidad distribuida con **OpenTelemetry y Jaeger**, y autenticación externa basada en **OIDC/JWKS y RBAC**.
 
-Incluye la **Variante Obligatoria A (Precio dinámico por demanda auditado)** y los temas especiales de cátedra:
-- **Tema 18:** Observabilidad distribuida con OpenTelemetry, SDK OTLP, propagación de contexto W3C `traceparent` y servidor Jaeger.
+Incluye la **Variante Obligatoria A (Precio dinámico por demanda auditado)** y los temas de cátedra documentados en [`docs/temas-catedra.md`](docs/temas-catedra.md):
+- **Tema 4 (Base arquitectónica):** Monolito modular y microservicios (`ms-viajes`, `ms-tarifas` y `ms-flota`) con fronteras hexagonales, contratos HTTP explícitos, aislamiento de fallos (`503`) y guía de demo en [`docs/demo-microservicios.md`](docs/demo-microservicios.md).
+- **Tema 18:** Observabilidad distribuida con OpenTelemetry, SDK OTLP, propagación de contexto W3C `traceparent` y servidor Jaeger / Grafana Cloud.
 - **Tema 19:** Emulador de Identidad JWKS, emisión asimétrica RS256, roles RBAC y control de acceso por recurso.
 - **Tema 20:** Comunicación en tiempo real mediante WebSockets autenticados, autorización por viaje y recuperación del estado por HTTP.
 
@@ -218,4 +219,6 @@ En Visual Studio Code con la extensión *REST Client*:
 - [docs/informe.md](docs/informe.md): Arquitectura, decisiones, resultados de medición y evidencia de seguridad.
 - [docs/guion-demo.md](docs/guion-demo.md): Guion cronometrado para ejecutar la demostración del proyecto.
 - [docs/ataque.md](docs/ataque.md): Bitácora de ataques controlados y verificación de defensas efectivas.
+- [docs/temas-catedra.md](docs/temas-catedra.md): Elección y justificación de temas de cátedra (Temas 4, 18, 19 y 20, y descarte de Tema 1).
+- [docs/demo-microservicios.md](docs/demo-microservicios.md): Guía reproducible para demostrar separación en microservicios y caída controlada de `ms-flota`.
 - [docs/adr/](docs/adr/): Registro numerado de decisiones arquitectónicas (ADRs).
