@@ -199,6 +199,7 @@ export const VistaPasajero: React.FC = () => {
   const claveConfirmacion = useRef<string | null>(null);
   const bloqueoEnvio = useRef(false);
   const viajeActualRef = useRef<ViajeDto | null>(null);
+  const ocultarUltimoFinalizadoRef = useRef(false);
   const secuenciaGeoInversaRef = useRef<{ origen: number; destino: number }>({ origen: 0, destino: 0 });
   const secuenciaEstimacionRef = useRef(0);
   const debounceEstimacionRef = useRef<number | null>(null);
@@ -228,7 +229,11 @@ export const VistaPasajero: React.FC = () => {
       const ordenados = listaFiltrada
         .sort((a, b) => Date.parse(b.creado_en) - Date.parse(a.creado_en));
       const activo = ordenados.find((elemento) => ESTADOS_ACTIVOS.has(elemento.estado.toLowerCase()));
-      const ultimoFinalizado = ordenados.find((elemento) => elemento.estado.toLowerCase() === "finalizado");
+      const masReciente = ordenados[0] ?? null;
+      const ultimoFinalizado =
+        !ocultarUltimoFinalizadoRef.current && masReciente?.estado.toLowerCase() === "finalizado"
+          ? masReciente
+          : null;
       const viajeMostrable = activo ?? ultimoFinalizado ?? null;
       setViaje(viajeMostrable);
       if (viajeMostrable?.estado.toLowerCase() === "finalizado") {
@@ -268,8 +273,11 @@ export const VistaPasajero: React.FC = () => {
         if (!ESTADOS_ACTIVOS.has(datos.estado.toLowerCase())) {
           setPosicionChofer(undefined);
         }
-        if (datos.estado.toLowerCase() === "finalizado") void sincronizarViajeActivo();
-      } else {
+        if (datos.estado.toLowerCase() === "finalizado") {
+          ocultarUltimoFinalizadoRef.current = false;
+          void sincronizarViajeActivo();
+        }
+      } else if (!bloqueoEnvio.current && ESTADOS_ACTIVOS.has(datos.estado.toLowerCase())) {
         void sincronizarViajeActivo();
       }
     });
@@ -649,6 +657,11 @@ export const VistaPasajero: React.FC = () => {
       const confirmado = await clienteApi.post<ViajeDto>("/viajes", { id_estimacion: estimacion.id_estimacion }, { claveIdempotencia: clave });
       const rutaConfirmada = puntosDeRuta(estimacion).map((p) => [p.latitud, p.longitud] as [number, number]);
       setPolilineaViaje(rutaConfirmada.length >= 2 ? rutaConfirmada : undefined);
+      ocultarUltimoFinalizadoRef.current = false;
+      setCobro(null);
+      setPosicionChofer(undefined);
+      setEstimacion(null);
+      claveConfirmacion.current = null;
       setViaje(confirmado);
       setAviso(confirmado.estado.toLowerCase() === "sin_choferes_disponibles"
         ? "No hay choferes disponibles en este momento. El precio de esta estimación se conserva."
@@ -858,7 +871,7 @@ export const VistaPasajero: React.FC = () => {
             {puedeCancelar && <p className="text-xs text-amber-800 dark:text-amber-300">Terminá o cancelá el viaje activo antes de solicitar otro.</p>}
           </form>
 
-          {estimacion && !viaje && (
+          {estimacion && !hayViajeEnCurso && (
             <section className="space-y-4 rounded-2xl border border-[#4A7C59]/30 dark:border-slate-700 bg-[#EFECE4] dark:bg-slate-900 p-5" aria-labelledby="titulo-precio">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -903,7 +916,7 @@ export const VistaPasajero: React.FC = () => {
             </section>
           )}
 
-          {viaje && (
+          {viaje && (!estimacion || hayViajeEnCurso) && (
             <section className="space-y-4 rounded-2xl border border-[#4A7C59]/30 dark:border-emerald-900/50 bg-[#EFECE4] dark:bg-slate-900 p-5 shadow-sm" aria-labelledby="titulo-viaje-activo">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -915,13 +928,37 @@ export const VistaPasajero: React.FC = () => {
                 <InsigniaEstadoViaje estado={viaje.estado} />
               </div>
               <p className="text-xs text-[#5E5B54] dark:text-slate-400">El precio y sus factores se mantienen congelados desde la confirmación.</p>
-              <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-300 dark:border-red-800/60 bg-[#F7F5F0] dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-red-700 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-50">
-                {procesando ? "Procesando…" : puedeCancelar ? "Cancelar viaje" : etiquetaEstado(viaje.estado)}
-              </button>
+              {hayViajeEnCurso ? (
+                <button type="button" onClick={() => void cancelarViaje()} disabled={procesando || !puedeCancelar} className="w-full rounded-xl border border-red-300 dark:border-red-800/60 bg-[#F7F5F0] dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-red-700 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-50">
+                  {procesando ? "Procesando…" : puedeCancelar ? "Cancelar viaje" : etiquetaEstado(viaje.estado)}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="boton-nuevo-viaje-pasajero"
+                  onClick={() => {
+                    ocultarUltimoFinalizadoRef.current = true;
+                    setViaje(null);
+                    setCobro(null);
+                    setPosicionChofer(undefined);
+                    setEstimacion(null);
+                    setPolilineaViaje(undefined);
+                    setOrigen("");
+                    setDestino("");
+                    setPinManualOrigen(null);
+                    setPinManualDestino(null);
+                    setAviso(null);
+                    setError(null);
+                  }}
+                  className="w-full rounded-xl bg-[#4A7C59] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#3E6A4B] cursor-pointer"
+                >
+                  Pedir nuevo viaje
+                </button>
+              )}
             </section>
           )}
 
-          {cobro && viaje && cobro.id_viaje === viaje.id_viaje && (
+          {cobro && viaje && (!estimacion || hayViajeEnCurso) && cobro.id_viaje === viaje.id_viaje && (
             <section className="space-y-3 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 p-5 shadow-sm" aria-labelledby="titulo-recibo-cobro" data-testid="recibo-cobro-pasajero">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -962,6 +999,7 @@ export const VistaPasajero: React.FC = () => {
               destino={destinoPinMapa}
               posicionChofer={hayViajeEnCurso ? posicionChofer : undefined}
               rutaGeoJson={rutaMapa}
+              seguirRutaChofer={estadoViaje === "en_curso"}
               onSeleccionarPunto={puedeCancelar ? undefined : manejarPinArrastrado}
             />
             {!estimacion && !viaje && (

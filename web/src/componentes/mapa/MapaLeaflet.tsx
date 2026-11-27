@@ -13,6 +13,7 @@ interface MapaLeafletProps {
   destino?: PuntoMapa;
   posicionChofer?: PuntoMapa;
   rutaGeoJson?: [number, number][]; // Coordenadas [lat, lng]
+  seguirRutaChofer?: boolean;
   altura?: string;
   sinBorde?: boolean;
   onSeleccionarPunto?: (tipo: "origen" | "destino", coords: [number, number]) => void;
@@ -31,6 +32,77 @@ function construirContenidoPopup(etiqueta: string, texto: string): HTMLElement {
   fuerte.textContent = `${etiqueta}:`;
   contenedor.append(fuerte, document.createElement("br"), document.createTextNode(texto));
   return contenedor;
+}
+
+/** Proyecta una coordenada sobre la polilínea vial y devuelve su distancia acumulada a lo largo de la ruta. */
+function proyectarSobreRuta(
+  punto: { latitud: number; longitud: number },
+  ruta: [number, number][] | undefined
+): { latitud: number; longitud: number; distanciaM: number; separacionM: number } | null {
+  if (!ruta || ruta.length < 2) return null;
+  const cosLat = Math.cos((punto.latitud * Math.PI) / 180);
+  const aMetrosX = (lon: number) => lon * 111_320 * cosLat;
+  const aMetrosY = (lat: number) => lat * 110_540;
+
+  const px = aMetrosX(punto.longitud);
+  const py = aMetrosY(punto.latitud);
+  let mejorDist2 = Number.POSITIVE_INFINITY;
+  let mejorLat = punto.latitud;
+  let mejorLon = punto.longitud;
+  let mejorDistanciaAcum = 0;
+  let acum = 0;
+
+  for (let i = 0; i < ruta.length - 1; i++) {
+    const [latA, lonA] = ruta[i];
+    const [latB, lonB] = ruta[i + 1];
+    const ax = aMetrosX(lonA);
+    const ay = aMetrosY(latA);
+    const bx = aMetrosX(lonB);
+    const by = aMetrosY(latB);
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const len = Math.sqrt(len2);
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+    const projX = ax + t * dx;
+    const projY = ay + t * dy;
+    const d2 = (px - projX) ** 2 + (py - projY) ** 2;
+    if (d2 < mejorDist2) {
+      mejorDist2 = d2;
+      mejorLat = latA + t * (latB - latA);
+      mejorLon = lonA + t * (lonB - lonA);
+      mejorDistanciaAcum = acum + len * t;
+    }
+    acum += len;
+  }
+
+  return {
+    latitud: mejorLat,
+    longitud: mejorLon,
+    distanciaM: mejorDistanciaAcum,
+    separacionM: Math.sqrt(mejorDist2),
+  };
+}
+
+/** Obtiene el punto exacto sobre los vértices de la polilínea a una distancia acumulada dada (en metros). */
+function puntoEnDistanciaRuta(ruta: [number, number][], distanciaObjetivoM: number): [number, number] {
+  if (ruta.length === 0) return [0, 0];
+  if (ruta.length === 1 || distanciaObjetivoM <= 0) return ruta[0];
+  const cosLat = Math.cos((ruta[0][0] * Math.PI) / 180);
+  let acum = 0;
+  for (let i = 0; i < ruta.length - 1; i++) {
+    const [latA, lonA] = ruta[i];
+    const [latB, lonB] = ruta[i + 1];
+    const dx = (lonB - lonA) * 111_320 * cosLat;
+    const dy = (latB - latA) * 110_540;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (acum + len >= distanciaObjetivoM && len > 0) {
+      const t = (distanciaObjetivoM - acum) / len;
+      return [latA + (latB - latA) * t, lonA + (lonB - lonA) * t];
+    }
+    acum += len;
+  }
+  return ruta[ruta.length - 1];
 }
 
 function firmaEncuadre(
@@ -54,6 +126,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   destino,
   posicionChofer,
   rutaGeoJson,
+  seguirRutaChofer = false,
   altura = "100%",
   sinBorde = false,
   onSeleccionarPunto,
@@ -62,6 +135,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   const mapaRef = useRef<L.Map | null>(null);
   const marcadoresRef = useRef<{ [key: string]: L.Marker }>({});
   const animacionChoferRef = useRef<number | null>(null);
+  const distanciaRutaChoferRef = useRef<number | null>(null);
   const lineaRutaRef = useRef<L.Polyline | null>(null);
   const ultimaFirmaEncuadreRef = useRef<string>("");
   const onSeleccionarPuntoRef = useRef(onSeleccionarPunto);
@@ -195,9 +269,12 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     ) => {
       const existente = marcadoresRef.current[clave];
       if (!punto) {
-        if (clave === "chofer" && animacionChoferRef.current !== null) {
-          window.cancelAnimationFrame(animacionChoferRef.current);
-          animacionChoferRef.current = null;
+        if (clave === "chofer") {
+          if (animacionChoferRef.current !== null) {
+            window.cancelAnimationFrame(animacionChoferRef.current);
+            animacionChoferRef.current = null;
+          }
+          distanciaRutaChoferRef.current = null;
         }
         if (existente) {
           mapa.removeLayer(existente);
@@ -214,22 +291,47 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
             window.cancelAnimationFrame(animacionChoferRef.current);
             animacionChoferRef.current = null;
           }
-          const inicio = existente.getLatLng();
-          const deltaLat = punto.latitud - inicio.lat;
-          const deltaLon = punto.longitud - inicio.lng;
-          if (Math.abs(deltaLat) > 1e-6 || Math.abs(deltaLon) > 1e-6) {
+          const proyeccion =
+            seguirRutaChofer && rutaGeoJson && rutaGeoJson.length >= 2
+              ? proyectarSobreRuta(punto, rutaGeoJson)
+              : null;
+
+          if (proyeccion && proyeccion.separacionM <= 250 && rutaGeoJson) {
+            const sInicio = distanciaRutaChoferRef.current ?? proyeccion.distanciaM;
+            const sFin = Math.max(sInicio, proyeccion.distanciaM);
             const duracionMs = 420;
             const t0 = performance.now();
-            const animar = (ahora: number) => {
+            const animarSobreRuta = (ahora: number) => {
               const progreso = Math.min(1, (ahora - t0) / duracionMs);
-              existente.setLatLng([inicio.lat + deltaLat * progreso, inicio.lng + deltaLon * progreso]);
+              const sActual = sInicio + (sFin - sInicio) * progreso;
+              distanciaRutaChoferRef.current = sActual;
+              existente.setLatLng(puntoEnDistanciaRuta(rutaGeoJson, sActual));
               if (progreso < 1) {
-                animacionChoferRef.current = window.requestAnimationFrame(animar);
+                animacionChoferRef.current = window.requestAnimationFrame(animarSobreRuta);
               } else {
                 animacionChoferRef.current = null;
               }
             };
-            animacionChoferRef.current = window.requestAnimationFrame(animar);
+            animacionChoferRef.current = window.requestAnimationFrame(animarSobreRuta);
+          } else {
+            distanciaRutaChoferRef.current = null;
+            const inicio = existente.getLatLng();
+            const deltaLat = punto.latitud - inicio.lat;
+            const deltaLon = punto.longitud - inicio.lng;
+            if (Math.abs(deltaLat) > 1e-6 || Math.abs(deltaLon) > 1e-6) {
+              const duracionMs = 420;
+              const t0 = performance.now();
+              const animar = (ahora: number) => {
+                const progreso = Math.min(1, (ahora - t0) / duracionMs);
+                existente.setLatLng([inicio.lat + deltaLat * progreso, inicio.lng + deltaLon * progreso]);
+                if (progreso < 1) {
+                  animacionChoferRef.current = window.requestAnimationFrame(animar);
+                } else {
+                  animacionChoferRef.current = null;
+                }
+              };
+              animacionChoferRef.current = window.requestAnimationFrame(animar);
+            }
           }
         } else {
           existente.setLatLng([punto.latitud, punto.longitud]);
@@ -262,9 +364,20 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     };
 
     const draggable = Boolean(onSeleccionarPuntoRef.current);
+    const proyeccionInicial =
+      seguirRutaChofer && posicionChofer && rutaGeoJson && rutaGeoJson.length >= 2
+        ? proyectarSobreRuta(posicionChofer, rutaGeoJson)
+        : null;
+    const choferAlineado =
+      posicionChofer && proyeccionInicial && proyeccionInicial.separacionM <= 250
+        ? { ...posicionChofer, latitud: proyeccionInicial.latitud, longitud: proyeccionInicial.longitud }
+        : posicionChofer;
+    if (!seguirRutaChofer) {
+      distanciaRutaChoferRef.current = null;
+    }
     sincronizarMarcador("origen", origen, "Origen", draggable);
     sincronizarMarcador("destino", destino, "Destino", draggable);
-    sincronizarMarcador("chofer", posicionChofer, "Chofer asignado", false);
+    sincronizarMarcador("chofer", choferAlineado, "Chofer asignado", false);
 
     // 4. Trazado de Ruta completo (siempre dibuja si hay >= 2 puntos)
     if (lineaRutaRef.current) {
@@ -292,7 +405,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
       ultimaFirmaEncuadreRef.current = firmaActual;
       encuadrarRecorridoCompleto();
     }
-  }, [origen, destino, posicionChofer, rutaGeoJson, encuadrarRecorridoCompleto]);
+  }, [origen, destino, posicionChofer, rutaGeoJson, seguirRutaChofer, encuadrarRecorridoCompleto]);
 
   return (
     <div
