@@ -41,7 +41,8 @@ function firmaEncuadre(
 ): string {
   const o = origen ? `${origen.latitud.toFixed(5)},${origen.longitud.toFixed(5)}` : "none";
   const d = destino ? `${destino.latitud.toFixed(5)},${destino.longitud.toFixed(5)}` : "none";
-  const c = chofer ? `${chofer.latitud.toFixed(5)},${chofer.longitud.toFixed(5)}` : "none";
+  // Solo re-encuadrar cuando el chofer aparece/desaparece, no en cada tick GPS en movimiento
+  const c = chofer ? "present" : "none";
   const rLen = rutaGeoJson?.length ?? 0;
   const rIni = rLen > 0 ? `${rutaGeoJson![0]![0].toFixed(5)},${rutaGeoJson![0]![1].toFixed(5)}` : "";
   const rFin = rLen > 1 ? `${rutaGeoJson![rLen - 1]![0].toFixed(5)},${rutaGeoJson![rLen - 1]![1].toFixed(5)}` : "";
@@ -60,6 +61,7 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
   const contenedorRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const marcadoresRef = useRef<{ [key: string]: L.Marker }>({});
+  const animacionChoferRef = useRef<number | null>(null);
   const lineaRutaRef = useRef<L.Polyline | null>(null);
   const ultimaFirmaEncuadreRef = useRef<string>("");
   const onSeleccionarPuntoRef = useRef(onSeleccionarPunto);
@@ -193,6 +195,10 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
     ) => {
       const existente = marcadoresRef.current[clave];
       if (!punto) {
+        if (clave === "chofer" && animacionChoferRef.current !== null) {
+          window.cancelAnimationFrame(animacionChoferRef.current);
+          animacionChoferRef.current = null;
+        }
         if (existente) {
           mapa.removeLayer(existente);
           delete marcadoresRef.current[clave];
@@ -203,7 +209,31 @@ export const MapaLeaflet: React.FC<MapaLeafletProps> = ({
       const textoPopup = punto.titulo || (clave === "chofer" ? "En camino" : etiquetaPopup);
 
       if (existente) {
-        existente.setLatLng([punto.latitud, punto.longitud]);
+        if (clave === "chofer") {
+          if (animacionChoferRef.current !== null) {
+            window.cancelAnimationFrame(animacionChoferRef.current);
+            animacionChoferRef.current = null;
+          }
+          const inicio = existente.getLatLng();
+          const deltaLat = punto.latitud - inicio.lat;
+          const deltaLon = punto.longitud - inicio.lng;
+          if (Math.abs(deltaLat) > 1e-6 || Math.abs(deltaLon) > 1e-6) {
+            const duracionMs = 420;
+            const t0 = performance.now();
+            const animar = (ahora: number) => {
+              const progreso = Math.min(1, (ahora - t0) / duracionMs);
+              existente.setLatLng([inicio.lat + deltaLat * progreso, inicio.lng + deltaLon * progreso]);
+              if (progreso < 1) {
+                animacionChoferRef.current = window.requestAnimationFrame(animar);
+              } else {
+                animacionChoferRef.current = null;
+              }
+            };
+            animacionChoferRef.current = window.requestAnimationFrame(animar);
+          }
+        } else {
+          existente.setLatLng([punto.latitud, punto.longitud]);
+        }
         existente.setPopupContent(construirContenidoPopup(etiquetaPopup, textoPopup));
         if (arrastrable && existente.dragging) {
           existente.dragging.enable();

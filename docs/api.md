@@ -209,8 +209,8 @@ Valida la curva de demanda y los multiplicadores, y crea una nueva versión acti
 - **Entrada inválida (`400` / `422`):** `400 ENTRADA_INVALIDA` si incluye campos no permitidos (`autor`, `version`, `creada_en`, `precio`, etc.) o tipos erróneos; `422 REGLA_INVALIDA` si la curva o los límites no son válidos.
 
 #### `POST /tarifas/geocodificacion-inversa`
-Convierte coordenadas seleccionadas manualmente en el mapa a una dirección legible usando el geocodificador configurado (`Nominatim`, `Google` o semilla de desarrollo).
-- **Autorización:** Requiere rol `PASAJERO` o `ADMINISTRADOR`.
+Convierte coordenadas seleccionadas en el mapa o detectadas por GPS del chofer a una dirección legible usando el geocodificador configurado (`Nominatim`, `Google` o semilla de desarrollo).
+- **Autorización:** Requiere rol `PASAJERO`, `CHOFER` o `ADMINISTRADOR`.
 - **Cuerpo recibido:** `{"latitud": -27.45213, "longitud": -58.98738}`.
 - **Respuesta (`200 OK`):** `{"direccion": "Juan B. Justo 4, Resistencia", "coordenada": {"latitud": -27.45213, "longitud": -58.98738}}`.
 

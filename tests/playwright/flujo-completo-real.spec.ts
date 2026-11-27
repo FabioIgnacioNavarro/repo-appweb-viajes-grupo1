@@ -157,7 +157,11 @@ test.describe("E2E Real en la App - Pasajero, Chofer en vivo y Cobro", () => {
     const opcionesContexto = MAXIMIZADO
       ? { viewport: null, deviceScaleFactor: undefined }
       : { viewport: { width: 1280, height: 860 } };
-    const contextoChofer = await browser.newContext(opcionesContexto);
+    const contextoChofer = await browser.newContext({
+      ...opcionesContexto,
+      permissions: ["geolocation"],
+      geolocation: { latitude: -27.4538, longitude: -58.9845 },
+    });
     const contextoPasajero = await browser.newContext(opcionesContexto);
     const pageChofer = await contextoChofer.newPage();
     const pagePasajero = await contextoPasajero.newPage();
@@ -183,19 +187,21 @@ test.describe("E2E Real en la App - Pasajero, Chofer en vivo y Cobro", () => {
     });
 
     try {
-      // 1. Chofer inicia sesión real (RS256), escribe su dirección (sin coordenadas manuales) y se conecta
+      // 1. Chofer inicia sesión real (RS256): la app detecta su GPS automáticamente, resuelve la dirección y la reporta
       await pageChofer.bringToFront();
+      const respUbicacionInicial = pageChofer.waitForResponse(
+        (res) => res.url().includes("/choferes/yo/ubicacion") && res.request().method() === "POST" && res.status() === 200
+      );
       const tokenChofer = await iniciarSesionReal(pageChofer, "carlos");
       await expect(pageChofer).toHaveURL(/#\/chofer/, { timeout: 10000 });
       await expect(pageChofer.getByTestId("vista-chofer")).toBeVisible();
 
-      const respUbicacionInicial = pageChofer.waitForResponse(
-        (res) => res.url().includes("/choferes/yo/ubicacion") && res.request().method() === "POST" && res.status() === 200
-      );
-      await pageChofer.getByTestId("input-direccion-chofer").fill("Av. Alberdi 250, Resistencia");
-      await pageChofer.getByTestId("boton-enviar-ubicacion").click();
       const ubicacionInicial = (await (await respUbicacionInicial).json()) as Coordenada;
-      await expect(pageChofer.getByTestId("ultima-ubicacion-chofer")).toContainText(/Alberdi/i, { timeout: 10000 });
+      puntoGpsEnMovimiento = ubicacionInicial;
+      await expect(pageChofer.getByTestId("input-direccion-chofer")).not.toHaveValue("", { timeout: 10000 });
+      await expect(pageChofer.getByTestId("ultima-ubicacion-chofer")).not.toContainText("Aún no se reportó", {
+        timeout: 10000,
+      });
 
       const btnDisponibilidad = pageChofer.getByTestId("boton-toggle-disponibilidad");
       await expect(btnDisponibilidad).toBeVisible();

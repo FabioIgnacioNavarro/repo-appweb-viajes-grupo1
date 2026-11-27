@@ -384,9 +384,16 @@ test("ms-tarifas HTTP: POST /tarifas/geocodificacion-inversa devuelve dirección
     assert.match(okBody.direccion, /Juan B\. Justo 4, Resistencia/);
     assert.equal(okBody.coordenada.latitud, -27.45213);
 
-    const forbiddenRes = await fetch(`${ctx.base}/tarifas/geocodificacion-inversa`, {
+    const choferRes = await fetch(`${ctx.base}/tarifas/geocodificacion-inversa`, {
       method: "POST",
       headers: { Authorization: "Bearer token-chofer-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ latitud: -27.45213, longitud: -58.98738 })
+    });
+    assert.equal(choferRes.status, 200);
+
+    const forbiddenRes = await fetch(`${ctx.base}/tarifas/geocodificacion-inversa`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token-soporte-1", "Content-Type": "application/json" },
       body: JSON.stringify({ latitud: -27.45213, longitud: -58.98738 })
     });
     assert.equal(forbiddenRes.status, 403);
