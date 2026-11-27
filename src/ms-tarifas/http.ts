@@ -333,8 +333,8 @@ export function crearRouterTarifas(deps: DependenciasTarifas): express.Router {
     } catch (causa) { error(res, causa); }
   });
   router.post("/tarifas/geocodificacion-inversa", autenticar, async (req, res) => {
-    if (!["PASAJERO", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
-      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros o administración pueden resolver direcciones en el mapa.", detalles: {} } });
+    if (!["PASAJERO", "CHOFER", "ADMINISTRADOR"].includes(req.actor?.rol ?? "")) {
+      res.status(403).json({ error: { codigo: "ROL_NO_AUTORIZADO", mensaje: "Solo pasajeros, choferes o administración pueden resolver direcciones en el mapa.", detalles: {} } });
       return;
     }
     if (!objeto(req.body) || Object.keys(req.body).some((k) => k !== "latitud" && k !== "longitud") || typeof req.body.latitud !== "number" || typeof req.body.longitud !== "number") {

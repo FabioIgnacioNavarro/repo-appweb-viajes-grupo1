@@ -119,6 +119,7 @@ export const VistaChofer: React.FC = () => {
     Array<{ etiqueta: string; latitud: number; longitud: number }>
   >([]);
   const [buscandoDireccion, setBuscandoDireccion] = useState<boolean>(false);
+  const [detectandoGps, setDetectandoGps] = useState<boolean>(false);
   const [latitudInput, setLatitudInput] = useState<string>("-27.4512");
   const [longitudInput, setLongitudInput] = useState<string>("-58.9866");
   const latitudRef = useRef<string>(latitudInput);
@@ -565,6 +566,72 @@ export const VistaChofer: React.FC = () => {
     }
     await reportarUbicacion(Number(latitudInput), Number(longitudInput), "Posición manual");
   };
+
+  // Detección automática de GPS del dispositivo + geocodificación inversa (como app real)
+  const detectarUbicacionGps = useCallback(
+    async (silencioso = false) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        if (!silencioso) {
+          setAlertaError({
+            codigo: "GPS_NO_DISPONIBLE",
+            mensaje: "Este navegador no soporta geolocalización. Podés ingresar tu dirección manualmente.",
+          });
+        }
+        return;
+      }
+
+      setDetectandoGps(true);
+      if (!silencioso) setAlertaError(null);
+
+      try {
+        const posicion = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 15_000,
+          });
+        });
+
+        const lat = posicion.coords.latitude;
+        const lon = posicion.coords.longitude;
+        setLatitudInput(String(lat));
+        setLongitudInput(String(lon));
+
+        let etiquetaDireccion = "Ubicación GPS detectada";
+        try {
+          const geo = await clienteApi.post<{ direccion?: string }>("/tarifas/geocodificacion-inversa", {
+            latitud: lat,
+            longitud: lon,
+          });
+          if (geo.direccion?.trim()) {
+            etiquetaDireccion = geo.direccion.trim();
+            setDireccionInput(etiquetaDireccion);
+          }
+        } catch {
+          // Si falla la geocodificación inversa, igual se reportan las coordenadas GPS
+        }
+
+        await reportarUbicacion(lat, lon, etiquetaDireccion);
+      } catch {
+        if (!silencioso) {
+          setAlertaError({
+            codigo: "GPS_DENEGADO",
+            mensaje: "No pudimos leer tu GPS. Revisá el permiso de ubicación o escribí tu dirección.",
+          });
+        }
+      } finally {
+        setDetectandoGps(false);
+      }
+    },
+    [reportarUbicacion]
+  );
+
+  const gpsAutoDetectadoRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (gpsAutoDetectadoRef.current) return;
+    gpsAutoDetectadoRef.current = true;
+    void detectarUbicacionGps(true);
+  }, [detectarUbicacionGps]);
 
   // Envío automático de ubicación cada 2 segundos mientras el chofer está conectado o en viaje
   useEffect(() => {
@@ -1304,15 +1371,26 @@ export const VistaChofer: React.FC = () => {
                     </ul>
                   )}
                 </div>
-                <button
-                  id="boton-enviar-ubicacion"
-                  data-testid="boton-enviar-ubicacion"
-                  type="submit"
-                  disabled={enviandoUbicacion}
-                  className="w-full py-2 px-4 rounded-lg bg-[#4A7C59] hover:bg-[#3E6A4B] text-white text-xs font-bold transition cursor-pointer"
-                >
-                  {enviandoUbicacion ? "Enviando..." : "Enviar Ubicación"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    data-testid="boton-detectar-gps-chofer"
+                    onClick={() => void detectarUbicacionGps(false)}
+                    disabled={detectandoGps || enviandoUbicacion}
+                    className="py-2 px-3 rounded-lg border border-[#4A7C59]/40 bg-[#F7F5F0] dark:bg-slate-800 hover:bg-[#E6EFE8] dark:hover:bg-slate-700 text-[#2C2B28] dark:text-slate-100 text-xs font-semibold transition cursor-pointer whitespace-nowrap"
+                  >
+                    {detectandoGps ? "Detectando..." : "Detectar GPS"}
+                  </button>
+                  <button
+                    id="boton-enviar-ubicacion"
+                    data-testid="boton-enviar-ubicacion"
+                    type="submit"
+                    disabled={enviandoUbicacion}
+                    className="w-full py-2 px-4 rounded-lg bg-[#4A7C59] hover:bg-[#3E6A4B] text-white text-xs font-bold transition cursor-pointer"
+                  >
+                    {enviandoUbicacion ? "Enviando..." : "Enviar Ubicación"}
+                  </button>
+                </div>
               </div>
 
               {modoDev && (
