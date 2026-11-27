@@ -1,5 +1,6 @@
 import { Pool, type PoolConfig } from "pg";
 import {
+  distanciaHaversineMetros,
   ErrorFlota,
   type AsignacionVehiculo,
   type Chofer,
@@ -50,7 +51,7 @@ function mapearAsignacion(fila: FilaAsignacion): AsignacionVehiculo {
 }
 
 export class RepositorioChoferesPostgres implements RepositorioChoferes {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly modoBusqueda: "optimizada" | "ingenua" = "optimizada") {}
 
   async obtenerPorUsuario(usuarioId: string): Promise<Chofer | undefined> {
     const resultado = await this.pool.query<FilaChofer>("SELECT id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado, fecha_creacion, fecha_actualizacion FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
@@ -78,6 +79,26 @@ export class RepositorioChoferesPostgres implements RepositorioChoferes {
   }
 
   async buscarDisponiblesCercanos(origen: Coordenada, radioMetros: number, ahora: Date, antiguedadMaximaMs: number): Promise<ChoferCercano[]> {
+    if (this.modoBusqueda === "ingenua") {
+      // Variante ingenua de referencia (ADR 0005): trae todas las ubicaciones a memoria y filtra/ordena en Node.js.
+      const resultado = await this.pool.query<FilaUbicacion & { habilitado: boolean; disponibilidad: boolean; carnet_conducir_validado: boolean }>(`
+        SELECT u.id, u.usuario_id, u.latitud, u.longitud, u.actualizado_at, u.precision_metros,
+               c.habilitado, c.disponibilidad, c.carnet_conducir_validado
+        FROM ubicacion_actual u
+        INNER JOIN usuario_chofer c ON c.usuario_id = u.usuario_id
+      `);
+      return resultado.rows
+        .flatMap((fila) => {
+          if (!fila.habilitado || !fila.disponibilidad || !fila.carnet_conducir_validado) return [];
+          const ubicacion = mapearUbicacion(fila);
+          if (ahora.getTime() - ubicacion.actualizadoAt.getTime() > antiguedadMaximaMs) return [];
+          const distanciaMetros = distanciaHaversineMetros(origen, ubicacion);
+          return distanciaMetros <= radioMetros ? [{ ...ubicacion, distanciaMetros }] : [];
+        })
+        .sort((a, b) => a.distanciaMetros - b.distanciaMetros)
+        .slice(0, 100);
+    }
+
     const radioTierra = 6_371_000;
     const latitudDelta = radioMetros / radioTierra * 180 / Math.PI;
     const longitudDelta = radioMetros / (radioTierra * Math.cos(origen.latitud * Math.PI / 180)) * 180 / Math.PI;

@@ -41,7 +41,7 @@ Se comparan versiones con el mismo conjunto de datos y la misma carga:
 
 1. **Reposo:** servicios iniciados, sin actualizaciones, una búsqueda por segundo y sondas de salud. Sirve como referencia de latencia sin competencia de escrituras.
 2. **Línea de base actual:** código de `ms-flota` de `main` registrado por su SHA antes de cambiar la estrategia. Para este inicio se registra `203451f`; en esta versión, PostgreSQL filtra por disponibilidad, antigüedad y cuadro geográfico, calcula Haversine en la consulta y limita los candidatos.
-3. **Referencia ingenua:** queda como comparación experimental separada. No se publicará como ruta de producción ni se comparará el CPU del generador con el CPU del servicio. El simulador MED-001 mide el recorrido HTTP real; la comparación ingenua se agregará cuando se defina la estrategia geográfica y exista un adaptador de benchmark con límites equivalentes.
+3. **Referencia ingenua:** queda como comparación experimental separada (`FLOTA_BUSQUEDA_MODO=ingenua`, bloqueada en `NODE_ENV=production`). No se publicará como ruta de producción ni se comparará el CPU del generador con el CPU del servicio. El simulador MED-001 mide el recorrido HTTP real contra la misma infraestructura para contrastar el escaneo completo en Node.js frente al prefiltrado SQL de la versión final.
 4. **Versión final:** estrategia de búsqueda optimizada que el grupo elija después de comparar alternativas. Se registra el commit exacto y la estrategia; no se presupone que sea PostGIS, geohash ni memoria antes de contar con evidencia.
 5. **Flujo integrado:** estimación, confirmación, creación de ofertas y aceptación automática de una oferta de prueba a través de los servicios y el gateway. Se ejecuta por separado de la medición de Flota y se informa qué servicios y proveedores estuvieron activos.
 
@@ -348,3 +348,53 @@ npm.cmd run carga:grafana:down
 | **Stress viajes con `http.batch` paralelo** (`estimacion-y-viajes.js`, `24 VUs`) | 3.208 | 79,70 req/s | **100,00 %** (4.758/4.758) | **0,00 %** (0/3.206) | 62,53 % (IP única) | Estimación `20,88 ms` · Confirmación paralela `36,44 ms` | ✅ PASS |
 | **Stress combinado con `http.batch` paralelo** (`stress-combinado.js`, `34 VUs` máx) | 4.690 | 100,39 req/s | **100,00 %** (4.685/4.685) | **0,00 %** (0/4.503) | 70,75 % (IP única) | Estimación `35,35 ms` · Confirmación `661,94 ms` · Ubicación `29,79 ms` · Búsqueda `33,12 ms` · `/health` `1,26 ms` | ✅ PASS |
 | **100 usuarios distintos + Prometheus/Grafana** (`carga-100-usuarios.js`, `100 VUs`, `50s`) | 12.510 | **240,31 req/s** | **100,00 %** (12.408/12.408) | **0,00 %** (0/12.408) | **0,00 %** (0/12.408) | Estimación `65,93 ms` · Confirmación paralela `561,12 ms` · Lecturas `459,97 ms` (tras indexar SQL; `944,44 ms` antes) · Ubicación `36,62 ms` | ✅ PASS |
+
+
+## Comparación Versión Ingenua vs. Estrategia Final y Asignación bajo Carga de 500 Choferes (`2026-11-26`)
+
+Para cerrar el [ADR 0005](./adr/0005-tarea-pesada.md) junto con el [ADR 0041](./adr/0041-mantener-busqueda-haversine-postgresql.md), se agregó al simulador (`carga/simulador.mjs --incluir-asignacion`) la medición del flujo integrado de solicitud hasta asignación bajo la misma carga continua de **500 choferes enviando ubicación cada 2s (~250 req/s)** y búsquedas/sondas a 1 req/s (`--warmup-segundos 10 --duracion-segundos 60 --recuperacion-segundos 5 --semilla 42`, con cabecera `X-Forwarded-For` por usuario bajo `carga/docker-compose.k6.yml` + `carga/docker-compose.mediciones.yml`).
+
+### Qué compara cada variante (`FLOTA_BUSQUEDA_MODO`)
+
+- **Variante ingenua (`FLOTA_BUSQUEDA_MODO=ingenua`, solo benchmark; bloqueada en `NODE_ENV=production`)**: `RepositorioChoferesPostgres.buscarDisponiblesCercanos` lee todas las filas de `ubicacion_actual INNER JOIN usuario_chofer` sin *bounding box* ni cálculo geográfico en SQL, y filtra por disponibilidad/antigüedad/Haversine y ordena candidatos en memoria dentro del proceso Node.js de `ms-flota`.
+- **Estrategia final optimizada (`FLOTA_BUSQUEDA_MODO=optimizada`)**: `RepositorioChoferesPostgres.buscarDisponiblesCercanos` prefiltra en PostgreSQL usando el índice B-Tree compuesto `(latitud, longitud)` (`idx_ubicacion_actual_estado_lat_lng`), calcula `distancia_metros` en SQL y recorta a `LIMIT 100`.
+
+### Qué mide el flujo integrado de asignación (`--incluir-asignacion`)
+
+Cada 5 segundos durante la ventana de medición (12 iteraciones), un pasajero sintético y el chofer candidato elegido por `POST /viajes` ejecutan sobre el gateway real (`Nginx -> ms-viajes -> ms-tarifas -> ms-flota -> PostgreSQL`):
+
+1. `POST /viajes/estimacion` (congelamiento de ruta y tarifa).
+2. `POST /viajes` → mide **`confirmacion_viaje`** (tiempo HTTP hasta viaje confirmado y oferta emitida).
+3. `GET /choferes/yo/ofertas` + `POST /choferes/yo/ofertas/:idOferta/aceptacion` → mide **`solicitud_hasta_asignacion`** desde el instante de `POST /viajes` hasta que el chofer elegido queda atómicamente asignado (`ASIGNADO`) en PostgreSQL (`0` errores de concurrencia o idempotencia).
+4. `POST /viajes/:idViaje/cancelacion` (limpieza del viaje sintético para no agotar la flota durante la corrida).
+
+### Resultados reales comparados (500 choferes a 250 req/s, ventana medida de 60s)
+
+| Métrica | Variante Ingenua (`cc6139ab`) | Estrategia Final Optimizada (`a524de27`) | Diferencia / Cumplimiento SLA |
+|---|---:|---:|---|
+| **`actualizacion_ubicacion`** (500 choferes, 250 req/s) | 14.999 / 14.999 OK (`249,98 req/s`) · `p50 6,51 ms` · `p95 15,68 ms` · `p99 25,77 ms` | 15.000 / 15.000 OK (`250,00 req/s`) · `p50 6,53 ms` · `p95 15,53 ms` · `p99 28,55 ms` | 0 fallidas en ambas · p95 `<= 300 ms` |
+| **`busqueda_cercanos`** (`GET /choferes/cercanos`) | 60 / 60 OK · `p50 8,20 ms` · `p95 23,77 ms` · `p99 29,34 ms` | 60 / 60 OK · `p50 8,03 ms` · `p95 20,76 ms` · `p99 26,80 ms` | **`-12,7 %` en p95** y **`-8,7 %` en p99** con SQL optimizado |
+| **`confirmacion_viaje`** (`POST /viajes`) | 12 / 12 OK · `p50 22,60 ms` · `p95 53,35 ms` · `p99 53,35 ms` | 12 / 12 OK · `p50 23,74 ms` · `p95 43,28 ms` · `p99 43,28 ms` | Cumple SLA (`<= 1.000 ms p50`, `<= 3.000 ms p95`), `-18,9 %` en p95 |
+| **`solicitud_hasta_asignacion`** (end-to-end bajo carga) | 12 / 12 OK · `p50 51,89 ms` · `p95 116,95 ms` · `p99 116,95 ms` | 12 / 12 OK · `p50 49,84 ms` · `p95 134,62 ms` · `p99 134,62 ms` | **Cumple SLA ampliamente** (`<= 5.000 ms p95`, `<= 8.000 ms p99`), `0` errores |
+| **`sonda_health`** / **`sonda_ready_flota`** | 60/60 OK (`p95 4,79 ms` / `22,70 ms`) | 60/60 OK (`p95 4,35 ms` / `23,13 ms`) | 100 % disponibles sin degradación |
+| **`ms-flota` RSS p95 / máximo** | `189,99 MiB` / `189,99 MiB` | `171,38 MiB` / `171,51 MiB` | **`-18,48 MiB` (-9,7 %)** RSS pico en estrategia final |
+| **`ms-flota` Heap usado p95 / máximo** | `67,54 MiB` / `92,90 MiB` | `67,66 MiB` / `69,69 MiB` | **`-23,21 MiB` (-25,0 %)** pico de heap al evitar traer toda la tabla a Node.js |
+| **`ms-flota` Event Loop p99 / máximo** | `26,71 ms` / `26,71 ms` | `24,20 ms` / `24,20 ms` | **`-2,51 ms` (-9,4 %)** menor bloqueo del event loop |
+| **`ms-flota` CPU p95** | `63,20 %` | `67,18 %` | Dentro de presupuesto `< 80 %` |
+
+### Cómo reproducir la comparación (`ingenua` vs `optimizada` + asignación)
+
+```powershell
+# Levantar stack con override Nginx + telemetría de ms-flota en modo ingenua
+$env:FLOTA_BUSQUEDA_MODO="ingenua"
+docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml -f carga/docker-compose.mediciones.yml up -d --build --wait
+node carga/simulador.mjs --duracion-segundos 60 --incluir-asignacion --etiqueta "ingenua-60s"
+
+# Repetir en modo optimizada (estrategia final de producción)
+$env:FLOTA_BUSQUEDA_MODO="optimizada"
+docker compose -f docker-compose.yml -f carga/docker-compose.k6.yml -f carga/docker-compose.mediciones.yml up -d --force-recreate --wait
+node carga/simulador.mjs --duracion-segundos 60 --incluir-asignacion --etiqueta "optimizada-60s"
+Remove-Item Env:FLOTA_BUSQUEDA_MODO
+```
+
+Conclusión: mantener el prefiltrado por *bounding box* + Haversine + `LIMIT 100` directamente en PostgreSQL (ADR 0041) evita cargar filas innecesarias y realizar cálculos geográficos masivos en el event loop de Node.js (`-25,0 %` en heap pico, `-12,7 %` en búsqueda p95), y confirma que la asignación end-to-end bajo carga sostenida de 500 choferes opera en `49,84 ms` (p50) y `134,62 ms` (p95), más de 35 veces por debajo del umbral SLA de 5.000 ms.

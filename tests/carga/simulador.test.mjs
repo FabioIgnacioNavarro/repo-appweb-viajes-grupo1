@@ -23,8 +23,10 @@ test("el modo prueba usa valores cortos y seguros por defecto", () => {
     recuperacionSegundos: 1,
     semilla: 42,
     concurrencia: 256,
-    repeticion: 1
+    repeticion: 1,
+    incluirAsignacion: false
   });
+  assert.equal(analizarArgumentos(["--modo", "prueba", "--incluir-asignacion"]).incluirAsignacion, true);
 });
 
 test("rechaza destinos remotos y parámetros fuera de rango", () => {
