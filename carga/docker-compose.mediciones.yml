@@ -3,3 +3,4 @@ services:
     environment:
       MEDICIONES_HABILITADAS: "true"
       MEDICIONES_INTERVALO_MS: "1000"
+      FLOTA_BUSQUEDA_MODO: ${FLOTA_BUSQUEDA_MODO:-optimizada}

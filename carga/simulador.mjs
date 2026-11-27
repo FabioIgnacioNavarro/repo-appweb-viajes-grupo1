@@ -25,7 +25,8 @@ export function analizarArgumentos(argumentos) {
     recuperacionSegundos: undefined,
     semilla: 42,
     concurrencia: 256,
-    repeticion: 1
+    repeticion: 1,
+    incluirAsignacion: false
   };
   const nombres = new Map([
     ["--modo", "modo"], ["--escenario", "escenario"], ["--base-url", "baseUrl"],
@@ -37,6 +38,7 @@ export function analizarArgumentos(argumentos) {
   for (let indice = 0; indice < argumentos.length; indice += 1) {
     const argumento = argumentos[indice];
     if (argumento === "--ayuda" || argumento === "-h") { opciones.ayuda = true; continue; }
+    if (argumento === "--incluir-asignacion") { opciones.incluirAsignacion = true; continue; }
     const nombre = nombres.get(argumento);
     if (!nombre) throw new Error(`Opción desconocida: ${argumento}`);
     const valor = argumentos[indice + 1];
@@ -123,9 +125,16 @@ async function ejecutar() {
     if (idChoferes.length !== opciones.choferes) throw new Error("No se pudieron preparar todos los choferes de prueba; se limpiarán únicamente los que creó esta ejecución.");
 
     const aleatorio = crearGeneradorDeterminista(opciones.semilla);
-    const choferes = idChoferes.map((idUsuario) => ({ idUsuario, token: crearTokenFalso(idUsuario, "CHOFER"), ubicacion: crearUbicacionInicial(aleatorio) }));
+    const choferes = idChoferes.map((idUsuario, idx) => ({
+      idUsuario,
+      token: crearTokenFalso(idUsuario, "CHOFER"),
+      ip: `10.200.${Math.floor(idx / 200) + 1}.${(idx % 200) + 1}`,
+      ubicacion: crearUbicacionInicial(aleatorio)
+    }));
     const tokenPasajero = crearTokenFalso("pasajero-simulador-med-001", "PASAJERO");
+    const ipPasajero = "10.200.250.1";
     const informe = crearInforme(opciones, contexto);
+    informe.configuracion.incluir_asignacion = opciones.incluirAsignacion;
     cola = crearColaSolicitudes(opciones.concurrencia, informe);
 
     const preparacion = await actualizarUbicacionesIniciales(opciones, choferes);
@@ -140,7 +149,7 @@ async function ejecutar() {
 
     for (const fase of fases) {
       if (fase.duracion === 0 || interrumpido) continue;
-      await ejecutarFase(fase, opciones, choferes, tokenPasajero, cola, informe, muestreadorRecursos, () => interrumpido);
+      await ejecutarFase(fase, opciones, choferes, tokenPasajero, ipPasajero, cola, informe, muestreadorRecursos, () => interrumpido);
     }
     await cola.drenar();
     await muestreadorRecursos.detener();
@@ -242,7 +251,7 @@ function crearColaSolicitudes(concurrencia, informe) {
   };
 }
 
-async function ejecutarFase(fase, opciones, choferes, tokenPasajero, cola, informe, muestreadorRecursos, estaInterrumpida) {
+async function ejecutarFase(fase, opciones, choferes, tokenPasajero, ipPasajero, cola, informe, muestreadorRecursos, estaInterrumpida) {
   const inicio = performance.now();
   const fin = inicio + fase.duracion * 1000;
   if (fase.medir) {
@@ -261,7 +270,7 @@ async function ejecutarFase(fase, opciones, choferes, tokenPasajero, cola, infor
         longitud: chofer.ubicacion.longitud,
         actualizado_at: new Date().toISOString(),
         precision_metros: 5
-      }, fase.nombre, programadaEn, informe), programada);
+      }, fase.nombre, programadaEn, informe, chofer.ip), programada);
     }));
   }
 
@@ -269,11 +278,22 @@ async function ejecutarFase(fase, opciones, choferes, tokenPasajero, cola, infor
     cola.enviar(fase.nombre, "busqueda_cercanos", (programadaEn) => solicitar(
       opciones.baseUrl,
       `/choferes/cercanos?latitud=${CENTRO_RESISTENCIA.latitud}&longitud=${CENTRO_RESISTENCIA.longitud}&radio_metros=${RADIO_PRUEBA_METROS}`,
-      "GET", tokenPasajero, undefined, fase.nombre, programadaEn, informe
+      "GET", tokenPasajero, undefined, fase.nombre, programadaEn, informe, ipPasajero
     ), programada);
-    cola.enviar(fase.nombre, "sonda_health", (programadaEn) => solicitar(opciones.baseUrl, "/health", "GET", undefined, undefined, fase.nombre, programadaEn, informe), programada);
-    cola.enviar(fase.nombre, "sonda_ready_flota", (programadaEn) => solicitar(opciones.baseUrl, "/ready/flota", "GET", undefined, undefined, fase.nombre, programadaEn, informe), programada);
+    cola.enviar(fase.nombre, "sonda_health", (programadaEn) => solicitar(opciones.baseUrl, "/health", "GET", undefined, undefined, fase.nombre, programadaEn, informe, ipPasajero), programada);
+    cola.enviar(fase.nombre, "sonda_ready_flota", (programadaEn) => solicitar(opciones.baseUrl, "/ready/flota", "GET", undefined, undefined, fase.nombre, programadaEn, informe, ipPasajero), programada);
   }));
+
+  if (opciones.incluirAsignacion && fase.medir) {
+    const mapaChoferes = new Map(choferes.map((c) => [c.idUsuario, c]));
+    let asignacionEnCurso = false;
+    tareas.push(programarCada(5000, inicio + 1000, fin - 1000, estaInterrumpida, () => {
+      if (asignacionEnCurso) return;
+      asignacionEnCurso = true;
+      void medirAsignacionIntegrada(opciones.baseUrl, tokenPasajero, ipPasajero, mapaChoferes, fase.nombre, informe)
+        .finally(() => { asignacionEnCurso = false; });
+    }));
+  }
 
   await Promise.all(tareas);
   if (fase.medir) {
@@ -282,6 +302,112 @@ async function ejecutarFase(fase, opciones, choferes, tokenPasajero, cola, infor
   }
   await cola.drenar();
   console.error(`Fase ${fase.nombre} completada (${fase.duracion}s).`);
+}
+
+async function medirAsignacionIntegrada(baseUrl, tokenPasajero, ipPasajero, mapaChoferes, fase, informe) {
+  const headersPasajero = { Authorization: `Bearer ${tokenPasajero}`, "Content-Type": "application/json", "X-Forwarded-For": ipPasajero };
+  try {
+    const respEst = await fetch(new URL("/viajes/estimacion", baseUrl), {
+      method: "POST",
+      headers: headersPasajero,
+      body: JSON.stringify({ origen: CENTRO_RESISTENCIA, destino: { latitud: -27.462, longitud: -58.993 } }),
+      signal: AbortSignal.timeout(10_000)
+    });
+    if (!respEst.ok) {
+      await respEst.text();
+      informe.mediciones.solicitudes.push({ fase, tipo: "confirmacion_viaje", latencia_ms: null, espera_cola_ms: 0, estado_http: respEst.status, error: `estimacion_http_${respEst.status}` });
+      return;
+    }
+    const estimacion = await respEst.json();
+    const inicioSolicitud = performance.now();
+    const respViaje = await fetch(new URL("/viajes", baseUrl), {
+      method: "POST",
+      headers: { ...headersPasajero, "Clave-Idempotencia": `med-asig-${randomUUID()}` },
+      body: JSON.stringify({ id_estimacion: estimacion.id_estimacion }),
+      signal: AbortSignal.timeout(10_000)
+    });
+    const textoViaje = await respViaje.text();
+    const latenciaConfirmacion = redondear(performance.now() - inicioSolicitud);
+    informe.mediciones.solicitudes.push({
+      fase,
+      tipo: "confirmacion_viaje",
+      latencia_ms: latenciaConfirmacion,
+      espera_cola_ms: 0,
+      estado_http: respViaje.status,
+      error: respViaje.ok ? null : `http_${respViaje.status}`
+    });
+    if (!respViaje.ok) return;
+    const viaje = JSON.parse(textoViaje);
+    if (viaje.estado !== "solicitado") return;
+
+    const respCand = await fetch(
+      new URL(`/choferes/cercanos?latitud=${CENTRO_RESISTENCIA.latitud}&longitud=${CENTRO_RESISTENCIA.longitud}&radio_metros=${RADIO_PRUEBA_METROS}`, baseUrl),
+      { headers: { Authorization: `Bearer ${tokenPasajero}`, "X-Forwarded-For": ipPasajero }, signal: AbortSignal.timeout(10_000) }
+    );
+    if (!respCand.ok) return;
+    const { candidatos = [] } = await respCand.json();
+    let asignado = false;
+
+    for (const cand of candidatos.slice(0, 5)) {
+      const chofer = mapaChoferes.get(cand.id_chofer);
+      if (!chofer) continue;
+      const respOf = await fetch(new URL("/choferes/yo/ofertas", baseUrl), {
+        headers: { Authorization: `Bearer ${chofer.token}`, "X-Forwarded-For": chofer.ip },
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (!respOf.ok) continue;
+      const { ofertas = [] } = await respOf.json();
+      const oferta = ofertas.find((o) => o.id_viaje === viaje.id_viaje && o.estado === "pendiente");
+      if (!oferta) continue;
+
+      const respAc = await fetch(new URL(`/choferes/yo/ofertas/${oferta.id_oferta}/aceptacion`, baseUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${chofer.token}`, "Content-Type": "application/json", "X-Forwarded-For": chofer.ip },
+        body: "{}",
+        signal: AbortSignal.timeout(10_000)
+      });
+      await respAc.text();
+      if (respAc.ok) {
+        informe.mediciones.solicitudes.push({
+          fase,
+          tipo: "solicitud_hasta_asignacion",
+          latencia_ms: redondear(performance.now() - inicioSolicitud),
+          espera_cola_ms: 0,
+          estado_http: respAc.status,
+          error: null
+        });
+        asignado = true;
+      }
+      break;
+    }
+
+    if (!asignado) {
+      informe.mediciones.solicitudes.push({
+        fase,
+        tipo: "solicitud_hasta_asignacion",
+        latencia_ms: null,
+        espera_cola_ms: 0,
+        estado_http: 404,
+        error: "oferta_no_encontrada_en_top5"
+      });
+    }
+
+    await fetch(new URL(`/viajes/${viaje.id_viaje}/cancelacion`, baseUrl), {
+      method: "POST",
+      headers: headersPasajero,
+      body: JSON.stringify({ motivo: "fin_sonda_medicion" }),
+      signal: AbortSignal.timeout(10_000)
+    }).then((r) => r.text()).catch(() => undefined);
+  } catch (error) {
+    informe.mediciones.solicitudes.push({
+      fase,
+      tipo: "solicitud_hasta_asignacion",
+      latencia_ms: null,
+      espera_cola_ms: 0,
+      estado_http: null,
+      error: clasificarError(error)
+    });
+  }
 }
 
 async function programarCada(intervaloMs, inicio, fin, estaInterrumpida, accion) {
@@ -294,7 +420,7 @@ async function programarCada(intervaloMs, inicio, fin, estaInterrumpida, accion)
   }
 }
 
-async function solicitar(baseUrl, ruta, metodo, token, cuerpo, fase, programadaEn, informe) {
+async function solicitar(baseUrl, ruta, metodo, token, cuerpo, fase, programadaEn, informe, ipCliente) {
   const inicio = performance.now();
   const registro = { fase, tipo: tipoDeRuta(ruta), latencia_ms: null, espera_cola_ms: redondear(inicio - programadaEn), estado_http: null, error: null };
   const controlador = AbortSignal.timeout(10_000);
@@ -302,6 +428,7 @@ async function solicitar(baseUrl, ruta, metodo, token, cuerpo, fase, programadaE
     const encabezados = {};
     if (token) encabezados.Authorization = `Bearer ${token}`;
     if (cuerpo) encabezados["Content-Type"] = "application/json";
+    if (ipCliente) encabezados["X-Forwarded-For"] = ipCliente;
     const respuesta = await fetch(new URL(ruta, baseUrl), {
       method: metodo,
       headers: encabezados,
@@ -335,7 +462,7 @@ async function actualizarUbicacionesIniciales(opciones, choferes) {
       try {
         const respuesta = await fetch(new URL("/choferes/yo/ubicacion", opciones.baseUrl), {
           method: "POST",
-          headers: { Authorization: `Bearer ${chofer.token}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${chofer.token}`, "Content-Type": "application/json", "X-Forwarded-For": chofer.ip },
           body: JSON.stringify({ ...chofer.ubicacion, actualizado_at: new Date().toISOString(), precision_metros: 5 }),
           signal: AbortSignal.timeout(10_000)
         });
@@ -417,7 +544,19 @@ async function limpiarChoferes(identificadores) {
   const seguros = identificadores.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   if (!seguros.length) return;
   const lista = seguros.map((id) => `'${id}'::uuid`).join(", ");
-  const sql = `BEGIN;\nDELETE FROM ubicacion_actual WHERE usuario_id = ANY (ARRAY[${lista}]);\nDELETE FROM usuario_chofer WHERE usuario_id = ANY (ARRAY[${lista}]);\nCOMMIT;\n`;
+  const sql = [
+    "BEGIN;",
+    "DELETE FROM viajes.cobro WHERE viaje_id IN (SELECT id FROM viajes.viaje WHERE pasajero_usuario_id = 'pasajero-simulador-med-001');",
+    "DELETE FROM viajes.oferta WHERE viaje_id IN (SELECT id FROM viajes.viaje WHERE pasajero_usuario_id = 'pasajero-simulador-med-001');",
+    "DELETE FROM viajes.viaje WHERE pasajero_usuario_id = 'pasajero-simulador-med-001';",
+    "DELETE FROM viajes.idempotencia WHERE actor_id = 'pasajero-simulador-med-001';",
+    "DELETE FROM tarifa.estimacion WHERE pasajero_id = 'pasajero-simulador-med-001';",
+    `DELETE FROM ubicacion_historica WHERE usuario_id = ANY (ARRAY[${lista}]);`,
+    `DELETE FROM ubicacion_actual WHERE usuario_id = ANY (ARRAY[${lista}]);`,
+    `DELETE FROM usuario_chofer WHERE usuario_id = ANY (ARRAY[${lista}]);`,
+    "COMMIT;",
+    ""
+  ].join("\n");
   obtenerDocker([...ARGUMENTOS_COMPOSE, "exec", "-T", "postgres", "sh", "-c", 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'], sql);
 }
 
