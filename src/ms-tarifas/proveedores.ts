@@ -385,6 +385,80 @@ export class GeocodificadorNominatim implements Geocodificador {
     private readonly radioNivel2Km = 250
   ) {}
 
+  private async consultarPhoton(consulta: string, centro?: Coordenada): Promise<SugerenciaDireccion[]> {
+    const ref = centro ?? { latitud: -27.4521295, longitud: -58.9873752 };
+    const parametros = new URLSearchParams({
+      q: consulta,
+      lat: String(ref.latitud),
+      lon: String(ref.longitud),
+      limit: "6"
+    });
+    try {
+      const resp = await this.obtener(`https://photon.komoot.io/api/?${parametros}`, {
+        headers: { "User-Agent": this.userAgent, "Accept-Language": "es-AR,es;q=0.9" },
+        signal: AbortSignal.timeout(Math.max(this.timeoutMs, 3000))
+      });
+      if (!resp.ok) return [];
+      const cuerpo = await resp.json() as {
+        features?: Array<{
+          geometry?: { coordinates?: [number, number] };
+          properties?: { name?: string; street?: string; housenumber?: string; city?: string; locality?: string; state?: string; country?: string };
+        }>;
+      };
+      if (!Array.isArray(cuerpo.features)) return [];
+      const vistas = new Set<string>();
+      const sugerencias: SugerenciaDireccion[] = [];
+      for (const feat of cuerpo.features) {
+        const coords = feat.geometry?.coordinates;
+        if (!coords || coords.length < 2) continue;
+        const longitud = Number(coords[0]);
+        const latitud = Number(coords[1]);
+        if (!Number.isFinite(latitud) || !Number.isFinite(longitud)) continue;
+        const p = feat.properties ?? {};
+        const calle = [p.street, p.housenumber].filter(Boolean).join(" ").trim();
+        const localidad = p.city ?? p.locality ?? p.state ?? "";
+        const partes = [p.name, calle && calle !== p.name ? calle : "", localidad].filter(Boolean);
+        const etiqueta = partes.join(", ").trim();
+        if (!etiqueta) continue;
+        const clave = etiqueta.toLowerCase();
+        if (vistas.has(clave)) continue;
+        vistas.add(clave);
+        sugerencias.push({ etiqueta, latitud, longitud });
+        if (sugerencias.length >= 5) break;
+      }
+      return sugerencias;
+    } catch {
+      return [];
+    }
+  }
+
+  private async consultarPhotonInversa(coordenada: Coordenada): Promise<string | undefined> {
+    const parametros = new URLSearchParams({
+      lat: String(coordenada.latitud),
+      lon: String(coordenada.longitud)
+    });
+    try {
+      const resp = await this.obtener(`https://photon.komoot.io/reverse?${parametros}`, {
+        headers: { "User-Agent": this.userAgent, "Accept-Language": "es-AR,es;q=0.9" },
+        signal: AbortSignal.timeout(Math.max(this.timeoutMs, 3000))
+      });
+      if (!resp.ok) return undefined;
+      const cuerpo = await resp.json() as {
+        features?: Array<{
+          properties?: { name?: string; street?: string; housenumber?: string; city?: string; locality?: string; state?: string };
+        }>;
+      };
+      const p = cuerpo.features?.[0]?.properties;
+      if (!p) return undefined;
+      const calle = [p.street, p.housenumber].filter(Boolean).join(" ").trim();
+      const localidad = p.city ?? p.locality ?? p.state ?? "";
+      const partes = [calle || p.name, localidad].filter(Boolean);
+      return partes.join(", ").trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async consultarBusqueda(parametros: URLSearchParams, referencia?: Coordenada): Promise<Coordenada | undefined> {
     const url = `https://nominatim.openstreetmap.org/search?${parametros}`;
     let respuesta: Response;
@@ -400,6 +474,16 @@ export class GeocodificadorNominatim implements Geocodificador {
 
     if (!respuesta.ok) {
       registrarFalla("nominatim_osm", "geocodificar", `http_${respuesta.status}`);
+      if (respuesta.status === 429 || respuesta.status === 629) {
+        const respaldo = await this.consultarPhoton(parametros.get("q") ?? "", referencia);
+        if (respaldo.length > 0) {
+          const candidatos = respaldo.map((s) => ({ latitud: s.latitud, longitud: s.longitud }));
+          if (referencia) {
+            candidatos.sort((a, b) => distanceHaversineMetros(referencia, a) - distanceHaversineMetros(referencia, b));
+          }
+          return candidatos[0];
+        }
+      }
       throw new ErrorTarifas(
         respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO",
         "El servicio de geocodificación de OpenStreetMap no pudo resolver la dirección."
@@ -529,6 +613,13 @@ export class GeocodificadorNominatim implements Geocodificador {
 
     if (!respuesta.ok) {
       registrarFalla("nominatim_osm", "geocodificar_inversa", `http_${respuesta.status}`);
+      if (respuesta.status === 429 || respuesta.status === 629) {
+        const respaldo = await this.consultarPhotonInversa(coordenada);
+        if (respaldo) {
+          this.cacheInversa.set(clave, respaldo);
+          return respaldo;
+        }
+      }
       throw new ErrorTarifas(
         respuesta.status >= 500 || respuesta.status === 429 ? "DEPENDENCIA_NO_DISPONIBLE" : "PROVEEDOR_GEO_RECHAZO",
         "El servicio de geocodificación inversa no pudo resolver la ubicación."
@@ -589,6 +680,13 @@ export class GeocodificadorNominatim implements Geocodificador {
 
     if (!respuesta.ok) {
       registrarFalla("nominatim_osm", "autocompletar", `http_${respuesta.status}`);
+      if (respuesta.status === 429 || respuesta.status === 629) {
+        const respaldo = await this.consultarPhoton(texto, centro);
+        if (respaldo.length > 0) {
+          this.cacheAutocompletar.set(claveCache, respaldo);
+        }
+        return respaldo;
+      }
       return [];
     }
 

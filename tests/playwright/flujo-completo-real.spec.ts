@@ -101,6 +101,27 @@ function muestrearRuta(puntos: Coordenada[], cantidad: number): Coordenada[] {
   return resultado;
 }
 
+/** Calcula la ruta real por calles (respetando sentidos viales) vía OSRM; cae a interpolación si no está disponible. */
+async function obtenerRutaPorCalles(inicio: Coordenada, fin: Coordenada, pasos: number): Promise<Coordenada[]> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${inicio.longitud},${inicio.latitud};${fin.longitud},${fin.latitud}?overview=full&geometries=polyline6`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (resp.ok) {
+      const cuerpo = (await resp.json()) as { code?: string; routes?: Array<{ geometry?: string }> };
+      const geom = cuerpo.routes?.[0]?.geometry;
+      if (cuerpo.code === "Ok" && geom) {
+        const decodificada = decodificarPolilinea(geom, 6);
+        if (decodificada.length >= 2) {
+          return muestrearRuta(decodificada, pasos);
+        }
+      }
+    }
+  } catch {
+    // Fallback offline/CI sin OSRM externo
+  }
+  return interpolarPuntos(inicio, fin, pasos);
+}
+
 async function iniciarSesionReal(page: Page, usuario: string): Promise<string> {
   await page.goto("/#/login");
   const respLoginPromesa = page.waitForResponse(
@@ -230,7 +251,7 @@ test.describe("E2E Real en la App - Pasajero, Chofer en vivo y Cobro", () => {
 
       const estimacionReal = (await (await respEstimacionPromesa).json()) as EstimacionReal;
       const rutaCompleta = extraerPuntosRutaCalculada(estimacionReal);
-      const puntosRecorrido = muestrearRuta(rutaCompleta, PAUSA_DEMO_MS > 0 ? 15 : 6);
+      const puntosRecorrido = muestrearRuta(rutaCompleta, PAUSA_DEMO_MS > 0 ? 18 : 6);
 
       const btnConfirmar = pagePasajero.getByRole("button", { name: "Confirmar viaje" });
       await expect(btnConfirmar).toBeVisible({ timeout: 15000 });
@@ -265,10 +286,10 @@ test.describe("E2E Real en la App - Pasajero, Chofer en vivo y Cobro", () => {
       await expect(pagePasajero.getByText(/Chofer en camino/i).first()).toBeVisible({ timeout: 15000 });
 
       const pinChoferMapa = pagePasajero.locator(".custom-leaflet-pin", { hasText: "C" }).first();
-      const puntosAcercamiento = interpolarPuntos(
+      const puntosAcercamiento = await obtenerRutaPorCalles(
         ubicacionInicial,
         estimacionReal.origen,
-        PAUSA_DEMO_MS > 0 ? 10 : 4
+        PAUSA_DEMO_MS > 0 ? 12 : 4
       );
       for (const punto of puntosAcercamiento) {
         puntoGpsEnMovimiento = punto;

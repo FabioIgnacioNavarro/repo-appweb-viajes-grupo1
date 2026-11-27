@@ -1000,8 +1000,8 @@ export const VistaChofer: React.FC = () => {
             onClick={() => void alternarDisponibilidad()}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer ${
               disponible
-                ? "bg-[#4A7C59] text-white hover:bg-[#3E6A4B]"
-                : "bg-[#E5E0D4] dark:bg-slate-700 text-[#2C2B28] dark:text-slate-200 hover:bg-[#D7D1C2] dark:hover:bg-slate-600"
+                ? "bg-slate-200 dark:bg-slate-700 text-[#2C2B28] dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600"
+                : "bg-[#4A7C59] text-white hover:bg-[#3E6A4B]"
             }`}
           >
             {cargandoDisponibilidad
