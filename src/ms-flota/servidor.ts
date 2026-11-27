@@ -33,7 +33,8 @@ if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("
 const pool = process.env.DATABASE_URL ? crearPoolPostgres() : undefined;
 const detenerMedicionProceso = iniciarMedicionProcesoFlota();
 const posiciones = new Map();
-const choferes = pool ? new RepositorioChoferesPostgres(pool) : new RepositorioChoferesMemoria(posiciones);
+const modoBusqueda = process.env.NODE_ENV !== "production" && process.env.FLOTA_BUSQUEDA_MODO === "ingenua" ? "ingenua" : "optimizada";
+const choferes = pool ? new RepositorioChoferesPostgres(pool, modoBusqueda) : new RepositorioChoferesMemoria(posiciones);
 const ubicaciones = pool ? new RepositorioUbicacionesPostgres(pool, randomUUID) : new RepositorioUbicacionesMemoria(posiciones);
 const vehiculos = pool ? new RepositorioVehiculosPostgres(pool) : new RepositorioVehiculosMemoria();
 const validador = crearValidadorJwtDesdeEntorno();

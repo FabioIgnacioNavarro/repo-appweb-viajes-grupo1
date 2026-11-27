@@ -18,6 +18,7 @@ test("persistencia real de disponibilidad y ubicación en PostgreSQL", { skip: !
     await pool.query("DELETE FROM usuario_chofer WHERE usuario_id = $1", [usuarioId]);
     await pool.query("INSERT INTO usuario_chofer (id, usuario_id, habilitado, disponibilidad, carnet_conducir_validado) VALUES ($1, $2, TRUE, FALSE, TRUE)", [perfilId, usuarioId]);
     const choferes = new RepositorioChoferesPostgres(pool);
+    const choferesIngenuo = new RepositorioChoferesPostgres(pool, "ingenua");
     const ubicaciones = new RepositorioUbicacionesPostgres(pool, randomUUID);
     const chofer = await choferes.obtenerPorUsuario(usuarioId);
     assert.equal(chofer?.disponibilidad, false);
@@ -26,6 +27,11 @@ test("persistencia real de disponibilidad y ubicación en PostgreSQL", { skip: !
     const nueva = await ubicaciones.guardarSiEsMasNueva({ id: "", usuarioId, latitud: -27.45, longitud: -58.98, actualizadoAt: new Date("2026-10-15T12:00:05Z") });
     const anterior = await ubicaciones.guardarSiEsMasNueva({ id: "", usuarioId, latitud: -27.46, longitud: -58.99, actualizadoAt: new Date("2026-10-15T12:00:01Z") });
     assert.equal(nueva.latitud, anterior.latitud);
+
+    const opt = await choferes.buscarDisponiblesCercanos({ latitud: -27.45, longitud: -58.98 }, 5000, new Date("2026-10-15T12:00:10Z"), 30_000);
+    const ing = await choferesIngenuo.buscarDisponiblesCercanos({ latitud: -27.45, longitud: -58.98 }, 5000, new Date("2026-10-15T12:00:10Z"), 30_000);
+    assert.equal(opt.some((c) => c.usuarioId === usuarioId), true);
+    assert.equal(ing.some((c) => c.usuarioId === usuarioId), true);
 
     const vehiculos = new RepositorioVehiculosPostgres(pool);
     const vehiculoId = "00000000-0000-0000-0000-000000000024";
