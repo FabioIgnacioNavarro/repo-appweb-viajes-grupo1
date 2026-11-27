@@ -32,7 +32,8 @@ export const options = {
         { duration: "10s", target: 65 },
         { duration: "15s", target: 100 }, // 100 usuarios distintos simultáneos
         { duration: "15s", target: 100 }, // meseta sostenida de 100 usuarios
-        { duration: "5s", target: 0 },
+        { duration: "5s", target: 0 }, // rampa de bajada a 0
+        { duration: "4s", target: 0 }, // 4s en 0 para que Prometheus/Grafana registre el cierre limpio en 0 VUs
       ],
   thresholds: {
     errores_5xx: ["rate<0.01"],
@@ -117,6 +118,8 @@ function ejecutarPasajero(baseUrl, usuario, iteracion) {
         "100u confirmación paralela sin 5xx ni 429": ([a, b]) =>
           (a.status === 201 || a.status === 200) && (b.status === 201 || b.status === 200),
         "100u confirmación paralela conserva mismo id_viaje": ([a, b]) =>
+          (a.status === 201 || a.status === 200) &&
+          (b.status === 201 || b.status === 200) &&
           a.json().id_viaje === b.json().id_viaje,
       });
     } else {
